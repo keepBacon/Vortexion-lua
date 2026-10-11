@@ -2822,12 +2822,22 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 		end
 
-		mainWindow.Sidebar.Player.PlayerIcon.Image =
-			Players:GetUserThumbnailAsync(Player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+		-- Do not block first UI frame on the avatar HTTP thumbnail request.
+        task.spawn(function()
+            local ok, image = pcall(function()
+                return Players:GetUserThumbnailAsync(Player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+            end)
+            if ok and image and mainWindow and mainWindow.Parent then
+                mainWindow.Sidebar.Player.PlayerIcon.Image = image
+            end
+        end)
 		mainWindow.Sidebar.Player.Header.Text = Player.DisplayName
 		mainWindow.Sidebar.Player.subheader.Text = Player.Name
 
-		ContentProvider:PreloadAsync({
+		-- Asset loading no longer blocks window construction on Android.
+        task.spawn(function()
+            pcall(function()
+                ContentProvider:PreloadAsync({
 			"rbxassetid://116767744785553", -- cursor
 			"rbxassetid://90155503712202", -- cursor shadow
 			"rbxassetid://18824089198", -- player blurred
@@ -2848,6 +2858,8 @@ function Starlight:CreateWindow(WindowSettings)
 				print(`loaded asset {asset}`)
 			end
 		end)
+            end)
+        end)
 
 		-- Theme Binding
 		do
