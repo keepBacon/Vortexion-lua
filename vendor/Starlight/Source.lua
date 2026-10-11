@@ -2985,7 +2985,11 @@ function Starlight:CreateWindow(WindowSettings)
 		end)
 
 		makeDraggable(mainWindow.Content.Topbar, mainWindow, StarlightUI.Drag)
-		makeDraggable(mainWindow.Sidebar, mainWindow, StarlightUI.Drag)
+        -- Vortexion mobile fix: sidebar taps and swipes must never drag the window.
+        -- The topbar remains the explicit draggable target.
+        if not UserInputService.TouchEnabled then
+            makeDraggable(mainWindow.Sidebar, mainWindow, StarlightUI.Drag)
+        end
 		makeDraggable(StarlightUI.MobileToggle, StarlightUI.MobileToggle, nil)
 		if StarlightUI.Drag then
 			makeDraggable(StarlightUI.Drag.Interact, mainWindow, StarlightUI.Drag, true, nil, StarlightUI.Drag)
@@ -5376,6 +5380,63 @@ function Starlight:CreateWindow(WindowSettings)
 					}
 					local Instances
 
+                    -- Vortexion v7: Starlight's original Toggle bound MouseButton1Click
+                    -- only to a tiny Switch/Checkbox child. Android touch may not
+                    -- synthesize this mouse event, while taps on the label did nothing.
+                    -- Use Activated for all GuiButtons, and one bounded touch listener
+                    -- for the visible row; do not allocate per-frame listeners.
+                    local function bindToggleTap(row, button, callback)
+                        local lastActivation = -100
+                        local captured = nil
+                        local endedConn = nil
+                        local beginAt = 0
+                        local beginPos = nil
+                        local function cleanup()
+                            captured = nil
+                            beginPos = nil
+                            if endedConn then endedConn:Disconnect(); endedConn = nil end
+                        end
+                        local function fire()
+                            if not row.Parent or not row.Visible then return end
+                            if mainWindow and mainWindow.Content and not mainWindow.Content.Interactable then return end
+                            local now = os.clock()
+                            -- Prevent Activated and InputEnded from toggling twice for one tap.
+                            if now - lastActivation < 0.16 then return end
+                            lastActivation = now
+                            callback()
+                        end
+                        button.Activated:Connect(fire)
+                        if not UserInputService.TouchEnabled then return end
+                        row.Active = true
+                        local function begin(inputObject)
+                            if inputObject.UserInputType ~= Enum.UserInputType.Touch or captured then return end
+                            if not row.Parent or not row.Visible or not row.Interactable then return end
+                            if mainWindow and mainWindow.Content and not mainWindow.Content.Interactable then return end
+                            captured = inputObject
+                            beginPos = inputObject.Position
+                            beginAt = os.clock()
+                            endedConn = UserInputService.InputEnded:Connect(function(finished)
+                                if finished ~= captured then return end
+                                local start = beginPos
+                                local moved = start and (finished.Position - start).Magnitude or math.huge
+                                local elapsed = os.clock() - beginAt
+                                local pos = finished.Position
+                                local rect = row.AbsolutePosition
+                                local size = row.AbsoluteSize
+                                local inside = pos.X >= rect.X and pos.X <= rect.X + size.X
+                                    and pos.Y >= rect.Y and pos.Y <= rect.Y + size.Y
+                                cleanup()
+                                -- Swipes remain owned by the ScrollingFrame, never switch a toggle.
+                                if moved <= 18 and elapsed <= 0.8 and inside then fire() end
+                            end)
+                        end
+                        row.InputBegan:Connect(begin)
+                        button.InputBegan:Connect(begin)
+                        row.AncestryChanged:Connect(function(_, parent)
+                            if not parent then cleanup() end
+                        end)
+                    end
+
 					task.spawn(function()
 						Instances = {
 							Style1 = GroupboxTemplateInstance["Checkbox_TEMPLATE_Disabled"]:Clone(),
@@ -5510,7 +5571,7 @@ function Starlight:CreateWindow(WindowSettings)
 									ElementInstance.Checkbox.Accent.Enabled = true
 								end)
 
-								ElementInstance.Checkbox.Interact.MouseButton1Click:Connect(function()
+								bindToggleTap(ElementInstance, ElementInstance.Checkbox.Interact, function()
 									Element.Values.CurrentValue = not Element.Values.CurrentValue
 									Set(Element.Values.CurrentValue)
 
@@ -5603,7 +5664,7 @@ function Starlight:CreateWindow(WindowSettings)
 									end
 								end)
 
-								ElementInstance.Switch.Interact.MouseButton1Click:Connect(function()
+								bindToggleTap(ElementInstance, ElementInstance.Switch.Interact, function()
 									Element.Values.CurrentValue = not Element.Values.CurrentValue
 									Set(Element.Values.CurrentValue)
 									local Success, Response = pcall(function()
@@ -5956,137 +6017,94 @@ function Starlight:CreateWindow(WindowSettings)
 							end
 						end
 
-						Element.Instance.PART_Backdrop.Interact.InputBegan:Connect(function(Input)
-							if
-								Input.UserInputType == Enum.UserInputType.MouseButton1
-								or Input.UserInputType == Enum.UserInputType.Touch
-							then
-								Element.SLDragging = true
-							end
-						end)
+                        -- Vortexion mobile touch fix. The old slider only started its drag
+                        -- loop on MouseButton1Down and read Mouse.X each Stepped frame.
+                        -- Real Touch InputObjects did not move the value, and nested
+                        -- ScrollingFrames could steal the same gesture.
+                        local activePointer = nil
+                        local movedConnection = nil
+                        local endedConnection = nil
+                        local parentScroll = Element.Instance:FindFirstAncestorWhichIsA("ScrollingFrame")
+                        local scrollPreviouslyEnabled = nil
+                        local lastValue = Element.Values.CurrentValue
+                        local pendingValue = nil
+                        local lastPublish = 0
 
-						Element.Instance.PART_Backdrop.Interact.InputEnded:Connect(function(Input)
-							if
-								Input.UserInputType == Enum.UserInputType.MouseButton1
-								or Input.UserInputType == Enum.UserInputType.Touch
-							then
-								Element.SLDragging = false
-							end
-						end)
+                        local function publishSlider(positionX, final)
+                            if not Element.Instance.Parent then return end
+                            local bar = Element.Instance.PART_Backdrop
+                            local left = bar.AbsolutePosition.X
+                            local width = bar.AbsoluteSize.X
+                            if width <= 0 then return end
+                            local alpha = math.clamp((positionX - left) / width, 0, 1)
+                            local minValue, maxValue = Element.Values.Range[1], Element.Values.Range[2]
+                            local step = math.max(0.000001, Element.Values.Increment)
+                            local value = math.clamp(math.floor((minValue + (maxValue - minValue) * alpha) / step + 0.5) * step, minValue, maxValue)
+                            value = math.floor(value * 10000000 + 0.5) / 10000000
+                            Element.Instance.PART_Backdrop.PART_Progress.Size = UDim2.fromScale(alpha, 1)
+                            Element.Instance.Value.input.Text = tostring(value)
+                            pendingValue = value
+                            local now = os.clock()
+                            -- Limit heavy callbacks (e.g. saved settings) to 20 Hz while dragging.
+                            if (final or now - lastPublish >= 0.05) and lastValue ~= value then
+                                lastValue = value
+                                Element.Values.CurrentValue = value
+                                lastPublish = now
+                                local ok, err = pcall(Element.Values.Callback, value)
+                                if not ok then warn("[Vortexion Slider] " .. tostring(err)) end
+                            end
+                        end
 
-						Element.Instance.PART_Backdrop.PART_Progress.Knob.Interact.InputBegan:Connect(function(Input)
-							if
-								Input.UserInputType == Enum.UserInputType.MouseButton1
-								or Input.UserInputType == Enum.UserInputType.Touch
-							then
-								Element.SLDragging = true
-							end
-						end)
+                        local function stopDrag()
+                            if not activePointer then return end
+                            local inputObject = activePointer
+                            activePointer = nil
+                            if movedConnection then movedConnection:Disconnect(); movedConnection = nil end
+                            if endedConnection then endedConnection:Disconnect(); endedConnection = nil end
+                            Element.SLDragging = false
+                            -- Commit the final value even when last drag event was throttled.
+                            if pendingValue ~= nil and pendingValue ~= lastValue then
+                                lastValue = pendingValue
+                                Element.Values.CurrentValue = pendingValue
+                                local ok, err = pcall(Element.Values.Callback, pendingValue)
+                                if not ok then warn("[Vortexion Slider] " .. tostring(err)) end
+                            end
+                            pendingValue = nil
+                            if parentScroll and parentScroll.Parent and scrollPreviouslyEnabled ~= nil then
+                                parentScroll.ScrollingEnabled = scrollPreviouslyEnabled
+                            end
+                            scrollPreviouslyEnabled = nil
+                        end
 
-						Element.Instance.PART_Backdrop.PART_Progress.Knob.Interact.InputEnded:Connect(function(Input)
-							if
-								Input.UserInputType == Enum.UserInputType.MouseButton1
-								or Input.UserInputType == Enum.UserInputType.Touch
-							then
-								Element.SLDragging = false
-							end
-						end)
+                        local function beginDrag(inputObject)
+                            if activePointer or not inputObject then return end
+                            local kind = inputObject.UserInputType
+                            if kind ~= Enum.UserInputType.Touch and kind ~= Enum.UserInputType.MouseButton1 then return end
+                            activePointer = inputObject
+                            Element.SLDragging = true
+                            if parentScroll and parentScroll.Parent then
+                                scrollPreviouslyEnabled = parentScroll.ScrollingEnabled
+                                parentScroll.ScrollingEnabled = false
+                            end
+                            publishSlider(inputObject.Position.X, true)
+                            movedConnection = UserInputService.InputChanged:Connect(function(changed)
+                                if activePointer ~= inputObject then return end
+                                if changed == inputObject or (kind == Enum.UserInputType.MouseButton1 and changed.UserInputType == Enum.UserInputType.MouseMovement) then
+                                    publishSlider(changed.Position.X, false)
+                                end
+                            end)
+                            endedConnection = UserInputService.InputEnded:Connect(function(finished)
+                                if finished == inputObject or (kind == Enum.UserInputType.MouseButton1 and finished.UserInputType == Enum.UserInputType.MouseButton1) then
+                                    stopDrag()
+                                end
+                            end)
+                        end
 
-						local dragFunction = function(X)
-							local Current = Element.Instance.PART_Backdrop.PART_Progress.AbsolutePosition.X
-								+ Element.Instance.PART_Backdrop.PART_Progress.AbsoluteSize.X
-							local Start = Current
-							local Location = X
-							local Loop
-							Loop = RunService.Stepped:Connect(function()
-								if Element.SLDragging then
-									Location = Mouse.X
-									Current = Current + 0.025 * (Location - Start)
-
-									if Location < Element.Instance.PART_Backdrop.AbsolutePosition.X then
-										Location = Element.Instance.PART_Backdrop.AbsolutePosition.X
-									elseif
-										Location
-										> Element.Instance.PART_Backdrop.AbsolutePosition.X
-										+ Element.Instance.PART_Backdrop.AbsoluteSize.X
-									then
-										Location = Element.Instance.PART_Backdrop.AbsolutePosition.X
-											+ Element.Instance.PART_Backdrop.AbsoluteSize.X
-									end
-
-									if Current < Element.Instance.PART_Backdrop.AbsolutePosition.X then
-										Current = Element.Instance.PART_Backdrop.AbsolutePosition.X
-									elseif
-										Current
-										> Element.Instance.PART_Backdrop.AbsolutePosition.X
-										+ Element.Instance.PART_Backdrop.AbsoluteSize.X
-									then
-										Current = Element.Instance.PART_Backdrop.AbsolutePosition.X
-											+ Element.Instance.PART_Backdrop.AbsoluteSize.X
-									end
-
-									if Current <= Location and (Location - Start) < 0 then
-										Start = Location
-									elseif Current >= Location and (Location - Start) > 0 then
-										Start = Location
-									end
-
-									local percentage = (Location - Element.Instance.PART_Backdrop.AbsolutePosition.X)
-										/ Element.Instance.PART_Backdrop.AbsoluteSize.X
-									Tween(
-										Element.Instance.PART_Backdrop.PART_Progress,
-
-										{ Size = UDim2.new(percentage, 0, 1, 0) },
-
-										nil,
-										Tween.Info(nil, nil, 0.2)
-									)
-
-									local NewValue = ((Element.Values.Range[2] - Element.Values.Range[1]) * percentage)
-										+ Element.Values.Range[1]
-
-									NewValue = math.floor(NewValue / Element.Values.Increment + 0.5)
-										* (Element.Values.Increment * 10000000)
-										/ 10000000
-
-									Element.Instance.Value.input.Text = tostring(NewValue)
-
-									if Element.Values.CurrentValue ~= NewValue then
-										local Success, Response = pcall(function()
-											Element.Values.Callback(NewValue)
-										end)
-
-										if not Success then
-											Element.Instance.Header.Text = "Callback Error"
-											warn(
-												`Starlight Interface Suite - Callback Error | {Element.Values.Name} ({Index})`
-											)
-											print(Response)
-											if WindowSettings.NotifyOnCallbackError then
-												Starlight:Notification({
-													Title = Element.Values.Name .. " Callback Error",
-													Content = tostring(Response),
-													Icon = 129398364168201,
-												})
-											end
-											wait(0.5)
-											Element.Instance.Header.Text = ElementSettings.Name
-										end
-
-										Element.Values.CurrentValue = NewValue
-									end
-								else
-									Loop:Disconnect()
-								end
-							end)
-						end
-
-						Element.Instance.PART_Backdrop.Interact.MouseButton1Down:Connect(function(X)
-							dragFunction(X)
-						end)
-						Element.Instance.PART_Backdrop.PART_Progress.Knob.Interact.MouseButton1Down:Connect(function(X)
-							dragFunction(X)
-						end)
+                        Element.Instance.PART_Backdrop.Interact.InputBegan:Connect(beginDrag)
+                        Element.Instance.PART_Backdrop.PART_Progress.Knob.Interact.InputBegan:Connect(beginDrag)
+                        Element.Instance.AncestryChanged:Connect(function(_, parent)
+                            if not parent then stopDrag() end
+                        end)
 
 						Element.Instance.PART_Backdrop.PART_Progress:GetPropertyChangedSignal("Size"):Connect(function()
 							if Element.Instance.PART_Backdrop.PART_Progress.AbsoluteSize.X <= 0 then

@@ -1,0 +1,10 @@
+{
+  "type": "static_source_checks",
+  "checks": 30,
+  "passed": 30,
+  "failed": [],
+  "video_reviewed": "1000547754.mp4 52.14 s, landscape, inspected frames 0-50 s",
+  "luau_compiler_tested": false,
+  "roblox_android_tested": false,
+  "claim_runtime_fixed": false
+}

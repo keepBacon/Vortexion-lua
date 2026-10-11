@@ -1405,6 +1405,10 @@ ESP.ShowDetails = false
 ESP.VisibleAlpha = 0.80
 ESP.CheckHz = 10
 ESP.LastCheck = 0
+-- Feature architecture: OPAI generator-status ESP + c00lSaken threat awareness.
+ESP.GeneratorDetails = false
+ESP.CompletedGenerators = false
+ESP.GeneratorLabelRecords = setmetatable({}, {__mode = "k"})
 
 local PLAYER_ESP_NAME = "PlayerESP"
 local ITEM_ESP_NAME = "ToolESPHighlight"
@@ -1978,6 +1982,72 @@ local function removeGeneratorHighlight(model)
     end
 end
 
+-- Generator details: progress and remaining distance are sampled on demand.
+-- Use existing generator index and Progress.Changed, never a second map traversal.
+local function updateGeneratorLabel(generator, genModel, progress, includeDistance)
+    local record = ESP.GeneratorLabelRecords[generator]
+    local completed = tonumber(progress.Value) and tonumber(progress.Value) >= 100
+    local visible = ESP.Enabled and ESP.GeneratorDetails and (not completed or ESP.CompletedGenerators)
+    if not visible and not record then return end
+    if not record and visible then
+        local part = genModel.PrimaryPart or genModel:FindFirstChildWhichIsA("BasePart", true)
+        if not part then return end
+        local gui = Instance.new("BillboardGui")
+        gui.Name = "VortexionGeneratorLabel"
+        gui.Size = UDim2.fromOffset(165, 35)
+        gui.StudsOffsetWorldSpace = Vector3.new(0, 3.5, 0)
+        gui.AlwaysOnTop = true
+        gui.MaxDistance = 1200
+        gui.Adornee = part
+        gui.Parent = genModel
+        local text = Instance.new("TextLabel")
+        text.Size = UDim2.fromScale(1, 1)
+        text.BackgroundTransparency = 1
+        text.TextColor3 = Color3.fromRGB(255, 223, 90)
+        text.TextStrokeTransparency = 0.2
+        text.TextSize = 13
+        text.Font = Enum.Font.GothamBold
+        text.Parent = gui
+        record = {Gui=gui, Label=text, Part=part, LastDistance=-1}
+        ESP.GeneratorLabelRecords[generator] = record
+    end
+    if not record.Gui.Parent then ESP.GeneratorLabelRecords[generator] = nil; return end
+    record.Gui.Enabled = visible
+    if not visible then return end
+    local percentage = math.clamp(tonumber(progress.Value) or 0, 0, 100)
+    local distance = record.LastDistance
+    if includeDistance or distance < 0 then
+        local ownRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        distance = ownRoot and math.floor((ownRoot.Position - record.Part.Position).Magnitude + 0.5) or -1
+        record.LastDistance = distance
+    end
+    local text = (completed and "已完成" or ("修理 " .. tostring(math.floor(percentage)) .. "%"))
+    if distance >= 0 then text = text .. " · " .. tostring(distance) .. " studs" end
+    if record.Label.Text ~= text then record.Label.Text = text end
+    local color = completed and Color3.fromRGB(155, 164, 176) or Color3.fromRGB(255, 223, 90)
+    if record.Label.TextColor3 ~= color then record.Label.TextColor3 = color end
+end
+
+function ESP:RefreshGeneratorLabels()
+    for generator in pairs(self.GeneratorLabelRecords) do
+        local progress = generator:FindFirstChild("Progress")
+        local instances = generator:FindFirstChild("Instances")
+        local genModel = instances and instances:FindFirstChild("Generator")
+        if not (generator.Parent and progress and genModel) then
+            local record = self.GeneratorLabelRecords[generator]
+            if record and record.Gui.Parent then record.Gui:Destroy() end
+            self.GeneratorLabelRecords[generator] = nil
+        else
+            updateGeneratorLabel(generator, genModel, progress, true)
+        end
+    end
+end
+
+-- One slow worker already shared with the existing generator registry.
+runEvery(1.0, function()
+    if ESP.Enabled and ESP.GeneratorDetails then ESP:RefreshGeneratorLabels() end
+end)
+
 local trackedGeneratorProgress = setmetatable({}, {__mode = "k"})
 local function trackGenerator(generator)
     if trackedGeneratorProgress[generator] then return end
@@ -1995,6 +2065,7 @@ local function trackGenerator(generator)
         removeGeneratorHighlight(genModel)
     end
 
+    updateGeneratorLabel(generator, genModel, progress, false)
     trackedGeneratorProgress[generator] = progress:GetPropertyChangedSignal("Value"):Connect(function()
         if not generator.Parent then
             local connection = trackedGeneratorProgress[generator]
@@ -2007,6 +2078,7 @@ local function trackGenerator(generator)
         else
             addGeneratorHighlight(genModel)
         end
+        updateGeneratorLabel(generator, genModel, progress, false)
     end)
 end
 
@@ -2104,6 +2176,7 @@ end -- scoped performance/UI helpers
 -- Function to toggle ESP on/off
 function ESP:SetEnabled(state)
     ESP.Enabled = not not state
+    self:RefreshGeneratorLabels()
     -- 非玩家高亮维持原来的逻辑；玩家高亮无遮挡 80%，遮挡或屏幕外 0%。
     for highlight in pairs(allHighlights) do
         if highlight.Parent == nil then
@@ -2975,6 +3048,70 @@ if FluentLoaded then
         Title = "遮挡检测频率", Min = 2, Max = 20, Default = 10, Rounding = 0, Suffix = "Hz",
         Callback = function(v) ESP.CheckHz = math.clamp(v, 2, 20) end
     })
+
+    -- Vortexion: generator readout uses the current generator index and a 1Hz
+    -- distance sampler. It never duplicates auto-solve or generator listeners.
+    Tabs.Game:AddToggle("GeneratorProgressESP", {
+        Title = "发电机进度与距离标签", Default = false,
+        Callback = function(v) ESP.GeneratorDetails = v; ESP:RefreshGeneratorLabels() end
+    })
+    Tabs.Game:AddToggle("GeneratorShowCompleted", {
+        Title = "标签包含已完成发电机", Default = false,
+        Callback = function(v) ESP.CompletedGenerators = v; ESP:RefreshGeneratorLabels() end
+    })
+
+    -- Reimplemented from the *idea* of c00lSaken's killer tracking and
+    -- OPAI's proximity options, not pasted from either reference source.
+    do
+        local alert = { Enabled=false, Range=35, Generation=0, LastGlobal=0, Cooldown=6, LastByCharacter=setmetatable({}, {__mode="k"}) }
+        function alert:SetEnabled(state)
+            state = not not state
+            if self.Enabled == state then return end
+            self.Enabled = state
+            self.Generation += 1
+            if not state then return end
+            local generation = self.Generation
+            task.spawn(function()
+                while self.Enabled and self.Generation == generation do
+                    local own = LocalPlayer.Character
+                    local ownRoot = own and own:FindFirstChild("HumanoidRootPart")
+                    local folders = Workspace:FindFirstChild("Players")
+                    local killers = folders and folders:FindFirstChild("Killers")
+                    if ownRoot and killers then
+                        local nearest, minDistance = nil, self.Range
+                        for _, model in ipairs(killers:GetChildren()) do
+                            if model ~= own then
+                                local root = model:FindFirstChild("HumanoidRootPart")
+                                local humanoid = model:FindFirstChildOfClass("Humanoid")
+                                if root and (not humanoid or humanoid.Health > 0) then
+                                    local dist = (root.Position - ownRoot.Position).Magnitude
+                                    if dist <= minDistance then nearest, minDistance = model, dist end
+                                end
+                            end
+                        end
+                        local now = os.clock()
+                        if nearest and now - self.LastGlobal >= self.Cooldown
+                            and now - (self.LastByCharacter[nearest] or -100) >= self.Cooldown then
+                            self.LastGlobal = now
+                            self.LastByCharacter[nearest] = now
+                            pcall(function()
+                                Fluent:Notify({Title = "杀手接近警报", Content = nearest.Name .. " · " .. tostring(math.floor(minDistance)) .. " studs", Duration = 2.5})
+                            end)
+                        end
+                    end
+                    task.wait(0.4) -- 2.5 Hz, no work while switched off
+                end
+            end)
+        end
+        Tabs.Game:AddToggle("KillerProximityAlert", {
+            Title = "杀手接近提醒（手机友好）", Default = false,
+            Callback = function(v) alert:SetEnabled(v) end
+        })
+        Tabs.Game:AddSlider("KillerProximityRadius", {
+            Title = "提醒距离", Min = 10, Max = 100, Default = 35, Rounding = 0, Suffix = " studs",
+            Callback = function(v) alert.Range = math.clamp(v,10,100) end
+        })
+    end
 
     Tabs.Game:AddToggle("StatsTrackerToggle", {
         Title = "玩家数据统计",

@@ -50,12 +50,16 @@ return function(Starlight)
         for _, descendant in ipairs(page:GetDescendants()) do
             if descendant:IsA("ScrollingFrame") then table.insert(scrollables, descendant) end
         end
+        -- Delay one frame for Starlight's asynchronously initialized groupboxes.
         for _, column in ipairs(scrollables) do
             if column:IsA("ScrollingFrame") then
                 column.Active = true
                 column.ScrollingEnabled = true
                 column.ScrollingDirection = Enum.ScrollingDirection.Y
-                if isTouch then column.ScrollBarThickness = 5 end
+                if isTouch then
+                    column.ScrollBarThickness = 5
+                    column.ScrollingEnabled = true
+                end
                 local layout = column:FindFirstChildOfClass("UIListLayout")
                 local function refresh()
                     if not column.Parent then return end

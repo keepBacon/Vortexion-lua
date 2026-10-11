@@ -21,7 +21,7 @@ checks={
     'byline follows title during UI scaling': 'byline.Parent = header' in ui and 'byline.AnchorPoint = Vector2.new(1, 0)' in ui,
     'no stage branding in title': 'SubTitle = ""' in core and 'Subtitle = ""' in ui,
     'renamed launcher cleans legacy instance': '"GoonsakenMobileOverlay", "VortexionForsakenOverlay"' in core and 'gui.Name = "VortexionForsakenOverlay"' in core,
-    'project manifest renamed': manifest.get('project_name')=='Vortexion - Forsaken' and manifest.get('repository_name_proposed')=='Vortexion-Forsaken',
+    'project manifest renamed': manifest.get('project_name')=='Vortexion - Forsaken' and manifest.get('repository_name_proposed')=='Vortexion-lua',
 
     'transparent default unobstructed 80%': 'ESP.VisibleAlpha = 0.80' in core and 'PLAYER_ESP_ONSCREEN_ALPHA = 0.80' in core,
     'transparent default occluded/outscreen 0%':'PLAYER_ESP_OFFSCREEN_ALPHA = 0' in core,
@@ -50,7 +50,7 @@ checks={
     'Starlight attribution retained': (root/'vendor/Starlight/LICENSE').read_text().startswith('Attribution-NonCommercial 4.0'),
     'manifest matches output bytes': manifest['output_bytes']==(root/'dist/Vortexion_Forsaken.lua').stat().st_size,
     'manifest matches output checksum': manifest['output_sha256']==hashlib.sha256((root/'dist/Vortexion_Forsaken.lua').read_bytes()).hexdigest(),
-    'proper status no false repo claims': manifest['new_public_repo_created'] is False and manifest['source_uploaded_to_github'] is False and manifest['roblox_android_tested'] is False,
+    'proper status no false repo claims': manifest.get('repository')=='keepBacon/Vortexion-lua' and manifest.get('publication')=='verify_github_main_after_push' and manifest['roblox_android_tested'] is False,
     'separate publish QA docs': (root/'docs/PUBLISH.md').exists() and (root/'docs/ANDROID_QA.md').exists(),
 }
 # Independently enumerate all truth-table branches for the semantic invariant.

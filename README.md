@@ -1,6 +1,6 @@
 # Vortexion - Forsaken · Starlight UI · 中文手机版
 
-**当前状态：** 源码已准备发布至 GitHub 公开仓库 `keepBacon/Vortexion-lua`；尚未进行 Roblox 安卓真机实测。
+**当前状态：** GitHub 公开工程 `keepBacon/Vortexion-lua`；滑块/开关触控补丁已构建，等待实机验证。Roblox 安卓客户端尚未实际运行验证。
 
 ## 品牌与 UI 标题
 
@@ -41,13 +41,13 @@ python3 build.py
 python3 tests/test_stage2.py
 ```
 
-公开仓库地址：[keepBacon/Vortexion-lua](https://github.com/keepBacon/Vortexion-lua)。发布完成后，在支持 `loadstring` / `HttpGet` 的 Roblox 执行器可使用：
+GitHub 上的可执行单文件：
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/dist/Vortexion_Forsaken.lua"))()
 ```
 
-这里的 `loadstring` 仅表示脚本加载入口，并不代表已通过安卓实机功能验证。`dist/build-manifest.json` 和 `dist/test-results.json` 记录的是本地构建时的检查状态，非实时 GitHub 发布检测。
+该链接更新为修复版后可继续沿用，无需修改执行器入口。
 
 ## 第三方与限制
 
@@ -55,3 +55,26 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/keepBacon/Vortexion-l
 - Starlight 仍从 Roblox 资产 `rbxassetid://132866968194043` 加载模型；运行依赖客户端权限和资产可用性。未测试所有执行器。
 - Goonsaken 上游仓库没有在所检查根目录提供明确可再分发许可；独立公开仓库发表含其大量派生实现之前，应获得原作者许可或以授权允许的实现替换相应代码。
 - 第三方游戏本身可能更新内部 `Sprinting` 等模块，体力/自动战斗功能不保证持续有效；只进行了本地源码检查，不是安卓 FPS 实测结果。
+
+## Touch v6 · 2026-10-11
+
+已检查用户提供的约 52 秒横屏录像。滑块表现出触控指示移动但控件数值响应不可靠的情况；代码审查确认触控起始事件与 MouseButton1Down + Mouse.X 的拖动实现相冲突。同时整个 Sidebar 被绑定为窗口拖动区域，导致触摸滚动/分页操作与窗口移动争用。
+
+- Starlight 原生滑块改为直接根据 Touch InputObject 的 Position.X 计算数值，鼠标仍受支持；同时清理拖动期间的全局监听。
+- 开始拖动滑块时锁定父 ScrollingFrame，结束时恢复之前的 ScrollingEnabled 状态；连续改变值的回调限制在最多约 20Hz，结束时提交最新值。
+- 手机上的 Sidebar 不再承担窗口拖动，顶部标题栏仍可拖动。
+- 新增发电机实时进度标签、到发电机的距离及可选的已完成发电机显示；复用已有 Generator Progress 事件，距离最多每秒更新一次。
+- 新增杀手接近提醒，范围 10–100 studs；开启时以 2.5Hz 工作、带 6 秒通知冷却，不复制参考脚本的自动传送逻辑。
+- 保留 ESP：遮挡/屏幕外 0% 透明，无遮挡 80%，杀手红色/幸存者绿色。
+- 新增 `tests/test_mobile_v6.py`；静态检查不能替代 Roblox 安卓真机验证。
+
+## Touch v7 · Toggle tap fix
+
+- 修复 Android 上功能开关点击无响应：将 Starlight 原生 Toggle 从仅监听
+  右侧小区域的 `MouseButton1Click` 改为兼容鼠标、手柄和触控的 `Activated`。
+- 对触控额外支持整行标题轻触，记录同一根手指的 InputObject，在释放时校验
+  位置、耗时和 ≤18px 的移动阈值，超过阈值视为滑动，避免误触。
+- 同一触控触发多个事件时采用 160ms 防重入，回调仅执行一次；
+  全局 InputEnded 监听只在当前触摸进行期间存在，结束或控件销毁后释放。
+- 保留 Slider v6 修复、ESP 0%／80% 规则、发电机标签、杀手提醒。
+- 仅通过静态与回归检查，需 Android 执行器中实测 Toggle 点按。
