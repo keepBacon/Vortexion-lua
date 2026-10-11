@@ -1,6 +1,6 @@
 # Vortexion - Forsaken · Starlight UI · 中文手机版
 
-**当前状态：** GitHub 公开工程 `keepBacon/Vortexion-lua`；滑块/开关触控补丁已构建，等待实机验证。Roblox 安卓客户端尚未实际运行验证。
+**当前状态：** GitHub 公开工程 `keepBacon/Vortexion-lua`；v8 统一触控分发器已构建并通过静态检查，等待安卓实机验证。Roblox 安卓客户端尚未实际运行验证。
 
 ## 品牌与 UI 标题
 
@@ -78,3 +78,14 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/keepBacon/Vortexion-l
   全局 InputEnded 监听只在当前触摸进行期间存在，结束或控件销毁后释放。
 - 保留 Slider v6 修复、ESP 0%／80% 规则、发电机标签、杀手提醒。
 - 仅通过静态与回归检查，需 Android 执行器中实测 Toggle 点按。
+
+## Touch v8 · 统一事件路由重构（2026-10-11）
+
+- **确认旧实现缺陷：** 每个 Toggle 仍分别绑定 `row.InputBegan`/`UserInputService.InputEnded`，受 Starlight 子级遮挡、滚动容器以及执行器触摸事件适配影响；原滑块也有多套独立事件绑定。旧版静态检查只测试源代码特征，不能说明真实触控已恢复。
+- **统一触控分发：** 使用单个 `InputBegan`/`TouchStarted` + `TouchMoved` + `InputEnded`/`TouchEnded` 路由，根据 GUI 的真实 `AbsolutePosition`/`AbsoluteSize`（含 UIScale）与滚动区域裁剪命中开关、按钮和滑块。
+- **防误触：** 每根手指独立捕获，滑动大于 16px / 长按 1s / 弹窗遮挡时不触发开关；禁止触摸与原生 `Activated` 双重回调。
+- **滑块：** 改用共享指针路由，阻止与滚动手势竞争；结束或销毁控件时恢复滚动，20Hz 上限回调，抬手强制提交。
+- **性能/生命周期：** 手机和空说明不再为 Tooltip 注册每个控件一个 `RenderStepped`；输入连接随 Starlight UI 销毁统一断开；`runEvery` 任务在下次运行新版时退出。
+- **弹窗交互：** 窗口唯一的 `ModalOverlay.Visible` 监听确保关闭弹窗后恢复 `Content.Interactable`，防止可看到菜单但内容区无法点击。
+- **调试：** 在执行器加载前运行 `getgenv().VortexionTouchDebug=true`，调试日志会说明是否命中目标及是否属于滑动。
+- **验证：** `python3 tests/test_stage2.py`、`python3 tests/test_touch_v8.py`。没有 Roblox 安卓客户端实测，需用户验证触摸事件交付行为。

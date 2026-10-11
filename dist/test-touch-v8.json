@@ -1,0 +1,9 @@
+{
+  "type": "static+policy_model",
+  "checks": 39,
+  "passed": 39,
+  "failures": [],
+  "roblox_android_tested": false,
+  "luau_compiler_tested": false,
+  "claim_runtime_fixed": false
+}

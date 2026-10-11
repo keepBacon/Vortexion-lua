@@ -30,3 +30,14 @@
 4. Scroll down and back up, change tabs, close/reopen window, and ensure all toggles still work.
 5. Repeat with gamepad / USB mouse, verify no duplicated callbacks.
 6. Verify sliders still drag correctly, and ESP occluded=0%, visible=80%.
+
+## v8 手机触控复测项目
+
+1. **彻底重启 Roblox** 再执行脚本，不在已加载 v7 的游戏中直接注入 v8。
+2. 开启 `getgenv().VortexionTouchDebug=true`（在 loadstring 之前），连续单击普通 Toggle 3 次，观察 UI 状态与输出日志是否分别变化。
+3. 轻触 Toggle 文本区、开关小圆钮；分别应切换一次。
+4. 上下滑动经过 Toggle 行不应触发，松手后仍能点击。
+5. 滑块分别从左到右、右到左、松手，值和效果一致且滚动可恢复。
+6. 弹出对话框后取消；返回后页面内 Toggle 和滑块仍可操作。
+7. 更换页面、旋转屏幕，验证 UIScale 后实际命中位置。
+8. 若仍出现无响应，保留调试日志与手指点按视频。

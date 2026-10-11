@@ -1811,6 +1811,12 @@ local function AddToolTip(InfoStr, HoverInstance)
 	local lastMousePos = nil
 	local threshold = 0.44
 
+    -- On phones a hover state does not exist. On all devices an empty tooltip
+    -- must not allocate a RenderStepped task for the lifetime of the game.
+    if UserInputService.TouchEnabled or String.IsEmptyOrNull(InfoStr) then
+        return label
+    end
+
 	local function updateTooltipPos()
 		tooltip.Position = UDim2.fromOffset(Mouse.X + 15, Mouse.Y + 20)
 	end
@@ -1932,7 +1938,6 @@ local function makeDraggable(Bar, Window: Frame, dragBar, enableTaptic, tapticOf
 				Input.Changed:Connect(function()
 					if Input.UserInputState == Enum.UserInputState.End then
 						Dragging = false
-						connectMethods()
 
 						if enableTaptic then
 							Tween(
@@ -2054,6 +2059,122 @@ until buildAttempts >= 2
 
 StarlightUI.Name = (((getgenv and getgenv().InterfaceName) or StarlightUI.Name) or "Starlight Interface Suite")
 Starlight.Instance = StarlightUI
+
+-- Vortexion v8: ONE source of mobile pointer truth. GUI descendants in Starlight's
+-- templates intercept GuiObject.InputBegan on some Android executors. Instead of
+-- creating competing per-control connections, route touches from UIS using
+-- actual, scaled AbsolutePosition/AbsoluteSize and the visible scroll viewport.
+-- It deliberately accepts gameProcessedEvent=true: GUI taps are processed.
+local VortexionTouch = { items = {}, pointers = {}, running = true, lastTouch = -100 }
+local function touchXY(input)
+    return Vector2.new(input.Position.X, input.Position.Y)
+end
+local function rectContains(gui, pos, pad)
+    local xy, sz = gui.AbsolutePosition, gui.AbsoluteSize
+    local margin = pad or 0
+    return pos.X >= xy.X-margin and pos.X <= xy.X+sz.X+margin
+       and pos.Y >= xy.Y-margin and pos.Y <= xy.Y+sz.Y+margin
+end
+local function touchEligible(item, pos)
+    local gui = item.gui
+    if not gui or not gui.Parent or not gui.Visible or not gui.Interactable then return false end
+    local root = item.root
+    if not root or not root.Parent or not root.Visible then return false end
+    if root.Content and not root.Content.Interactable then return false end
+    local modal = root:FindFirstChild("ModalOverlay")
+    if modal and modal.Visible then return false end
+    local popup = root:FindFirstChild("Popup Overlay")
+    if popup and popup.Visible then return false end
+    if not rectContains(gui, pos, item.pad) then return false end
+    local current = gui.Parent
+    while current and current ~= root do
+        if current:IsA("GuiObject") then
+            if not current.Visible or not current.Interactable then return false end
+            if (current:IsA("ScrollingFrame") or current.ClipsDescendants)
+                and not rectContains(current, pos, 0) then return false end
+        end
+        current = current.Parent
+    end
+    return current == root
+end
+function VortexionTouch:Register(gui, kind, callback, root, pad)
+    if not UserInputService.TouchEnabled or not gui then return end
+    table.insert(self.items, {gui=gui, kind=kind, callback=callback, root=root, pad=pad or 0})
+end
+function VortexionTouch:Debug(stage, item)
+    if getgenv and getgenv().VortexionTouchDebug then
+        warn("[VortexionTouch/v8] " .. stage .. " " .. (item and item.gui.Name or "no target"))
+    end
+end
+local function beginMobileTouch(touch)
+    if not VortexionTouch.running or touch.UserInputType ~= Enum.UserInputType.Touch then return end
+    if VortexionTouch.pointers[touch] then return end
+    local pos = touchXY(touch)
+    VortexionTouch.lastTouch = os.clock()
+    -- Drop stale entries as users reopen the UI, and choose the last live matching
+    -- control. Only one capture per finger; navigation/scrolling remain native.
+    local winner
+    for i=#VortexionTouch.items,1,-1 do
+        local item = VortexionTouch.items[i]
+        if not item.gui or not item.gui.Parent then
+            table.remove(VortexionTouch.items,i)
+        elseif not winner and touchEligible(item,pos) then
+            winner = item
+        end
+    end
+    if not winner then VortexionTouch:Debug("down",nil);return end
+    VortexionTouch.pointers[touch] = {item=winner, start=pos, last=pos, time=os.clock()}
+    VortexionTouch:Debug("down",winner)
+    if winner.kind=="slider" then
+        winner.callback(pos.X,false,"begin")
+    end
+end
+local function moveMobileTouch(touch)
+    local capture = VortexionTouch.pointers[touch]
+    if not capture then return end
+    local pos = touchXY(touch)
+    capture.last=pos
+    if capture.item.kind=="slider" then
+        capture.item.callback(pos.X,false,"move")
+    end
+end
+local function endMobileTouch(touch)
+    local capture = VortexionTouch.pointers[touch]
+    if not capture then return end
+    VortexionTouch.pointers[touch] = nil
+    local item=capture.item
+    local pos=touchXY(touch)
+    if item.kind=="slider" then
+        item.callback(pos.X,true,"end")
+    elseif (pos-capture.start).Magnitude <= 16 and os.clock()-capture.time <= 1
+        and touchEligible(item,pos) then
+        VortexionTouch:Debug("tap",item)
+        local ok,err=pcall(item.callback)
+        if not ok then warn("[VortexionTouch/v8] callback error: "..tostring(err)) end
+    else
+        VortexionTouch:Debug("swipe/cancel",item)
+    end
+end
+if UserInputService.TouchEnabled then
+    local touchLinks = {
+        UserInputService.InputBegan:Connect(function(touch) beginMobileTouch(touch) end),
+        UserInputService.TouchStarted:Connect(function(touch) beginMobileTouch(touch) end),
+        UserInputService.TouchMoved:Connect(function(touch) moveMobileTouch(touch) end),
+        UserInputService.InputEnded:Connect(function(touch) endMobileTouch(touch) end),
+        UserInputService.TouchEnded:Connect(function(touch) endMobileTouch(touch) end),
+    }
+    StarlightUI.Destroying:Connect(function()
+        VortexionTouch.running=false
+        for _,capture in pairs(VortexionTouch.pointers) do
+            if capture.item.kind=="slider" then
+                pcall(capture.item.callback,capture.last.X,true,"cancel")
+            end
+        end
+        table.clear(VortexionTouch.pointers)
+        table.clear(VortexionTouch.items)
+        for _,link in ipairs(touchLinks) do link:Disconnect() end
+    end)
+end
 StarlightUI.Enabled = false
 if not isStudio then
 	pcall(function()
@@ -2682,7 +2803,13 @@ function Starlight:CreateWindow(WindowSettings)
 				+ 10
 		)
 
-		mainWindow.ModalOverlay.Visible = false
+        mainWindow.ModalOverlay.Visible = false
+        -- One modal-state listener for the window lifecycle, not one per dialog.
+        mainWindow.ModalOverlay:GetPropertyChangedSignal("Visible"):Connect(function()
+            if not mainWindow.ModalOverlay.Visible and mainWindow.Content then
+                mainWindow.Content.Interactable = true
+            end
+        end)
 		--[[mainWindow["Loading Screen"].Version.Text = WindowSettings.LoadingSettings.Title == "Starlight Interface Suite" and Release or "Starlight Interface Suite " .. Release
 		mainWindow["Loading Screen"].Frame.SubFrame.Title.Text = WindowSettings.LoadingSettings.Title or ""
 		mainWindow["Loading Screen"].Frame.SubFrame.Subtitle.Text = WindowSettings.LoadingSettings.Subtitle or ""]]
@@ -3086,7 +3213,7 @@ function Starlight:CreateWindow(WindowSettings)
 			end)
 			task.wait(0.18)
 			mainWindow.ModalOverlay.Visible = false
-			mainWindow.Content.Interactable = true
+			mainWindow.Content.Interactable = true -- v8: release touch handling immediately
 			if x then
 				x()
 			end
@@ -3094,6 +3221,8 @@ function Starlight:CreateWindow(WindowSettings)
 		end
 
 		connection = mainWindow.ModalOverlay.MouseButton1Click:Connect(close)
+        -- Avoid a stale noninteractive content frame after a dismissed modal.
+
 
 		Modal.Instance.Holder.Header.TextLabel.Text = Modal.Values.Name
 		Modal.Instance.Holder.Header.Icon.Visible = not String.IsEmptyOrNull(Modal.Values.Icon)
@@ -3333,7 +3462,7 @@ function Starlight:CreateWindow(WindowSettings)
 		until Tab.Instances.Page.Parent == tabs
 		Activate()
 
-		Tab.Instances.Button.Interact["MouseButton1Click"]:Connect(Activate)
+		Tab.Instances.Button.Interact.Activated:Connect(Activate)
 
 		Tab.Instances.Button.MouseEnter:Connect(function()
 			Tab.Hover = true
@@ -3768,7 +3897,7 @@ function Starlight:CreateWindow(WindowSettings)
 				--end)
 			end
 
-			Tab.Instances.Button.Interact["MouseButton1Click"]:Connect(Activate)
+			Tab.Instances.Button.Interact.Activated:Connect(Activate)
 
 			Tab.Instances.Button.MouseEnter:Connect(function()
 				Tab.Hover = true
@@ -3930,7 +4059,7 @@ function Starlight:CreateWindow(WindowSettings)
 				--end)
 			end
 
-			Tab.Instances.Button.Interact["MouseButton1Click"]:Connect(Activate)
+			Tab.Instances.Button.Interact.Activated:Connect(Activate)
 
 			Tab.Instances.Button.MouseEnter:Connect(function()
 				Tab.Hover = true
@@ -5254,8 +5383,8 @@ function Starlight:CreateWindow(WindowSettings)
 								)
 							end
 
-							ElementInstance.Interact.MouseButton1Click:Connect(function()
-								local Success, Response = pcall(Element.Values.Callback)
+							local function activateButton()
+                                local Success, Response = pcall(Element.Values.Callback)
 
 								if not Success then
 									ElementInstance["PART_Backdrop"].Header.Header.Text = "Callback Error"
@@ -5271,7 +5400,15 @@ function Starlight:CreateWindow(WindowSettings)
 									wait(0.5)
 									ElementInstance["PART_Backdrop"].Header.Header.Text = ElementSettings.Name
 								end
-							end)
+                            end
+                            -- A full-row touch target works even when Starlight's
+                            -- cloned Interact GUI absorbs native mouse events.
+                            VortexionTouch:Register(ElementInstance,"tap",activateButton,mainWindow)
+                            ElementInstance.Interact.Activated:Connect(function(inputObject)
+                                if inputObject and inputObject.UserInputType==Enum.UserInputType.Touch then return end
+                                if UserInputService.TouchEnabled and os.clock()-VortexionTouch.lastTouch < 0.35 then return end
+                                activateButton()
+                            end)
 
 							ElementInstance.Parent = Groupbox.ParentingItem
 
@@ -5380,60 +5517,18 @@ function Starlight:CreateWindow(WindowSettings)
 					}
 					local Instances
 
-                    -- Vortexion v7: Starlight's original Toggle bound MouseButton1Click
-                    -- only to a tiny Switch/Checkbox child. Android touch may not
-                    -- synthesize this mouse event, while taps on the label did nothing.
-                    -- Use Activated for all GuiButtons, and one bounded touch listener
-                    -- for the visible row; do not allocate per-frame listeners.
+                    -- Vortexion v8: register the full row in the shared touch
+                    -- router. Native Activated is for mouse/gamepad ONLY, because
+                    -- Android synthesizes Activated after TouchEnded on some devices.
                     local function bindToggleTap(row, button, callback)
-                        local lastActivation = -100
-                        local captured = nil
-                        local endedConn = nil
-                        local beginAt = 0
-                        local beginPos = nil
-                        local function cleanup()
-                            captured = nil
-                            beginPos = nil
-                            if endedConn then endedConn:Disconnect(); endedConn = nil end
-                        end
-                        local function fire()
-                            if not row.Parent or not row.Visible then return end
-                            if mainWindow and mainWindow.Content and not mainWindow.Content.Interactable then return end
-                            local now = os.clock()
-                            -- Prevent Activated and InputEnded from toggling twice for one tap.
-                            if now - lastActivation < 0.16 then return end
-                            lastActivation = now
-                            callback()
-                        end
-                        button.Activated:Connect(fire)
-                        if not UserInputService.TouchEnabled then return end
-                        row.Active = true
-                        local function begin(inputObject)
-                            if inputObject.UserInputType ~= Enum.UserInputType.Touch or captured then return end
+                        VortexionTouch:Register(row, "tap", callback, mainWindow, 0)
+                        button.Activated:Connect(function(inputObject)
+                            if inputObject and inputObject.UserInputType == Enum.UserInputType.Touch then return end
+                            if UserInputService.TouchEnabled
+                                and os.clock() - VortexionTouch.lastTouch < 0.35 then return end
                             if not row.Parent or not row.Visible or not row.Interactable then return end
-                            if mainWindow and mainWindow.Content and not mainWindow.Content.Interactable then return end
-                            captured = inputObject
-                            beginPos = inputObject.Position
-                            beginAt = os.clock()
-                            endedConn = UserInputService.InputEnded:Connect(function(finished)
-                                if finished ~= captured then return end
-                                local start = beginPos
-                                local moved = start and (finished.Position - start).Magnitude or math.huge
-                                local elapsed = os.clock() - beginAt
-                                local pos = finished.Position
-                                local rect = row.AbsolutePosition
-                                local size = row.AbsoluteSize
-                                local inside = pos.X >= rect.X and pos.X <= rect.X + size.X
-                                    and pos.Y >= rect.Y and pos.Y <= rect.Y + size.Y
-                                cleanup()
-                                -- Swipes remain owned by the ScrollingFrame, never switch a toggle.
-                                if moved <= 18 and elapsed <= 0.8 and inside then fire() end
-                            end)
-                        end
-                        row.InputBegan:Connect(begin)
-                        button.InputBegan:Connect(begin)
-                        row.AncestryChanged:Connect(function(_, parent)
-                            if not parent then cleanup() end
+                            if not mainWindow.Content.Interactable then return end
+                            callback()
                         end)
                     end
 
@@ -6017,93 +6112,87 @@ function Starlight:CreateWindow(WindowSettings)
 							end
 						end
 
-                        -- Vortexion mobile touch fix. The old slider only started its drag
-                        -- loop on MouseButton1Down and read Mouse.X each Stepped frame.
-                        -- Real Touch InputObjects did not move the value, and nested
-                        -- ScrollingFrames could steal the same gesture.
-                        local activePointer = nil
-                        local movedConnection = nil
-                        local endedConnection = nil
-                        local parentScroll = Element.Instance:FindFirstAncestorWhichIsA("ScrollingFrame")
-                        local scrollPreviouslyEnabled = nil
+                        -- Vortexion v8: one active pointer per slider in the
+                        -- shared Touch router. No input listeners are allocated
+                        -- per widget and nested scrolling is restored at release.
+                        local parentScroll = nil
+                        local oldScrollEnabled = nil
+                        local sliderActive = false
                         local lastValue = Element.Values.CurrentValue
-                        local pendingValue = nil
                         local lastPublish = 0
-
+                        local pendingValue = nil
                         local function publishSlider(positionX, final)
                             if not Element.Instance.Parent then return end
-                            local bar = Element.Instance.PART_Backdrop
-                            local left = bar.AbsolutePosition.X
-                            local width = bar.AbsoluteSize.X
-                            if width <= 0 then return end
-                            local alpha = math.clamp((positionX - left) / width, 0, 1)
-                            local minValue, maxValue = Element.Values.Range[1], Element.Values.Range[2]
-                            local step = math.max(0.000001, Element.Values.Increment)
-                            local value = math.clamp(math.floor((minValue + (maxValue - minValue) * alpha) / step + 0.5) * step, minValue, maxValue)
-                            value = math.floor(value * 10000000 + 0.5) / 10000000
-                            Element.Instance.PART_Backdrop.PART_Progress.Size = UDim2.fromScale(alpha, 1)
-                            Element.Instance.Value.input.Text = tostring(value)
-                            pendingValue = value
-                            local now = os.clock()
-                            -- Limit heavy callbacks (e.g. saved settings) to 20 Hz while dragging.
-                            if (final or now - lastPublish >= 0.05) and lastValue ~= value then
-                                lastValue = value
-                                Element.Values.CurrentValue = value
-                                lastPublish = now
-                                local ok, err = pcall(Element.Values.Callback, value)
-                                if not ok then warn("[Vortexion Slider] " .. tostring(err)) end
+                            local bar=Element.Instance.PART_Backdrop
+                            local left,width=bar.AbsolutePosition.X,bar.AbsoluteSize.X
+                            if width<=0 then return end
+                            local alpha=math.clamp((positionX-left)/width,0,1)
+                            local minValue,maxValue=Element.Values.Range[1],Element.Values.Range[2]
+                            local step=math.max(0.000001,Element.Values.Increment)
+                            local value=math.clamp(math.floor((minValue+(maxValue-minValue)*alpha)/step+0.5)*step,minValue,maxValue)
+                            value=math.floor(value*10000000+0.5)/10000000
+                            Element.Instance.PART_Backdrop.PART_Progress.Size=UDim2.fromScale(alpha,1)
+                            Element.Instance.Value.input.Text=tostring(value)
+                            pendingValue=value
+                            local now=os.clock()
+                            if (final or now-lastPublish>=0.05) and lastValue~=value then
+                                lastValue=value
+                                Element.Values.CurrentValue=value
+                                lastPublish=now
+                                local ok,err=pcall(Element.Values.Callback,value)
+                                if not ok then warn("[VortexionSlider/v8] "..tostring(err)) end
                             end
                         end
-
-                        local function stopDrag()
-                            if not activePointer then return end
-                            local inputObject = activePointer
-                            activePointer = nil
-                            if movedConnection then movedConnection:Disconnect(); movedConnection = nil end
-                            if endedConnection then endedConnection:Disconnect(); endedConnection = nil end
-                            Element.SLDragging = false
-                            -- Commit the final value even when last drag event was throttled.
-                            if pendingValue ~= nil and pendingValue ~= lastValue then
-                                lastValue = pendingValue
-                                Element.Values.CurrentValue = pendingValue
-                                local ok, err = pcall(Element.Values.Callback, pendingValue)
-                                if not ok then warn("[Vortexion Slider] " .. tostring(err)) end
-                            end
-                            pendingValue = nil
-                            if parentScroll and parentScroll.Parent and scrollPreviouslyEnabled ~= nil then
-                                parentScroll.ScrollingEnabled = scrollPreviouslyEnabled
-                            end
-                            scrollPreviouslyEnabled = nil
-                        end
-
-                        local function beginDrag(inputObject)
-                            if activePointer or not inputObject then return end
-                            local kind = inputObject.UserInputType
-                            if kind ~= Enum.UserInputType.Touch and kind ~= Enum.UserInputType.MouseButton1 then return end
-                            activePointer = inputObject
-                            Element.SLDragging = true
-                            if parentScroll and parentScroll.Parent then
-                                scrollPreviouslyEnabled = parentScroll.ScrollingEnabled
-                                parentScroll.ScrollingEnabled = false
-                            end
-                            publishSlider(inputObject.Position.X, true)
-                            movedConnection = UserInputService.InputChanged:Connect(function(changed)
-                                if activePointer ~= inputObject then return end
-                                if changed == inputObject or (kind == Enum.UserInputType.MouseButton1 and changed.UserInputType == Enum.UserInputType.MouseMovement) then
-                                    publishSlider(changed.Position.X, false)
+                        local function onSliderPointer(x,final,phase)
+                            if phase=="begin" then
+                                if sliderActive then return end
+                                sliderActive=true
+                                Element.SLDragging=true
+                                parentScroll=Element.Instance:FindFirstAncestorWhichIsA("ScrollingFrame")
+                                if parentScroll then
+                                    oldScrollEnabled=parentScroll.ScrollingEnabled
+                                    parentScroll.ScrollingEnabled=false
                                 end
-                            end)
-                            endedConnection = UserInputService.InputEnded:Connect(function(finished)
-                                if finished == inputObject or (kind == Enum.UserInputType.MouseButton1 and finished.UserInputType == Enum.UserInputType.MouseButton1) then
-                                    stopDrag()
+                            end
+                            if sliderActive and phase~="cancel" then
+                                publishSlider(x,final)
+                            end
+                            if phase=="end" or phase=="cancel" then
+                                if parentScroll and parentScroll.Parent and oldScrollEnabled~=nil then
+                                    parentScroll.ScrollingEnabled=oldScrollEnabled
                                 end
+                                parentScroll,oldScrollEnabled=nil,nil
+                                sliderActive=false
+                                Element.SLDragging=false
+                                pendingValue=nil
+                            end
+                        end
+                        -- Expand the vertical track hit area by 12px for thumbs.
+                        VortexionTouch:Register(Element.Instance.PART_Backdrop, "slider",onSliderPointer,mainWindow,12)
+                        -- Non-touch mouse inputs keep their native drag path.
+                        if not UserInputService.TouchEnabled then
+                            local mouseDrag=nil
+                            local movedConn,endedConn
+                            Element.Instance.PART_Backdrop.Interact.InputBegan:Connect(function(i)
+                                if mouseDrag or i.UserInputType~=Enum.UserInputType.MouseButton1 then return end
+                                mouseDrag=i
+                                onSliderPointer(i.Position.X,false,"begin")
+                                movedConn=UserInputService.InputChanged:Connect(function(changed)
+                                    if changed.UserInputType==Enum.UserInputType.MouseMovement then
+                                        onSliderPointer(changed.Position.X,false,"move")
+                                    end
+                                end)
+                                endedConn=UserInputService.InputEnded:Connect(function(finished)
+                                    if finished.UserInputType~=Enum.UserInputType.MouseButton1 then return end
+                                    onSliderPointer(finished.Position.X,true,"end")
+                                    mouseDrag=nil
+                                    if movedConn then movedConn:Disconnect();movedConn=nil end
+                                    if endedConn then endedConn:Disconnect();endedConn=nil end
+                                end)
                             end)
                         end
-
-                        Element.Instance.PART_Backdrop.Interact.InputBegan:Connect(beginDrag)
-                        Element.Instance.PART_Backdrop.PART_Progress.Knob.Interact.InputBegan:Connect(beginDrag)
                         Element.Instance.AncestryChanged:Connect(function(_, parent)
-                            if not parent then stopDrag() end
+                            if not parent and sliderActive then onSliderPointer(0,true,"cancel") end
                         end)
 
 						Element.Instance.PART_Backdrop.PART_Progress:GetPropertyChangedSignal("Size"):Connect(function()

@@ -33,3 +33,9 @@
 - Deduplicate touch `InputEnded` vs `Activated`, protect open modal dialogs, and detach InputEnded on release.
 - Preserves touch-v6 slider fix, generator ESP details and proximity alerts.
 - Static checks only: Roblox Android interaction and FPS are not verified.
+
+## v8 Touch Router
+
+- 重构 Starlight 全局触控路由：整行 Toggle/按钮/滑块由同一 InputObject 状态机处理，兼容 TouchStarted/TouchMoved/TouchEnded；修复弹窗内容区交互状态。
+- 避免多次事件触发；回收 UI 监听；禁用手机 Tooltip 的无意义 RenderStepped；重新运行时旧版 v8 计时任务退出。
+- 保留 v7 游戏功能及所有选项 ID。安卓真机验证仍待完成。

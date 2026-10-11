@@ -21,6 +21,10 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
 local RNG = Random.new()
+-- v8: stop previous session's throttled background jobs on reinjection.
+local sessionEnv = (getgenv and getgenv()) or _G
+sessionEnv.VortexionSessionId = (sessionEnv.VortexionSessionId or 0) + 1
+local thisSessionId = sessionEnv.VortexionSessionId
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local Animator = Humanoid:WaitForChild("Animator")
@@ -41,7 +45,7 @@ local stamina
 -- Throttled task runner
 local function runEvery(interval, fn)
     task.spawn(function()
-        while true do
+        while sessionEnv.VortexionSessionId == thisSessionId do
             local ok, err = pcall(fn)
             if not ok then warn("[runEvery]", err) end
             task.wait(interval)
