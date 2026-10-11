@@ -1,0 +1,12 @@
+{
+  "source_static_checks_total": 39,
+  "passed": 39,
+  "failed": [],
+  "original_control_ids": 45,
+  "current_control_ids": 51,
+  "truth_table_cases": 16,
+  "luau_parse_executed": false,
+  "android_runtime_executed": false,
+  "github_repo_published": false,
+  "full_lua_luau_semantic_verification": false
+}

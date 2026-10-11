@@ -1,0 +1,19 @@
+{
+  "phase": 2,
+  "project_name": "Vortexion - Forsaken",
+  "ui_project_title": "Forsaken",
+  "ui_byline": "- Vortexion",
+  "repository_name_proposed": "Vortexion-Forsaken",
+  "status": "local_build_ready",
+  "starlight_source_sha256": "30149a9b4419f9613db6427ecd5f79663fb0e5cf3f85031e9b34fe462c4068cc",
+  "core_sha256": "e751600025cb4f80ef18d0805a6cf26c30507052db0dbffbb0f5d49606c54948",
+  "bridge_sha256": "9287809229b01e9b848d7211fd07335e1e76e16df557aea89ac7fab2f04058e7",
+  "output_sha256": "86fdc83c5c11bf6cb1301f7867640ee9ff8bd378d71b6abbeb8de1c994c8f108",
+  "output_bytes": 550918,
+  "source_uploaded_to_github": false,
+  "new_public_repo_created": false,
+  "old_repo_touched": false,
+  "roblox_android_tested": false,
+  "luau_compiler_tested": false,
+  "notice": "GitHub connector cannot create repositories; publish only after independent repo is created and permissions checked."
+}
