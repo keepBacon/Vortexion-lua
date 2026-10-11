@@ -2743,6 +2743,56 @@ if FluentLoaded then
 
     -- No Fluent add-ons: build native Starlight theme/config groupboxes.
     Window:InstallSettings(Tabs.Settings)
+    local fovValue, fovActive, oldFov, fovListener = 80, false, nil, nil
+    local function applyFovValue()
+        local camera = Workspace.CurrentCamera
+        if not (fovActive and camera) then return end
+        if not oldFov then oldFov = camera.FieldOfView end
+        local effective = math.min(fovValue, 120) -- Roblox engine camera limit
+        if math.abs(camera.FieldOfView - effective) > 0.01 then
+            camera.FieldOfView = effective
+        end
+    end
+    Tabs.Settings:AddSlider("ForsakenFOVValue", {
+        Title = "视场角（80–200）", Default = 80, Min = 80, Max = 200, Rounding = 0,
+        Callback = function(value)
+            fovValue = math.clamp(tonumber(value) or 80, 80, 200)
+            applyFovValue()
+        end
+    })
+    Tabs.Settings:AddToggle("ForsakenFOVEnabled", {
+        Title = "应用视场角", Default = false,
+        Callback = function(enabled)
+            fovActive = enabled
+            if not enabled then
+                if fovListener then fovListener:Disconnect(); fovListener = nil end
+                if oldFov and Workspace.CurrentCamera then
+                    Workspace.CurrentCamera.FieldOfView = oldFov
+                end
+                oldFov = nil
+            else
+                applyFovValue()
+                if not fovListener then
+                    local nextCheck = 0
+                    fovListener = RunService.Heartbeat:Connect(function()
+                        if sessionEnv.VortexionSessionId ~= thisSessionId then
+                            fovListener:Disconnect(); fovListener = nil
+                            return
+                        end
+                        local now = os.clock()
+                        if now >= nextCheck then
+                            nextCheck = now + 0.2
+                            applyFovValue()
+                        end
+                    end)
+                end
+            end
+        end
+    })
+    Tabs.Settings:AddParagraph({
+        Title = "视场角限制",
+        Content = "控制当前相机。引擎实际限制为 120°；没有证据证实游戏设置值可直接改写到 200°。"
+    })
     -- Fluent third-party addon strings: UI-only patch, never alters saved option keys.
     local ExtraLabels = {
         ["Interface"] = "界面", ["Minimize Keybind"] = "收起菜单快捷键",
@@ -3545,22 +3595,28 @@ if FluentLoaded then
         Content = "此功能组来自 skibisaken 的脚本，社区：https://discord.gg/ETTV2g8kxS"
     })
 
-	Tabs.GuestSettings:AddToggle("ChargeSpeedToggle", {
-        Title = "自定义冲锋速度",
-        Default = false,
-        Callback = function(Value)
-			RunService.Stepped:Connect(function()
-				if Value == true then
-					local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-       		 		local speedMultipliers = character:FindFirstChild("SpeedMultipliers")
-        			local mult = speedMultipliers and speedMultipliers:FindFirstChild("Guest1337Charge")
-        			if mult and GuestChargeSpeed ~= nil then
-        	   		mult.Value = GuestChargeSpeed
-        			    print("Guest charge speed set to", GuestChargeSpeed)
-        			end
-				end			
-			end)
-		end
+    -- One shared, detachable job instead of one permanent Stepped hook per toggle.
+    local chargeConnection, chargeLastTime = nil, 0
+    Tabs.GuestSettings:AddToggle("ChargeSpeedToggle", {
+        Title = "自定义冲锋速度", Default = false,
+        Callback = function(enabled)
+            if chargeConnection then chargeConnection:Disconnect(); chargeConnection = nil end
+            if not enabled then return end
+            chargeConnection = RunService.Heartbeat:Connect(function()
+                if sessionEnv.VortexionSessionId ~= thisSessionId then
+                    chargeConnection:Disconnect(); chargeConnection = nil
+                    return
+                end
+                if os.clock() - chargeLastTime < 0.1 then return end
+                chargeLastTime = os.clock()
+                local character = LocalPlayer.Character
+                local multipliers = character and character:FindFirstChild("SpeedMultipliers")
+                local charge = multipliers and multipliers:FindFirstChild("Guest1337Charge")
+                if charge and charge:IsA("NumberValue") and charge.Value ~= GuestChargeSpeed then
+                    charge.Value = GuestChargeSpeed
+                end
+            end)
+        end
     })
 
 	Tabs.GuestSettings:AddSlider("GuestChargeSpeed", {
