@@ -2827,12 +2827,22 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 		end
 
-		mainWindow.Sidebar.Player.PlayerIcon.Image =
-			Players:GetUserThumbnailAsync(Player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+		-- Do not block first UI frame on the avatar HTTP thumbnail request.
+        task.spawn(function()
+            local ok, image = pcall(function()
+                return Players:GetUserThumbnailAsync(Player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+            end)
+            if ok and image and mainWindow and mainWindow.Parent then
+                mainWindow.Sidebar.Player.PlayerIcon.Image = image
+            end
+        end)
 		mainWindow.Sidebar.Player.Header.Text = Player.DisplayName
 		mainWindow.Sidebar.Player.subheader.Text = Player.Name
 
-		ContentProvider:PreloadAsync({
+		-- Asset loading no longer blocks window construction on Android.
+        task.spawn(function()
+            pcall(function()
+                ContentProvider:PreloadAsync({
 			"rbxassetid://116767744785553", -- cursor
 			"rbxassetid://90155503712202", -- cursor shadow
 			"rbxassetid://18824089198", -- player blurred
@@ -2853,6 +2863,8 @@ function Starlight:CreateWindow(WindowSettings)
 				print(`loaded asset {asset}`)
 			end
 		end)
+            end)
+        end)
 
 		-- Theme Binding
 		do
@@ -11151,24 +11163,28 @@ return function(Starlight)
                     column.ScrollingEnabled = true
                 end
                 local layout = column:FindFirstChildOfClass("UIListLayout")
+                local refreshPending = false
                 local function refresh()
+                    refreshPending = false
                     if not column.Parent then return end
                     local content = layout and layout.AbsoluteContentSize.Y or 0
                     local needed = math.ceil(content + (isTouch and 62 or 30))
                     if column.CanvasSize.Y.Offset ~= needed then
                         column.CanvasSize = UDim2.new(0, 0, 0, needed)
                     end
-                    column.ScrollingEnabled = true
+                end
+                local function scheduleRefresh()
+                    if refreshPending then return end
+                    refreshPending = true
+                    task.defer(refresh)
                 end
                 if layout then
                     table.insert(scrollConns, layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                        task.defer(refresh)
+                        scheduleRefresh()
                     end))
                 end
-                table.insert(scrollConns, column:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-                    task.defer(refresh)
-                end))
-                task.defer(refresh)
+                table.insert(scrollConns, column:GetPropertyChangedSignal("AbsoluteSize"):Connect(scheduleRefresh))
+                scheduleRefresh()
             end
         end
     end
@@ -11260,6 +11276,10 @@ return function(Starlight)
             local handle = {Native = nativeTab, Key = idx, Title = info.Title, Count = 0, GroupCount = 0}
             local groupbox
             local function pickBox()
+                -- Release the render thread periodically while building many mobile controls.
+                if isTouch and handle.Count > 0 and handle.Count % 7 == 0 then
+                    task.wait()
+                end
                 -- Split large lists into bounded groupboxes; avoid one enormous page hierarchy.
                 if not groupbox or (handle.Count > 0 and handle.Count % 9 == 0) then
                     handle.GroupCount += 1
@@ -14125,6 +14145,56 @@ if FluentLoaded then
 
     -- No Fluent add-ons: build native Starlight theme/config groupboxes.
     Window:InstallSettings(Tabs.Settings)
+    local fovValue, fovActive, oldFov, fovListener = 80, false, nil, nil
+    local function applyFovValue()
+        local camera = Workspace.CurrentCamera
+        if not (fovActive and camera) then return end
+        if not oldFov then oldFov = camera.FieldOfView end
+        local effective = math.min(fovValue, 120) -- Roblox engine camera limit
+        if math.abs(camera.FieldOfView - effective) > 0.01 then
+            camera.FieldOfView = effective
+        end
+    end
+    Tabs.Settings:AddSlider("ForsakenFOVValue", {
+        Title = "视场角（80–200）", Default = 80, Min = 80, Max = 200, Rounding = 0,
+        Callback = function(value)
+            fovValue = math.clamp(tonumber(value) or 80, 80, 200)
+            applyFovValue()
+        end
+    })
+    Tabs.Settings:AddToggle("ForsakenFOVEnabled", {
+        Title = "应用视场角", Default = false,
+        Callback = function(enabled)
+            fovActive = enabled
+            if not enabled then
+                if fovListener then fovListener:Disconnect(); fovListener = nil end
+                if oldFov and Workspace.CurrentCamera then
+                    Workspace.CurrentCamera.FieldOfView = oldFov
+                end
+                oldFov = nil
+            else
+                applyFovValue()
+                if not fovListener then
+                    local nextCheck = 0
+                    fovListener = RunService.Heartbeat:Connect(function()
+                        if sessionEnv.VortexionSessionId ~= thisSessionId then
+                            fovListener:Disconnect(); fovListener = nil
+                            return
+                        end
+                        local now = os.clock()
+                        if now >= nextCheck then
+                            nextCheck = now + 0.2
+                            applyFovValue()
+                        end
+                    end)
+                end
+            end
+        end
+    })
+    Tabs.Settings:AddParagraph({
+        Title = "视场角限制",
+        Content = "控制当前相机。引擎实际限制为 120°；没有证据证实游戏设置值可直接改写到 200°。"
+    })
     -- Fluent third-party addon strings: UI-only patch, never alters saved option keys.
     local ExtraLabels = {
         ["Interface"] = "界面", ["Minimize Keybind"] = "收起菜单快捷键",
@@ -14927,22 +14997,28 @@ if FluentLoaded then
         Content = "此功能组来自 skibisaken 的脚本，社区：https://discord.gg/ETTV2g8kxS"
     })
 
-	Tabs.GuestSettings:AddToggle("ChargeSpeedToggle", {
-        Title = "自定义冲锋速度",
-        Default = false,
-        Callback = function(Value)
-			RunService.Stepped:Connect(function()
-				if Value == true then
-					local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-       		 		local speedMultipliers = character:FindFirstChild("SpeedMultipliers")
-        			local mult = speedMultipliers and speedMultipliers:FindFirstChild("Guest1337Charge")
-        			if mult and GuestChargeSpeed ~= nil then
-        	   		mult.Value = GuestChargeSpeed
-        			    print("Guest charge speed set to", GuestChargeSpeed)
-        			end
-				end			
-			end)
-		end
+    -- One shared, detachable job instead of one permanent Stepped hook per toggle.
+    local chargeConnection, chargeLastTime = nil, 0
+    Tabs.GuestSettings:AddToggle("ChargeSpeedToggle", {
+        Title = "自定义冲锋速度", Default = false,
+        Callback = function(enabled)
+            if chargeConnection then chargeConnection:Disconnect(); chargeConnection = nil end
+            if not enabled then return end
+            chargeConnection = RunService.Heartbeat:Connect(function()
+                if sessionEnv.VortexionSessionId ~= thisSessionId then
+                    chargeConnection:Disconnect(); chargeConnection = nil
+                    return
+                end
+                if os.clock() - chargeLastTime < 0.1 then return end
+                chargeLastTime = os.clock()
+                local character = LocalPlayer.Character
+                local multipliers = character and character:FindFirstChild("SpeedMultipliers")
+                local charge = multipliers and multipliers:FindFirstChild("Guest1337Charge")
+                if charge and charge:IsA("NumberValue") and charge.Value ~= GuestChargeSpeed then
+                    charge.Value = GuestChargeSpeed
+                end
+            end)
+        end
     })
 
 	Tabs.GuestSettings:AddSlider("GuestChargeSpeed", {
@@ -14955,6 +15031,87 @@ if FluentLoaded then
             GuestChargeSpeed = Value
         end
     })
+
+    -- Attack-sound awareness: event-driven, no frame-by-frame workspace scan.
+    local guestSoundWarningEnabled = false
+    local guestSoundWarningRange = 20
+    local guestSoundWarnings = {}
+    local guestSoundLastWarning = 0
+    local guestSoundIds = {
+        ["102228729296384"] = true, ["140242176732868"] = true,
+        ["86174610237192"] = true, ["101199185291628"] = true,
+        ["95079963655241"] = true, ["112809109188560"] = true,
+        ["84307400688050"] = true, ["136323728355613"] = true
+    }
+    local function stopGuestSoundWarnings()
+        guestSoundWarningEnabled = false
+        for _, conn in ipairs(guestSoundWarnings) do
+            if conn.Connected then conn:Disconnect() end
+        end
+        table.clear(guestSoundWarnings)
+    end
+    local function startGuestSoundWarnings()
+        stopGuestSoundWarnings()
+        guestSoundWarningEnabled = true
+        local playersFolder = Workspace:FindFirstChild("Players")
+        local killers = playersFolder and playersFolder:FindFirstChild("Killers")
+        if not killers then
+            guestSoundWarningEnabled = false
+            return
+        end
+        local seen = {}
+        local function check(sound)
+            if not guestSoundWarningEnabled or sessionEnv.VortexionSessionId ~= thisSessionId then
+                return
+            end
+            local id = tostring(sound.SoundId):match("%d+")
+            if not guestSoundIds[id] or not sound:IsDescendantOf(killers) then return end
+            local now = os.clock()
+            if now - guestSoundLastWarning < 2 then return end
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local model = sound:FindFirstAncestorOfClass("Model")
+            local targetRoot = model and model:FindFirstChild("HumanoidRootPart")
+            if not targetRoot then
+                local ancestor = model and model.Parent
+                if ancestor and ancestor:IsA("Model") then
+                    targetRoot = ancestor:FindFirstChild("HumanoidRootPart")
+                end
+            end
+            if not (root and targetRoot) then return end
+            local offset = root.Position - targetRoot.Position
+            if offset:Dot(offset) > guestSoundWarningRange * guestSoundWarningRange then return end
+            guestSoundLastWarning = now
+            Fluent:Notify({Title = "Guest 1337 · 攻击预警",
+                Content = "检测到附近杀手攻击音效", Duration = 2})
+        end
+        local function observe(item)
+            if not item:IsA("Sound") or seen[item] then return end
+            seen[item] = true
+            local function bindIfKnown()
+                local id = tostring(item.SoundId):match("%d+")
+                if not guestSoundIds[id] then return end
+                table.insert(guestSoundWarnings, item.Played:Connect(function() check(item) end))
+            end
+            bindIfKnown()
+        end
+        for _, item in ipairs(killers:GetDescendants()) do observe(item) end
+        table.insert(guestSoundWarnings, killers.DescendantAdded:Connect(observe))
+    end
+    Tabs.GuestSettings:AddToggle("GuestSoundWarning", {
+        Title = "杀手攻击音效预警", Default = false,
+        Callback = function(enabled)
+            if enabled then startGuestSoundWarnings() else stopGuestSoundWarnings() end
+        end
+    })
+    Tabs.GuestSettings:AddSlider("GuestSoundWarningRange", {
+        Title = "攻击预警距离", Default = 20, Min = 8, Max = 45, Rounding = 0,
+        Suffix = "studs", Callback = function(value)
+            guestSoundWarningRange = math.clamp(tonumber(value) or 20, 8, 45)
+        end
+    })
+    Tabs.GuestSettings:AddParagraph({Title = "音效预警说明",
+        Content = "参考上传源码重新实现。仅启用时监听杀手音效，2 秒通知冷却，关闭时释放连接；音效 ID 可能随游戏更新失效。"})
 
     Tabs.GuestSettings:AddToggle("GuestSettingsToggle", {
         Title = "自动格挡",
