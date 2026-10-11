@@ -3630,6 +3630,87 @@ if FluentLoaded then
         end
     })
 
+    -- Attack-sound awareness: event-driven, no frame-by-frame workspace scan.
+    local guestSoundWarningEnabled = false
+    local guestSoundWarningRange = 20
+    local guestSoundWarnings = {}
+    local guestSoundLastWarning = 0
+    local guestSoundIds = {
+        ["102228729296384"] = true, ["140242176732868"] = true,
+        ["86174610237192"] = true, ["101199185291628"] = true,
+        ["95079963655241"] = true, ["112809109188560"] = true,
+        ["84307400688050"] = true, ["136323728355613"] = true
+    }
+    local function stopGuestSoundWarnings()
+        guestSoundWarningEnabled = false
+        for _, conn in ipairs(guestSoundWarnings) do
+            if conn.Connected then conn:Disconnect() end
+        end
+        table.clear(guestSoundWarnings)
+    end
+    local function startGuestSoundWarnings()
+        stopGuestSoundWarnings()
+        guestSoundWarningEnabled = true
+        local playersFolder = Workspace:FindFirstChild("Players")
+        local killers = playersFolder and playersFolder:FindFirstChild("Killers")
+        if not killers then
+            guestSoundWarningEnabled = false
+            return
+        end
+        local seen = {}
+        local function check(sound)
+            if not guestSoundWarningEnabled or sessionEnv.VortexionSessionId ~= thisSessionId then
+                return
+            end
+            local id = tostring(sound.SoundId):match("%d+")
+            if not guestSoundIds[id] or not sound:IsDescendantOf(killers) then return end
+            local now = os.clock()
+            if now - guestSoundLastWarning < 2 then return end
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local model = sound:FindFirstAncestorOfClass("Model")
+            local targetRoot = model and model:FindFirstChild("HumanoidRootPart")
+            if not targetRoot then
+                local ancestor = model and model.Parent
+                if ancestor and ancestor:IsA("Model") then
+                    targetRoot = ancestor:FindFirstChild("HumanoidRootPart")
+                end
+            end
+            if not (root and targetRoot) then return end
+            local offset = root.Position - targetRoot.Position
+            if offset:Dot(offset) > guestSoundWarningRange * guestSoundWarningRange then return end
+            guestSoundLastWarning = now
+            Fluent:Notify({Title = "Guest 1337 · 攻击预警",
+                Content = "检测到附近杀手攻击音效", Duration = 2})
+        end
+        local function observe(item)
+            if not item:IsA("Sound") or seen[item] then return end
+            seen[item] = true
+            local function bindIfKnown()
+                local id = tostring(item.SoundId):match("%d+")
+                if not guestSoundIds[id] then return end
+                table.insert(guestSoundWarnings, item.Played:Connect(function() check(item) end))
+            end
+            bindIfKnown()
+        end
+        for _, item in ipairs(killers:GetDescendants()) do observe(item) end
+        table.insert(guestSoundWarnings, killers.DescendantAdded:Connect(observe))
+    end
+    Tabs.GuestSettings:AddToggle("GuestSoundWarning", {
+        Title = "杀手攻击音效预警", Default = false,
+        Callback = function(enabled)
+            if enabled then startGuestSoundWarnings() else stopGuestSoundWarnings() end
+        end
+    })
+    Tabs.GuestSettings:AddSlider("GuestSoundWarningRange", {
+        Title = "攻击预警距离", Default = 20, Min = 8, Max = 45, Rounding = 0,
+        Suffix = "studs", Callback = function(value)
+            guestSoundWarningRange = math.clamp(tonumber(value) or 20, 8, 45)
+        end
+    })
+    Tabs.GuestSettings:AddParagraph({Title = "音效预警说明",
+        Content = "参考上传源码重新实现。仅启用时监听杀手音效，2 秒通知冷却，关闭时释放连接；音效 ID 可能随游戏更新失效。"})
+
     Tabs.GuestSettings:AddToggle("GuestSettingsToggle", {
         Title = "自动格挡",
         Default = false,
