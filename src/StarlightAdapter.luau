@@ -61,24 +61,28 @@ return function(Starlight)
                     column.ScrollingEnabled = true
                 end
                 local layout = column:FindFirstChildOfClass("UIListLayout")
+                local refreshPending = false
                 local function refresh()
+                    refreshPending = false
                     if not column.Parent then return end
                     local content = layout and layout.AbsoluteContentSize.Y or 0
                     local needed = math.ceil(content + (isTouch and 62 or 30))
                     if column.CanvasSize.Y.Offset ~= needed then
                         column.CanvasSize = UDim2.new(0, 0, 0, needed)
                     end
-                    column.ScrollingEnabled = true
+                end
+                local function scheduleRefresh()
+                    if refreshPending then return end
+                    refreshPending = true
+                    task.defer(refresh)
                 end
                 if layout then
                     table.insert(scrollConns, layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                        task.defer(refresh)
+                        scheduleRefresh()
                     end))
                 end
-                table.insert(scrollConns, column:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-                    task.defer(refresh)
-                end))
-                task.defer(refresh)
+                table.insert(scrollConns, column:GetPropertyChangedSignal("AbsoluteSize"):Connect(scheduleRefresh))
+                scheduleRefresh()
             end
         end
     end
@@ -170,6 +174,10 @@ return function(Starlight)
             local handle = {Native = nativeTab, Key = idx, Title = info.Title, Count = 0, GroupCount = 0}
             local groupbox
             local function pickBox()
+                -- Release the render thread periodically while building many mobile controls.
+                if isTouch and handle.Count > 0 and handle.Count % 7 == 0 then
+                    task.wait()
+                end
                 -- Split large lists into bounded groupboxes; avoid one enormous page hierarchy.
                 if not groupbox or (handle.Count > 0 and handle.Count % 9 == 0) then
                     handle.GroupCount += 1
