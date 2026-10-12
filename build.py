@@ -22,6 +22,9 @@ prefix=(
     '-- Build output, do not edit: modify src/*.luau then run python3 build.py.\n'
     'local Starlight = (function()\n'+starlight+'\nend)()\n'
     'local StarlightBridgeFactory = (function()\n'+bridge+'\nend)()\n'
+    'local BloxCombatFactory = (function()\n'+combat+'\nend)()\n'
+    'local BloxVisualFactory = (function()\n'+visual+'\nend)()\n'
+    'local BloxCosmeticFactory = (function()\n'+cosmetic+'\nend)()\n'
 )
 core=core.replace('local StarlightBridgeFactory = nil\nlocal Starlight = nil\n','',1)
 out=DIST/'Vortexion_Forsaken.lua';out.write_text(prefix+core,encoding='utf-8')
@@ -32,13 +35,24 @@ manifest={'phase':5,'project_name':'Vortexion - Forsaken','ui_project_title':'Fo
 BLOX=ROOT/'src/BloxStrikeCore.luau'
 blox=BLOX.read_text(encoding='utf-8')
 assert blox.count('local StarlightBridgeFactory = nil\nlocal Starlight = nil\n')==1
+combat=(ROOT/'src/BloxStrikeCombat.luau').read_text(encoding='utf-8')
+visual=(ROOT/'src/BloxStrikeVisual.luau').read_text(encoding='utf-8')
+cosmetic=(ROOT/'src/BloxStrikeCosmetic.luau').read_text(encoding='utf-8')
+assert combat.lstrip().startswith('return function(c)')
+assert visual.lstrip().startswith('return function(c)')
+assert cosmetic.lstrip().startswith('-- BloxStrike')
 blox_prefix=(
     '-- Vortexion BloxStrike independent build\n'
     '-- Starlight © Nebula Softworks, CC BY-NC 4.0 (see vendor/Starlight/LICENSE)\n'
     'local Starlight = (function()\n'+starlight+'\nend)()\n'
     'local StarlightBridgeFactory = (function()\n'+bridge+'\nend)()\n'
+    'local BloxCombatFactory = (function()\n'+combat+'\nend)()\n'
+    'local BloxVisualFactory = (function()\n'+visual+'\nend)()\n'
+    'local BloxCosmeticFactory = (function()\n'+cosmetic+'\nend)()\n'
 )
 blox_out=DIST/'Vortexion_BloxStrike.lua'
-blox_out.write_text(blox_prefix+blox.replace('local StarlightBridgeFactory = nil\nlocal Starlight = nil\n','',1),encoding='utf-8')
+blox_source=blox.replace('local BloxCombatFactory = nil\n','',1).replace('local BloxVisualFactory = nil\n','',1).replace('local BloxCosmeticFactory = nil\n','',1)
+blox_source=blox_source.replace('local StarlightBridgeFactory = nil\nlocal Starlight = nil\n','',1)
+blox_out.write_text(blox_prefix+blox_source,encoding='utf-8')
 print('BloxStrike bundle:',blox_out.stat().st_size,sha(blox_out))
 print(json.dumps(manifest,indent=2,ensure_ascii=False))

@@ -1,247 +1,158 @@
--- Vortexion - BloxStrike
--- Independent game-specific feature set. Uses the same Starlight UI as Forsaken.
--- Built by build.py; never automatically runs when the game ID is unsupported.
+-- Vortexion - BloxStrike v2: game-specific entry, unified Starlight UI.
+-- Do not copy source implementations: use lifecycle-managed services in separate modules.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
 local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
-local uid = (getgenv and getgenv()) or _G
-uid.VortexionBloxSession = (uid.VortexionBloxSession or 0) + 1
-local token = uid.VortexionBloxSession
-local function active() return uid.VortexionBloxSession == token end
-local Window, Tabs
+local BloxCombatFactory = nil
+local BloxVisualFactory = nil
+local BloxCosmeticFactory = nil
 local StarlightBridgeFactory = nil
 local Starlight = nil
-local successful, UI = pcall(function() return StarlightBridgeFactory(Starlight) end)
-if not successful or not UI then
-    warn("[Vortexion/BloxStrike] UI unavailable: " .. tostring(UI))
-    return
+
+local global = (getgenv and getgenv()) or _G
+if type(global.VortexionBloxCleanup) == "function" then
+    pcall(global.VortexionBloxCleanup)
 end
-Window = UI:CreateWindow({Title = "BloxStrike", Size = UDim2.fromOffset(580, 460)})
-pcall(function()
-    local header = Starlight.Instance.MainWindow.Sidebar.Header
-    header.Text = "BloxStrike"
-end)
-Tabs = {
-    Combat = Window:AddTab({Title="战斗", Icon="lucide-crosshair"}),
-    Visual = Window:AddTab({Title="视觉", Icon="lucide-eye"}),
-    Appearance = Window:AddTab({Title="外观", Icon="lucide-palette"}),
-    Movement = Window:AddTab({Title="移动", Icon="lucide-activity"}),
-    Settings = Window:AddTab({Title="设置", Icon="lucide-settings"}),
-}
-Window:InstallSettings(Tabs.Settings)
-local state = {Fov=220, AimEnabled=false, Hold=false, TeamCheck=true,
-    WallCheck=true, AimSmooth=0.25, ESP=false, ESPDetail=true, ESPDistance=true,
-    Tracers=false, ScanHz=12, Fullbright=false, SkinEnabled=false,
-    SkinName="", WeaponName="", KnifeName="Karambit"}
-local currentTarget = nil
-local targetCache = {}
-local function isAlive(player)
-    local char = player.Character
-    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-    return char and humanoid and humanoid.Health > 0 and char:GetAttribute("Dead") ~= true
+global.VortexionBloxGeneration = (global.VortexionBloxGeneration or 0) + 1
+local generation = global.VortexionBloxGeneration
+local connections = {}
+local cleanups = {}
+local function isCurrent()
+    return global.VortexionBloxGeneration == generation
 end
-local function isEnemy(player)
-    if player == LocalPlayer then return false end
-    if not state.TeamCheck then return true end
-    if Workspace:GetAttribute("Gamemode") == "Deathmatch" then return true end
-    local a, b = LocalPlayer:GetAttribute("Team"), player:GetAttribute("Team")
-    if a ~= nil and b ~= nil then return a ~= b end
-    if LocalPlayer.Team and player.Team then return LocalPlayer.Team ~= player.Team end
+local function ownConnection(conn)
+    if conn then table.insert(connections,conn) end
+    return conn
+end
+local function ownCleanup(fn)
+    table.insert(cleanups,fn)
+end
+local function cleanup()
+    if global.VortexionBloxGeneration == generation then
+        global.VortexionBloxGeneration += 1
+    end
+    for i=#connections,1,-1 do
+        pcall(function() connections[i]:Disconnect() end)
+        connections[i]=nil
+    end
+    for i=#cleanups,1,-1 do
+        pcall(cleanups[i])
+        cleanups[i]=nil
+    end
+end
+global.VortexionBloxCleanup=cleanup
+
+-- BloxStrike uses Workspace.Characters/Terrorists and Counter-Terrorists;
+-- Player.Character alone is not a reliable source while spectating/spawning.
+local function getCharacterRoot()
+    return Workspace:FindFirstChild("Characters")
+end
+local function teamFolder(player)
+    local root=getCharacterRoot()
+    if not root then return nil end
+    for _,name in ipairs({"Terrorists","Counter-Terrorists"}) do
+        local folder=root:FindFirstChild(name)
+        if folder and folder:FindFirstChild(player.Name) then return folder end
+    end
+    return nil
+end
+local function characterOf(player)
+    local team=teamFolder(player)
+    local candidate=team and team:FindFirstChild(player.Name)
+    if candidate and candidate:IsA("Model") then return candidate end
+    return player.Character
+end
+local function livingCharacter(player)
+    local model=characterOf(player)
+    if not model or not model.Parent or model:GetAttribute("Dead")==true then return nil end
+    local humanoid=model:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return nil end
+    return model,humanoid
+end
+local function isEnemy(player,checkTeam)
+    if player==LocalPlayer then return false end
+    if checkTeam==false or Workspace:GetAttribute("Gamemode")=="Deathmatch" then return true end
+    local localTeam=teamFolder(LocalPlayer)
+    local otherTeam=teamFolder(player)
+    if localTeam and otherTeam then return localTeam~=otherTeam end
+    local a,b=LocalPlayer:GetAttribute("Team"),player:GetAttribute("Team")
+    if a~=nil and b~=nil then return a~=b end
+    if LocalPlayer.Team and player.Team then return LocalPlayer.Team~=player.Team end
     return true
 end
-local raycastParams = RaycastParams.new()
-raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-raycastParams.IgnoreWater = true
-local function isVisible(char, part, camera)
-    if not state.WallCheck then return true end
-    local ignore = {camera}
-    if LocalPlayer.Character then table.insert(ignore, LocalPlayer.Character) end
-    raycastParams.FilterDescendantsInstances = ignore
-    local origin = camera.CFrame.Position
-    local result = Workspace:Raycast(origin, part.Position-origin, raycastParams)
-    return result == nil or result.Instance:IsDescendantOf(char)
+local function playerFromModel(model)
+    if not model then return nil end
+    local byName=Players:FindFirstChild(model.Name)
+    if byName and byName:IsA("Player") then return byName end
+    return Players:GetPlayerFromCharacter(model)
 end
-local function findTarget(camera)
-    local vp = camera.ViewportSize
-    local center = Vector2.new(vp.X/2,vp.Y/2)
-    local best, d2 = nil, state.Fov*state.Fov
-    for _, player in ipairs(Players:GetPlayers()) do
-        if isAlive(player) and isEnemy(player) then
-            local character = player.Character
-            local part = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
-            if part then
-                local pos,onScreen = camera:WorldToViewportPoint(part.Position)
-                if onScreen and pos.Z > 0 then
-                    local dx,dy=pos.X-center.X,pos.Y-center.Y
-                    local radius=dx*dx+dy*dy
-                    if radius<d2 and isVisible(character,part,camera) then
-                        d2,best=radius,part
-                    end
-                end
-            end
-        end
+local function notify(title, content)
+    if global.VortexionBloxNotify then
+        global.VortexionBloxNotify(title,content)
     end
-    return best
 end
-local nextAimScan=0
-local function aimFrame(dt)
-    if not active() then return end
-    if not state.AimEnabled or not state.Hold then return end
-    local camera=Workspace.CurrentCamera
-    if not camera then return end
-    local now=os.clock()
-    if now>=nextAimScan then
-        nextAimScan=now+0.1
-        currentTarget=findTarget(camera)
-    end
-    if not currentTarget or not currentTarget.Parent then return end
-    local direction=currentTarget.Position-camera.CFrame.Position
-    if direction.Magnitude<0.1 then return end
-    local alpha=1-math.exp(-math.max(0.1, state.AimSmooth*20)*dt)
-    camera.CFrame=camera.CFrame:Lerp(CFrame.lookAt(camera.CFrame.Position,currentTarget.Position),alpha)
+
+local ok,ui=pcall(function() return StarlightBridgeFactory(Starlight) end)
+if not ok or not ui then
+    warn("[Vortexion/BloxStrike] Starlight initialization failed: "..tostring(ui))
+    return
 end
-local aimConnection
-local function syncAim()
-    if aimConnection then aimConnection:Disconnect();aimConnection=nil end
-    currentTarget=nil
-    if state.AimEnabled then aimConnection=RunService.RenderStepped:Connect(aimFrame) end
+global.VortexionBloxNotify=function(title,content)
+    pcall(function() ui:Notify({Title=title, Content=content, Duration=4}) end)
 end
-Tabs.Combat:AddToggle("BloxAimEnabled", {Title="镜头瞄准辅助",Default=false,
-    Description="按住右键时平滑转向可见的敌方角色；不修改命中数据",
-    Callback=function(v) state.AimEnabled=v;syncAim() end})
-Tabs.Combat:AddSlider("BloxAimFov", {Title="目标搜索半径",Default=220,Min=50,Max=500,Rounding=0,
-    Callback=function(v) state.Fov=v end})
-Tabs.Combat:AddSlider("BloxAimSmooth", {Title="镜头跟随强度",Default=25,Min=5,Max=100,Rounding=0,
-    Callback=function(v) state.AimSmooth=v/100 end})
-Tabs.Combat:AddToggle("BloxWallCheck", {Title="遮挡检查",Default=true,
-    Callback=function(v) state.WallCheck=v end})
-Tabs.Combat:AddToggle("BloxTeamCheck", {Title="阵营过滤",Default=true,
-    Callback=function(v) state.TeamCheck=v end})
-local began=UserInputService.InputBegan:Connect(function(input,processed)
-    if processed or not active() then return end
-    if input.UserInputType==Enum.UserInputType.MouseButton2 then state.Hold=true end
+local window=ui:CreateWindow({Title="BloxStrike", Size=UDim2.fromOffset(580,460)})
+pcall(function()
+    local header=Starlight.Instance.MainWindow.Sidebar.Header
+    header.Text="BloxStrike"
 end)
-local ended=UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType==Enum.UserInputType.MouseButton2 then state.Hold=false end
-end)
--- ESP does not depend on Drawing API. Highlights are lightweight and removed on disable.
-local highlights={}
-local function removeHighlights()
-    for player,h in pairs(highlights) do
-        if h then pcall(function() h:Destroy() end) end
-        highlights[player]=nil
+local tabs={
+    Combat=window:AddTab({Title="战斗",Icon="lucide-crosshair"}),
+    Weapon=window:AddTab({Title="武器",Icon="lucide-target"}),
+    Visual=window:AddTab({Title="视觉",Icon="lucide-eye"}),
+    Appearance=window:AddTab({Title="枪械皮肤",Icon="lucide-palette"}),
+    Knife=window:AddTab({Title="刀具与手套",Icon="lucide-swords"}),
+    Movement=window:AddTab({Title="移动",Icon="lucide-activity"}),
+    Settings=window:AddTab({Title="设置",Icon="lucide-settings"}),
+}
+window:InstallSettings(tabs.Settings)
+
+local ctx={
+    Players=Players,RunService=RunService,Workspace=Workspace,
+    ReplicatedStorage=ReplicatedStorage,Lighting=Lighting,Input=UserInputService,
+    LocalPlayer=LocalPlayer,UI=ui,Window=window,Tabs=tabs,
+    Notify=notify,IsCurrent=isCurrent,Own=ownConnection,OnCleanup=ownCleanup,
+    Character=characterOf,Living=livingCharacter,TeamFolder=teamFolder,
+    Enemy=isEnemy,PlayerFromModel=playerFromModel,
+}
+local function setup(name,factory)
+    local passed,err=pcall(factory,ctx)
+    if not passed then
+        warn("[Vortexion/BloxStrike] "..name.." failed: "..tostring(err))
+        notify(name.." 模块失败",tostring(err))
     end
 end
-local function updateHighlights()
-    if not state.ESP or not active() then return end
-    for _,player in ipairs(Players:GetPlayers()) do
-        local char=player.Character
-        local valid=char and isAlive(player) and isEnemy(player)
-        local h=highlights[player]
-        if not valid then
-            if h then h:Destroy();highlights[player]=nil end
-        else
-            if not h or h.Parent~=char then
-                if h then h:Destroy() end
-                h=Instance.new("Highlight")
-                h.Name="VortexionBloxHighlight"
-                h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
-                h.FillTransparency=0.78
-                h.OutlineTransparency=0.08
-                h.Adornee=char
-                h.Parent=char
-                highlights[player]=h
-            end
-            h.FillColor=Color3.fromRGB(255,90,90)
-            h.OutlineColor=Color3.fromRGB(255,120,120)
-        end
-    end
-end
-local espThread
-local function syncESP()
-    if not state.ESP then
-        removeHighlights()
-        return
-    end
-    if espThread then return end
-    espThread=task.spawn(function()
-        while state.ESP and active() do
-            updateHighlights()
-            task.wait(0.3)
-        end
-        espThread=nil
-    end)
-end
-Tabs.Visual:AddToggle("BloxESP", {Title="角色高亮 ESP",Default=false,
-    Callback=function(v) state.ESP=v;syncESP() end})
-Tabs.Visual:AddToggle("BloxESPTeam", {Title="阵营过滤（与瞄准共享）",Default=true,
-    Callback=function(v) state.TeamCheck=v;updateHighlights() end})
-local prevLighting
-Tabs.Visual:AddToggle("BloxFullbright", {Title="明亮场景",Default=false,
-    Callback=function(on)
-        if on then
-            if not prevLighting then
-                prevLighting={Brightness=Lighting.Brightness,Ambient=Lighting.Ambient,
-                    OutdoorAmbient=Lighting.OutdoorAmbient,ClockTime=Lighting.ClockTime}
-            end
-            Lighting.Brightness=2
-            Lighting.Ambient=Color3.fromRGB(160,160,160)
-            Lighting.OutdoorAmbient=Color3.fromRGB(180,180,180)
-            Lighting.ClockTime=14
-        elseif prevLighting then
-            for k,v in pairs(prevLighting) do Lighting[k]=v end
-            prevLighting=nil
-        end
-    end})
-local originalWalkSpeed, speedConnection
-local requestedSpeed=20
-local function disableSpeed()
-    if speedConnection then speedConnection:Disconnect(); speedConnection=nil end
-    local hum=LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum and originalWalkSpeed then hum.WalkSpeed=originalWalkSpeed end
-    originalWalkSpeed=nil
-end
-Tabs.Movement:AddSlider("BloxWalkSpeed", {Title="移动速度",Min=16,Max=60,Default=20,Rounding=0,
-    Callback=function(v)
-        requestedSpeed=v
-    end})
-Tabs.Movement:AddToggle("BloxSpeedEnabled", {Title="自定义移动速度",Default=false,
-    Callback=function(on)
-        disableSpeed()
-        if not on then return end
-        local nextCheck=0
-        speedConnection=RunService.Heartbeat:Connect(function()
-            if not active() then disableSpeed();return end
-            local now=os.clock()
-            if now<nextCheck then return end
-            nextCheck=now+0.25
-            local hum=LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if hum then
-                if not originalWalkSpeed then originalWalkSpeed=hum.WalkSpeed end
-                hum.WalkSpeed=requestedSpeed
-            end
-        end)
-    end})
-Tabs.Appearance:AddParagraph({Title="BloxStrike 外观",
-    Content="本地皮肤资源需要核对 Assets/Skins 结构。此版本不写入库存或服务器经济数据。"})
-Tabs.Appearance:AddButton({Title="扫描可用的游戏皮肤资源",Callback=function()
+setup("战斗",BloxCombatFactory)
+setup("视觉",BloxVisualFactory)
+setup("皮肤",BloxCosmeticFactory)
+tabs.Settings:AddParagraph({Title="BloxStrike 兼容说明",
+    Content="独立模块；角色优先识别 Workspace.Characters。所有皮肤仅本地预览；服务器命中与武器模块兼容性依赖游戏版本。"})
+tabs.Settings:AddButton({Title="检查运行状态",Callback=function()
     local assets=ReplicatedStorage:FindFirstChild("Assets")
     local skins=assets and assets:FindFirstChild("Skins")
-    if not skins then
-        UI:Notify({Title="资源不可用",Content="当前版本未找到 Assets/Skins。",Duration=3})
-        return
-    end
-    local count=0
-    for _,folder in ipairs(skins:GetChildren()) do
-        count+=1
-    end
-    UI:Notify({Title="皮肤资源扫描",Content="检测到 "..tostring(count).." 个类别。",Duration=4})
+    local characters=getCharacterRoot()
+    local components=ReplicatedStorage:FindFirstChild("Components")
+    local weapon=components and components:FindFirstChild("Weapon")
+    notify("运行环境检查",(characters and "角色目录正常" or "角色目录未加载")
+        .." / "..(skins and "皮肤目录正常" or "皮肤目录未加载")
+        .." / "..(weapon and "武器组件正常" or "武器组件未加载"))
 end})
-Tabs.Settings:AddParagraph({Title="BloxStrike 模式",
-    Content="根据 GameId=7633926880 加载；界面与 Forsaken 共用 Starlight 资源。功能按需执行，未在真机及线上对战中验证。"})
-Window:SelectTab(1)
-UI:Notify({Title="Vortexion - BloxStrike",Content="独立 BloxStrike 模块已启动",Duration=4})
+tabs.Settings:AddButton({Title="卸载全部 BloxStrike 功能",Callback=function()
+    cleanup()
+    pcall(function() ui:Destroy() end)
+end})
+window:SelectTab(1)
+notify("Vortexion - BloxStrike","功能模块已加载；进入对局后启用对应功能")
