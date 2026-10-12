@@ -56,3 +56,17 @@ blox_source=blox_source.replace('local StarlightBridgeFactory = nil\nlocal Starl
 blox_out.write_text(blox_prefix+blox_source,encoding='utf-8')
 print('BloxStrike bundle:',blox_out.stat().st_size,sha(blox_out))
 print(json.dumps(manifest,indent=2,ensure_ascii=False))
+
+# Dedicated AOTR bundles use the same vendored Starlight but isolated application state.
+for name,core_file in (("Lobby","AOTRLobby.luau"),("Battle","AOTRBattle.luau")):
+    common=(ROOT/"src/AOTRCommon.luau").read_text(encoding="utf-8")
+    body=(ROOT/"src"/core_file).read_text(encoding="utf-8")
+    header=(
+        "-- Vortexion AOTR "+name+" - generated bundle, do not edit\n"
+        "local Starlight = (function()\n"+starlight+"\nend)()\n"
+        "local StarlightBridgeFactory = (function()\n"+bridge+"\nend)()\n"
+        "local AOTRCommon = (function()\n"+common+"\nend)()\n"
+    )
+    output=DIST/("Vortexion_AOTR_"+name+".lua")
+    output.write_text(header+body, encoding="utf-8")
+    print("AOTR",name,output.stat().st_size,sha(output))

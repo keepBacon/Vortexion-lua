@@ -1,7 +1,11 @@
 -- Vortexion - Forsaken: real Starlight API bridge for preserved v4 callbacks.
 -- Existing stable option IDs are retained for mobile hotkeys and future config migration.
 -- Called after the vendored Starlight Source.lua has been executed.
-return function(Starlight)
+return function(Starlight, config)
+    config = config or {}
+    local appName = config.Name or "Forsaken"
+    local appFolder = config.Folder or "ForsakenCN"
+    local tabSection = config.Section or "F O R S A K E N"
     assert(Starlight and type(Starlight.CreateWindow) == "function", "Starlight UI missing")
     local input = game:GetService("UserInputService")
     local camera = workspace.CurrentCamera
@@ -16,7 +20,7 @@ return function(Starlight)
     local function safeCallback(callback, value)
         if type(callback) ~= "function" then return end
         local ok, err = pcall(callback, value)
-        if not ok then warn("[Forsaken/Starlight] 控件回调异常: " .. tostring(err)) end
+        if not ok then warn("[" .. appName .. "/Starlight] 控件回调异常: " .. tostring(err)) end
     end
 
     local function clampFrame()
@@ -89,7 +93,7 @@ return function(Starlight)
 
     function bridge:Notify(config)
         pcall(function()
-            Starlight:Notification({Title = config.Title or "Forsaken", Content = config.Content or "", Duration = config.Duration or 4})
+            Starlight:Notification({Title = config.Title or appName, Content = config.Content or "", Duration = config.Duration or 4})
         end)
     end
 
@@ -103,7 +107,7 @@ return function(Starlight)
         local sidebar = main and main:FindFirstChild("Sidebar")
         local header = sidebar and sidebar:FindFirstChild("Header")
         if not (header and header:IsA("TextLabel")) then return false end
-        header.Text = "Forsaken"
+        header.Text = appName
         header.ClipsDescendants = false
         local byline = header:FindFirstChild("VortexionSignature")
         if not byline then
@@ -132,19 +136,19 @@ return function(Starlight)
     function bridge:CreateWindow(config)
         Starlight.WindowKeybind = "K"
         local native = Starlight:CreateWindow({
-            Name = "Forsaken",
+            Name = appName,
             Subtitle = "",
             LoadingEnabled = false,
             InterfaceAdvertisingPrompts = false,
             NotifyOnCallbackError = true,
             BuildWarnings = true,
             DefaultSize = UDim2.fromOffset(650, 490),
-            FileSettings = {RootFolder = "ForsakenCN", ConfigFolder = "Configs", ThemeFolder = "Themes"},
+            FileSettings = {RootFolder = appFolder, ConfigFolder = "Configs", ThemeFolder = "Themes"},
         })
         -- Starlight's sidebar header is the only project-name slot; keep the
         -- byline out of the main content subtitle and fixed to the name itself.
         if not attachBrandSignature() then task.defer(attachBrandSignature) end
-        local group = native:CreateTabSection("F O R S A K E N", true)
+        local group = native:CreateTabSection(tabSection, true)
         local win = {Native = native, Root = Starlight.Instance.MainWindow, TabHolder = nil}
         function win:SelectTab(index)
             local item = bridge.Tabs[index]
