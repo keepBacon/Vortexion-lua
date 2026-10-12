@@ -28,4 +28,17 @@ out=DIST/'Vortexion_Forsaken.lua';out.write_text(prefix+core,encoding='utf-8')
 sha=lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 manifest={'phase':5,'project_name':'Vortexion - Forsaken','ui_project_title':'Forsaken','ui_byline':'- Vortexion','repository_name_proposed':'Vortexion-lua', 'repository':'keepBacon/Vortexion-lua', 'build_tag':'mobile-perf-fov-guest-v9','status':'local_build_ready_for_publishing','starlight_source_sha256':sha(VENDOR),'core_sha256':sha(CORE),'bridge_sha256':sha(BRIDGE),'output_sha256':sha(out),'output_bytes':out.stat().st_size,'publication':'verify_github_main_after_push','github_repository':'https://github.com/keepBacon/Vortexion-lua','old_repo_touched':False,'roblox_android_tested':False,'luau_compiler_tested':False,'notice':'Build-time metadata cannot verify GitHub deployment; confirm main and Raw URLs after push.'}
 (DIST/'build-manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False),encoding='utf-8')
+# Game-specific bundle shares vendored Starlight without mixing feature logic.
+BLOX=ROOT/'src/BloxStrikeCore.luau'
+blox=BLOX.read_text(encoding='utf-8')
+assert blox.count('local StarlightBridgeFactory = nil\nlocal Starlight = nil\n')==1
+blox_prefix=(
+    '-- Vortexion BloxStrike independent build\n'
+    '-- Starlight © Nebula Softworks, CC BY-NC 4.0 (see vendor/Starlight/LICENSE)\n'
+    'local Starlight = (function()\n'+starlight+'\nend)()\n'
+    'local StarlightBridgeFactory = (function()\n'+bridge+'\nend)()\n'
+)
+blox_out=DIST/'Vortexion_BloxStrike.lua'
+blox_out.write_text(blox_prefix+blox.replace('local StarlightBridgeFactory = nil\nlocal Starlight = nil\n','',1),encoding='utf-8')
+print('BloxStrike bundle:',blox_out.stat().st_size,sha(blox_out))
 print(json.dumps(manifest,indent=2,ensure_ascii=False))
