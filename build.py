@@ -67,3 +67,20 @@ for name,core_file in (("Lobby","AOTRLobby.luau"),("Battle","AOTRBattle.luau")):
     output=DIST/("Vortexion_AOTR_"+name+".lua")
     output.write_text(header+body, encoding="utf-8")
     print("AOTR",name,output.stat().st_size,sha(output))
+
+# SCP: Roleplay is compiled separately, preserving other game bundles.
+scp_core=(ROOT/'src/SCPRoleplayCore.luau').read_text(encoding='utf-8')
+scp_meta=(ROOT/'src/SCPRoleplayMetadata.luau').read_text(encoding='utf-8')
+scp_placeholder='local StarlightBridgeFactory = nil\nlocal Starlight = nil\nlocal MetadataFactory = nil\n'
+assert scp_core.count(scp_placeholder)==1
+assert scp_meta.rstrip().endswith('return Metadata')
+scp_prefix=(
+    '-- Vortexion SCP: Roleplay standalone release.\n'
+    '-- Starlight © Nebula Softworks, CC BY-NC 4.0: see vendor/Starlight/LICENSE.\n'
+    'local Starlight = (function()\n'+starlight+'\nend)()\n'
+    'local StarlightBridgeFactory = (function()\n'+bridge+'\nend)()\n'
+    'local MetadataFactory = function()\n'+scp_meta+'\nend\n'
+)
+scp_file=DIST/'Vortexion_SCPRoleplay.lua'
+scp_file.write_text(scp_prefix+scp_core.replace(scp_placeholder,'',1),encoding='utf-8')
+print('SCP Roleplay bundle:',scp_file.stat().st_size,sha(scp_file))
