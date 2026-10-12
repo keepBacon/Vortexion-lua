@@ -34,9 +34,10 @@ return function(scene, Starlight, Bridge)
         return window
     end
     function app:Loop(id, interval, work)
-        self.flags[id]=true
+        self.flags[id]=(self.flags[id] or 0)+1
+        local generation=self.flags[id]
         task.spawn(function()
-            while self:Alive() and self.flags[id] do
+            while self:Alive() and self.flags[id]==generation do
                 local started=os.clock()
                 local ok,err=pcall(work)
                 if not ok then warn("[AOTR/"..id.."] "..tostring(err)) end
@@ -44,7 +45,7 @@ return function(scene, Starlight, Bridge)
             end
         end)
     end
-    function app:StopLoop(id) self.flags[id]=false end
+    function app:StopLoop(id) self.flags[id]=(self.flags[id] or 0)+1 end
     function app:Character()
         local c=self.player and self.player.Character
         local hum=c and c:FindFirstChildOfClass("Humanoid")
