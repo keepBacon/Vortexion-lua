@@ -49,9 +49,9 @@ for name,core_file in (("Lobby","AOTRLobby.luau"),("Battle","AOTRBattle.luau")):
     body=(ROOT/"src"/core_file).read_text(encoding="utf-8")
     header=(
         "-- Vortexion AOTR "+name+" - generated bundle, do not edit\n"
-        "local Starlight = (function()\\n"+starlight+"\\nend)()\\n"
-        "local StarlightBridgeFactory = (function()\\n"+bridge+"\\nend)()\\n"
-        "local AOTRCommon = (function()\\n"+common+"\\nend)()\\n"
+        "local Starlight = (function()\n"+starlight+"\nend)()\n"
+        "local StarlightBridgeFactory = (function()\n"+bridge+"\nend)()\n"
+        "local AOTRCommon = (function()\n"+common+"\nend)()\n"
     )
     output=DIST/("Vortexion_AOTR_"+name+".lua")
     output.write_text(header+body, encoding="utf-8")
