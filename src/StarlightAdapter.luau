@@ -7,6 +7,7 @@ return function(Starlight)
     local camera = workspace.CurrentCamera
     local bridge = { Options = {}, GUI = Starlight.Instance, Library = Starlight, Tabs = {} }
     local windowHandle
+    local appName = "Forsaken"
     local firstTab = nil
     local sections = {}
     local created = 0
@@ -89,7 +90,7 @@ return function(Starlight)
 
     function bridge:Notify(config)
         pcall(function()
-            Starlight:Notification({Title = config.Title or "Forsaken", Content = config.Content or "", Duration = config.Duration or 4})
+            Starlight:Notification({Title = config.Title or appName, Content = config.Content or "", Duration = config.Duration or 4})
         end)
     end
 
@@ -97,13 +98,13 @@ return function(Starlight)
     -- "Forsaken" in the original title slot with a small grey "- Vortexion" below its right edge.
     -- Make this a child of the actual title label so mobile UIScale and window dragging
     -- cannot desynchronize the two text elements.
-    local function attachBrandSignature()
+    local function attachBrandSignature(title)
         local gui = Starlight.Instance
         local main = gui and gui:FindFirstChild("MainWindow")
         local sidebar = main and main:FindFirstChild("Sidebar")
         local header = sidebar and sidebar:FindFirstChild("Header")
         if not (header and header:IsA("TextLabel")) then return false end
-        header.Text = "Forsaken"
+        header.Text = title or "Forsaken"
         header.ClipsDescendants = false
         local byline = header:FindFirstChild("VortexionSignature")
         if not byline then
@@ -130,21 +131,23 @@ return function(Starlight)
     end
 
     function bridge:CreateWindow(config)
+        appName = config.Title or "Forsaken"
         Starlight.WindowKeybind = "K"
         local native = Starlight:CreateWindow({
-            Name = "Forsaken",
+            Name = appName,
             Subtitle = "",
             LoadingEnabled = false,
             InterfaceAdvertisingPrompts = false,
             NotifyOnCallbackError = true,
             BuildWarnings = true,
             DefaultSize = UDim2.fromOffset(650, 490),
-            FileSettings = {RootFolder = "ForsakenCN", ConfigFolder = "Configs", ThemeFolder = "Themes"},
+            FileSettings = {RootFolder = config.ConfigFolder or "ForsakenCN", ConfigFolder = "Configs", ThemeFolder = "Themes"},
         })
         -- Starlight's sidebar header is the only project-name slot; keep the
         -- byline out of the main content subtitle and fixed to the name itself.
-        if not attachBrandSignature() then task.defer(attachBrandSignature) end
-        local group = native:CreateTabSection("F O R S A K E N", true)
+        if not attachBrandSignature(appName) then task.defer(attachBrandSignature, appName) end
+        local sectionTitle = appName == "Forsaken" and "F O R S A K E N" or string.upper(appName)
+        local group = native:CreateTabSection(sectionTitle, true)
         local win = {Native = native, Root = Starlight.Instance.MainWindow, TabHolder = nil}
         function win:SelectTab(index)
             local item = bridge.Tabs[index]
