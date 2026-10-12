@@ -8,10 +8,20 @@ local PLACE_FALLBACK = {
     [18687417158] = "dist/Vortexion_Forsaken.lua",
     [114234929420007] = "dist/Vortexion_BloxStrike.lua",
 }
+local AOTR_UNIVERSE = 4658598196
+local AOTR_PLACES = {
+    [13379208636] = "dist/Vortexion_AOTR_Lobby.lua",
+    [14916516914] = "dist/Vortexion_AOTR_Lobby.lua",
+    [13379349730] = "dist/Vortexion_AOTR_Battle.lua",
+}
 local base = "https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/"
 local universe = tonumber(game.GameId)
 local place = tonumber(game.PlaceId)
-local path = ROUTES[universe] or PLACE_FALLBACK[place]
+local path = universe == AOTR_UNIVERSE and AOTR_PLACES[place] or ROUTES[universe] or PLACE_FALLBACK[place]
+if universe == AOTR_UNIVERSE and not AOTR_PLACES[place] then
+    warn("[Vortexion/AOTR] Unsupported or trade scene: "..tostring(place))
+    return
+end
 if not path then
     warn(("[Vortexion] Unsupported experience: GameId=%s, PlaceId=%s"):format(tostring(universe), tostring(place)))
     return
