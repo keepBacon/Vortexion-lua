@@ -3,10 +3,12 @@
 local ROUTES = {
     [6331902150] = "dist/Vortexion_Forsaken.lua",
     [7633926880] = "dist/Vortexion_BloxStrike.lua",
+    [1742264997] = "dist/Vortexion_SCPRoleplay.lua",
 }
 local PLACE_FALLBACK = {
     [18687417158] = "dist/Vortexion_Forsaken.lua",
     [114234929420007] = "dist/Vortexion_BloxStrike.lua",
+    [5041144419] = "dist/Vortexion_SCPRoleplay.lua",
 }
 local base = "https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/"
 local universe = tonumber(game.GameId)
