@@ -13,6 +13,9 @@ local AOTR_PLACES = {
     [13379208636] = "dist/Vortexion_AOTR_Lobby.lua",
     [14916516914] = "dist/Vortexion_AOTR_Lobby.lua",
     [13379349730] = "dist/Vortexion_AOTR_Battle.lua",
+    [14638336319] = "dist/Vortexion_AOTR_Battle.lua",
+    [14012874501] = "dist/Vortexion_AOTR_Battle.lua",
+    [13904207646] = "dist/Vortexion_AOTR_Battle.lua",
 }
 local base = "https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/"
 local universe = tonumber(game.GameId)
