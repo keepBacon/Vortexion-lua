@@ -100,7 +100,7 @@ bind(RunService.Heartbeat,function(dt)
     accumulator+=dt
     if accumulator>=1/state.UpdateHz then accumulator=0;update() end
 end)
-local ok,bridge=pcall(function() return StarlightBridgeFactory(Starlight) end)
+local ok,bridge=pcall(function() return StarlightBridgeFactory(Starlight, {Name="SCP: Roleplay", Folder="VortexionSCP", Section="SCP ROLEPLAY"}) end)
 if not ok or not bridge then
     warn("[Vortexion/SCP] UI initialization failed: "..tostring(bridge))
     cleanup()
