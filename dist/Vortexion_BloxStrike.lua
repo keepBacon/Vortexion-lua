@@ -11488,7 +11488,10 @@ return function(c)
                 if not cam then return end
                 local origin=cam.CFrame.Position
                 local dir=cam.CFrame.LookVector*500
-                ray.FilterDescendantsInstances={cam,c.Character(c.LocalPlayer)}
+                local filters={cam}
+                local myCharacter=c.Character(c.LocalPlayer)
+                if myCharacter then table.insert(filters,myCharacter) end
+                ray.FilterDescendantsInstances=filters
                 local hit=c.Workspace:Raycast(origin,dir,ray)
                 local model=hit and hit.Instance:FindFirstAncestorOfClass("Model")
                 local player=model and c.PlayerFromModel(model)
