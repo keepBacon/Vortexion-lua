@@ -42,3 +42,21 @@ blox_out=DIST/'Vortexion_BloxStrike.lua'
 blox_out.write_text(blox_prefix+blox.replace('local StarlightBridgeFactory = nil\nlocal Starlight = nil\n','',1),encoding='utf-8')
 print('BloxStrike bundle:',blox_out.stat().st_size,sha(blox_out))
 print(json.dumps(manifest,indent=2,ensure_ascii=False))
+
+# SCP: Roleplay identity display; no third-party combat packages are bundled.
+SCP=ROOT/'src/SCPRoleplayCore.luau'
+SCP_METADATA=ROOT/'src/SCPRoleplayMetadata.luau'
+scp=SCP.read_text(encoding='utf-8')
+meta=SCP_METADATA.read_text(encoding='utf-8')
+assert scp.count('local StarlightBridgeFactory = nil\nlocal Starlight = nil\nlocal MetadataFactory = nil\n') == 1
+assert meta.rstrip().endswith('return Metadata')
+scp_prefix=(
+    '-- Vortexion SCP: Roleplay single-file distribution.\n'
+    '-- Starlight © Nebula Softworks, CC BY-NC 4.0; see vendor/Starlight/LICENSE.\n'
+    'local Starlight = (function()\n'+starlight+'\nend)()\n'
+    'local StarlightBridgeFactory = (function()\n'+bridge+'\nend)()\n'
+    'local MetadataFactory = function()\n'+meta+'\nend\n'
+)
+scp_out=DIST/'Vortexion_SCPRoleplay.lua'
+scp_out.write_text(scp_prefix+scp.replace('local StarlightBridgeFactory = nil\nlocal Starlight = nil\nlocal MetadataFactory = nil\n','',1),encoding='utf-8')
+print('SCP: Roleplay bundle:',scp_out.stat().st_size,sha(scp_out))
