@@ -48,7 +48,8 @@ SCP=ROOT/'src/SCPRoleplayCore.luau'
 SCP_METADATA=ROOT/'src/SCPRoleplayMetadata.luau'
 scp=SCP.read_text(encoding='utf-8')
 meta=SCP_METADATA.read_text(encoding='utf-8')
-assert scp.count('local StarlightBridgeFactory = nil\nlocal Starlight = nil\nlocal MetadataFactory = nil\n') == 1
+placeholder='local StarlightBridgeFactory = nil\nlocal Starlight = nil\nlocal MetadataFactory = nil\n'
+assert scp.count(placeholder) == 1
 assert meta.rstrip().endswith('return Metadata')
 scp_prefix=(
     '-- Vortexion SCP: Roleplay single-file distribution.\n'
@@ -58,5 +59,5 @@ scp_prefix=(
     'local MetadataFactory = function()\n'+meta+'\nend\n'
 )
 scp_out=DIST/'Vortexion_SCPRoleplay.lua'
-scp_out.write_text(scp_prefix+scp.replace('local StarlightBridgeFactory = nil\nlocal Starlight = nil\nlocal MetadataFactory = nil\n','',1),encoding='utf-8')
+scp_out.write_text(scp_prefix+scp.replace(placeholder,'',1),encoding='utf-8')
 print('SCP: Roleplay bundle:',scp_out.stat().st_size,sha(scp_out))
