@@ -21,6 +21,10 @@ if not successful or not UI then
     return
 end
 Window = UI:CreateWindow({Title = "BloxStrike", Size = UDim2.fromOffset(580, 460)})
+pcall(function()
+    local header = Starlight.Instance.MainWindow.Sidebar.Header
+    header.Text = "BloxStrike"
+end)
 Tabs = {
     Combat = Window:AddTab({Title="战斗", Icon="lucide-crosshair"}),
     Visual = Window:AddTab({Title="视觉", Icon="lucide-eye"}),
