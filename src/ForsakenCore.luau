@@ -2741,8 +2741,7 @@ if FluentLoaded then
         end)
     end
 
-    -- No Fluent add-ons: build native Starlight theme/config groupboxes.
-    Window:InstallSettings(Tabs.Settings)
+    -- Put FOV controls before native theme/config groups on mobile.
     local fovValue, fovActive, oldFov, fovListener = 80, false, nil, nil
     local function applyFovValue()
         local camera = Workspace.CurrentCamera
@@ -2793,6 +2792,7 @@ if FluentLoaded then
         Title = "视场角限制",
         Content = "控制当前相机。引擎实际限制为 120°；没有证据证实游戏设置值可直接改写到 200°。"
     })
+    Window:InstallSettings(Tabs.Settings)
     -- Fluent third-party addon strings: UI-only patch, never alters saved option keys.
     local ExtraLabels = {
         ["Interface"] = "界面", ["Minimize Keybind"] = "收起菜单快捷键",

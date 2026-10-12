@@ -2247,7 +2247,7 @@ StarlightUI:WaitForChild("Drag").Position = UDim2.new(
 
 local mainWindow: Frame = StarlightUI.MainWindow
 local Resources = StarlightUI.Resources
-local navigation: Frame = mainWindow.Sidebar.Navigation
+local navigation: any = mainWindow.Sidebar.Navigation
 local tabs: Frame = mainWindow.Content.ContentMain.Elements
 local Resizing = false -- Not Implemented as of Alpha Release 2
 local ResizePos = false -- Not Implemented as of Alpha Release 2
@@ -2258,12 +2258,56 @@ local GUICanvasSize = { X = Camera.ViewportSize.X, Y = Camera.ViewportSize.Y - G
 
 local mainWindow: Frame = StarlightUI.MainWindow
 local Resources = StarlightUI.Resources
-local navigation: Frame = mainWindow.Sidebar.Navigation
+local navigation: any = mainWindow.Sidebar.Navigation
 local tabs: Frame = mainWindow.Content.ContentMain.Elements
 local Resizing = false -- Not Implemented as of Alpha Release 2
 local ResizePos = false -- Not Implemented as of Alpha Release 2
 
 local GUICanvasSize = { X = Camera.ViewportSize.X, Y = Camera.ViewportSize.Y - GuiInset }
+
+-- Vortexion: make every native sidebar tab reachable on compact viewports.
+-- Preserve the Starlight tab template, section layout and native callbacks.
+do
+    local navigationRoot = navigation
+    local scroller = navigationRoot
+    if not navigationRoot:IsA("ScrollingFrame") then
+        scroller = Instance.new("ScrollingFrame")
+        scroller.Name = "VortexionNavigationScroll"
+        scroller.BackgroundTransparency = 1
+        scroller.BorderSizePixel = 0
+        scroller.Position = UDim2.fromOffset(0, 0)
+        scroller.Size = UDim2.fromScale(1, 1)
+        scroller.ZIndex = navigationRoot.ZIndex + 1
+        scroller.ScrollBarImageTransparency = 0.35
+        scroller.ScrollBarImageColor3 = Color3.fromRGB(135, 140, 151)
+        scroller.Parent = navigationRoot
+        local hadLayout = false
+        for _, child in ipairs(navigationRoot:GetChildren()) do
+            if child ~= scroller and (
+                child.Name == "NavigationSectionTemplate"
+                or child.Name:sub(1, 12) == "TAB_SECTION_"
+                or child:IsA("UIListLayout")
+                or child:IsA("UIPadding")
+            ) then
+                if child:IsA("UIListLayout") then hadLayout = true end
+                child.Parent = scroller
+            end
+        end
+        if not hadLayout then
+            local layout = Instance.new("UIListLayout")
+            layout.SortOrder = Enum.SortOrder.LayoutOrder
+            layout.Padding = UDim.new(0, 4)
+            layout.Parent = scroller
+        end
+        navigation = scroller
+    end
+    scroller.Active = true
+    scroller.ScrollingEnabled = true
+    scroller.ScrollingDirection = Enum.ScrollingDirection.Y
+    scroller.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroller.CanvasSize = UDim2.fromOffset(0, 0)
+    scroller.ScrollBarThickness = UserInputService.TouchEnabled and 5 or 4
+end
 
 --// ENDSUBSECTION
 
