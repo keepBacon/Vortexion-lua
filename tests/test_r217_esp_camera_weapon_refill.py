@@ -11,14 +11,12 @@ FARM=(ROOT/'src/AOTRFarm.luau').read_text()
 
 class R217Tests(unittest.TestCase):
     def test_esp_projected_overlay_survives_highlight_occlusion(self):
-        self.assertIn('projectOverlay(entry, camera, root, model, color, lines, dist)', VISUAL)
-        self.assertIn('frame.Visible = Config.ESPOverlay', VISUAL)
-        self.assertIn('HighlightDepthMode.AlwaysOnTop', VISUAL)
-        self.assertIn('ESPWorldHighlight = false', VISUAL)
-        self.assertIn('frame.Active = false', VISUAL)
-        self.assertIn('MAX_ESP_TARGETS = 24', VISUAL)
-        self.assertIn('math.max(0.12, value)', VISUAL)
-        self.assertIn('makeOverlay(entry)', VISUAL)
+        self.assertIn('Instance.new("BillboardGui")',VISUAL)
+        self.assertIn('gui.AlwaysOnTop = true',VISUAL)
+        self.assertIn('gui.Active = false',VISUAL)
+        self.assertIn('MAX_ESP_TARGETS = 24',VISUAL)
+        self.assertIn('math.max(0.25, value)',VISUAL)
+        self.assertIn('makeEntry(player, model, root)',VISUAL)
 
     def test_third_person_uses_one_post_camera_binding(self):
         self.assertIn('RunService:BindToRenderStep(cameraBindName, Enum.RenderPriority.Last.Value + 5', VISUAL)

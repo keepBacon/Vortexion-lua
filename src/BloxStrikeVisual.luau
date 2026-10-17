@@ -1,8 +1,7 @@
 -- Vortexion BloxStrike visual: player ESP, fullbright, movement helpers.
 --
--- ESP highlights now use random names and cloak protection (the old fixed
--- "VortexionBloxESP" name was a one-line scan signature), refresh at 20Hz
--- with distance/team filtering, and tear down on PlayerRemoving.
+-- R2.19 ESP uses engine-tracked BillboardGui: one non-interactive instance
+-- per valid player, event-safe cleanup, throttled metadata updates.
 --
 -- Speed keeps the WalkSpeed writer for game compatibility but adds the
 -- pulse/coast AssemblyLinearVelocity cycle from the SCP branch: a constant
@@ -21,9 +20,9 @@ return function(c)
         ESPNames = true,
         ESPHealth = true,
         ESPRange = true,
-        ESPVisibility = false, -- avoid a raycast per target on mobile; optional diagnostics
-        ESPWorldHighlight = false, -- 2D projected overlay is reliable through walls
-        ESPOverlay = true,
+        ESPVisibility = false, -- optional visibility tint: rays are OFF by default
+        ESPWorldHighlight = false, -- optional 3D GPU highlight; native billboard is default
+        ESPWeapon = true,
         ESPBox = true,
         ESPTracer = false,
         Fullbright = false,
@@ -39,256 +38,260 @@ return function(c)
     }
 
     --=========================================================================
-    -- ESP: pooled highlights, random names, cloaked, lifecycle-aware.
+    -- R2.19: native BillboardGui ESP. Roblox positions billboards in its
+    -- renderer: no per-frame WorldToViewportPoint / GetBoundingBox / 3D
+    -- Highlight allocations. One billboard per live replicated character.
+    -- Only roster reconciliation and text are throttled in Lua.
     --=========================================================================
     local highlights = {}
-    local espStats = { refreshes = 0, scanned = 0, eligible = 0, markers = 0, noHumanoid = 0, lastError = "none" }
-    local ESP_GRACE_SECONDS = 1.4
+    local espStats = {refreshes=0, scanned=0, eligible=0, markers=0,
+        noHumanoid=0, creates=0, writes=0, lastError="none"}
     local MAX_ESP_TARGETS = 24
-    -- 2D projected labels do not rely on 3D Highlight rendering, which can
-    -- be culled even when HighlightDepthMode is AlwaysOnTop.
-    local overlayGui
-    local function ensureOverlay()
-        if overlayGui and overlayGui.Parent then return overlayGui end
-        local parent = (c.GetGuiParent and c.GetGuiParent()) or LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        if not parent then return nil end
-        local gui = Instance.new("ScreenGui")
-        gui.Name = "VortexionBloxReadOnlyESP"
-        gui.ResetOnSpawn = false
-        gui.IgnoreGuiInset = true
-        gui.DisplayOrder = 24
-        gui.Enabled = true
-        gui.Parent = parent
-        overlayGui = gui
-        return gui
-    end
-    local function makeOverlay(entry)
-        local gui = ensureOverlay()
-        if not gui then return end
-        local frame = Instance.new("Frame")
-        frame.Name = "Target"
-        frame.BackgroundTransparency = 1
-        frame.BorderSizePixel = 0
-        frame.Active = false
-        frame.Visible = false
-        frame.Parent = gui
-        local stroke = Instance.new("UIStroke")
-        stroke.Thickness = 1.5
-        stroke.Color = Color3.fromRGB(255, 90, 90)
-        stroke.Parent = frame
-        local text = Instance.new("TextLabel")
-        text.Name = "Info"
-        text.BackgroundTransparency = 1
-        text.BorderSizePixel = 0
-        text.Active = false
-        text.TextSize = 13
-        text.TextStrokeTransparency = 0.4
-        text.TextColor3 = stroke.Color
-        text.Size = UDim2.fromOffset(174, 43)
-        text.AnchorPoint = Vector2.new(0.5, 1)
-        text.Position = UDim2.new(0.5, 0, 0, -3)
-        text.Parent = frame
-        entry.overlay, entry.overlayStroke, entry.overlayText = frame, stroke, text
-    end
-    local function projectOverlay(entry, camera, root, model, color, lines, distance)
-        local frame = entry.overlay
-        if not frame or not camera or not root then return end
-        local point, onScreen = camera:WorldToViewportPoint(root.Position)
-        if not onScreen or point.Z <= 0 then frame.Visible = false; return end
-        local head = model:FindFirstChild("Head")
-        local height
-        if head and head:IsA("BasePart") then
-            local hp = camera:WorldToViewportPoint(head.Position)
-            height = math.abs(hp.Y - point.Y) * 3.0
-        end
-        if not height or height < 20 then height = 880 / math.max(distance, 4) end
-        height = math.clamp(height, 25, 210)
-        local width = math.clamp(height * 0.45, 16, 100)
-        frame.Position = UDim2.fromOffset(math.floor(point.X - width / 2), math.floor(point.Y - height * 0.65))
-        frame.Size = UDim2.fromOffset(width, height)
-        frame.Visible = Config.ESPOverlay
-        entry.overlayStroke.Color = color
-        entry.overlayStroke.Enabled = Config.ESPBox
-        entry.overlayText.TextColor3 = color
-        local label = table.concat(lines, "\n")
-        if entry.overlayText.Text ~= label then entry.overlayText.Text = label end
-        entry.overlayText.Visible = #lines > 0
-    end
+    local ESP_GRACE_SECONDS = 1.25
+    -- Distances are hysteretic: existing labels survive small camera offsets.
+    local ESP_DISTANCE_SLACK = 35
     local espAccum = 0
     local visibilityParams = RaycastParams.new()
-    visibilityParams.FilterType = Enum.RaycastFilterType.Blacklist
+    visibilityParams.FilterType = Enum.RaycastFilterType.Exclude
     visibilityParams.IgnoreWater = true
-
+    local function renderRoot(model)
+        local part = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("LowerTorso")
+            or model:FindFirstChild("Torso") or model:FindFirstChild("Head") or model.PrimaryPart
+        if part and part:IsA("BasePart") then return part end
+        return model:FindFirstChildWhichIsA("BasePart", true)
+    end
     local function clearEntry(player)
         local entry = highlights[player]
         if not entry then return end
-        if entry.model then pcall(function() entry.model:Destroy() end) end
-        if entry.overlay then pcall(function() entry.overlay:Destroy() end) end
-        if entry.labelGui then pcall(function() entry.labelGui:Destroy() end) end
-        if entry.box then pcall(function() entry.box:Remove() end) end
-        if entry.tracer then pcall(function() entry.tracer:Remove() end) end
-        if entry.nativeBox then entry.nativeBox:Destroy() end
-        if entry.adorneeConn then pcall(function() entry.adorneeConn:Disconnect() end) end
         highlights[player] = nil
+        if entry.gui then pcall(function() entry.gui:Destroy() end) end
+        if entry.highlight then pcall(function() entry.highlight:Destroy() end) end
+        if entry.tracer then pcall(function() entry.tracer:Remove() end) end
     end
-
     local function clearESP()
         for player in pairs(highlights) do clearEntry(player) end
-        if overlayGui then pcall(function() overlayGui:Destroy() end); overlayGui = nil end
+        espStats.markers = 0
     end
-
+    local function makeEntry(player, model, root)
+        local parent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if not parent then return nil end
+        local gui = Instance.new("BillboardGui")
+        gui.Name = "VortexionBloxESP219"
+        gui.Adornee = root
+        gui.AlwaysOnTop = true
+        gui.LightInfluence = 0
+        gui.Size = UDim2.new(4, 0, 6, 0)
+        gui.StudsOffsetWorldSpace = Vector3.new(0, 1.15, 0)
+        gui.MaxDistance = Config.ESPDistance + ESP_DISTANCE_SLACK
+        gui.Active = false
+        gui.Enabled = Config.ESPEnabled
+        local box = Instance.new("Frame")
+        box.Name = "Bounds"
+        box.Size = UDim2.fromScale(1, 1)
+        box.BackgroundTransparency = 1
+        box.BorderSizePixel = 0
+        box.Active = false
+        box.Parent = gui
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 1.25
+        stroke.Color = Color3.fromRGB(243, 93, 93)
+        stroke.Parent = box
+        local text = Instance.new("TextLabel")
+        text.Name = "Info"
+        text.AnchorPoint = Vector2.new(0.5, 1)
+        text.Position = UDim2.new(0.5, 0, 0, -4)
+        text.Size = UDim2.fromOffset(190, 54)
+        text.BackgroundTransparency = 1
+        text.TextStrokeTransparency = 0.3
+        text.TextColor3 = stroke.Color
+        text.TextSize = 13
+        text.TextWrapped = false
+        text.Active = false
+        text.Text = ""
+        text.Parent = box
+        local healthBack = Instance.new("Frame")
+        healthBack.Name = "HealthBackground"
+        healthBack.AnchorPoint = Vector2.new(1, 0)
+        healthBack.Position = UDim2.fromScale(0, 0)
+        healthBack.Size = UDim2.new(0, 3, 1, 0)
+        healthBack.BackgroundColor3 = Color3.fromRGB(44, 44, 44)
+        healthBack.BorderSizePixel = 0
+        healthBack.Visible = false
+        healthBack.Active = false
+        healthBack.Parent = box
+        local healthFill = Instance.new("Frame")
+        healthFill.Name = "HealthFill"
+        healthFill.AnchorPoint = Vector2.new(0, 1)
+        healthFill.Position = UDim2.fromScale(0, 1)
+        healthFill.Size = UDim2.fromScale(1, 1)
+        healthFill.BackgroundColor3 = Color3.fromRGB(92, 222, 132)
+        healthFill.BorderSizePixel = 0
+        healthFill.Active = false
+        healthFill.Parent = healthBack
+        gui.Parent = parent
+        espStats.creates += 1
+        return {gui=gui, box=box, stroke=stroke, text=text, healthBack=healthBack,
+            healthFill=healthFill, model=model, root=root, lastSeen=os.clock(), nextInfo=0}
+    end
+    local function modelWeapon(model)
+        local weapon = model:GetAttribute("Weapon") or model:GetAttribute("CurrentWeapon")
+            or model:GetAttribute("EquippedWeapon")
+        if type(weapon) == "string" and #weapon > 0 then return weapon end
+        for _, child in ipairs(model:GetChildren()) do
+            if child:IsA("Tool") then return child.Name end
+        end
+        return nil
+    end
+    local function updateInfo(entry, player, model, vitals, distance)
+        local now = os.clock()
+        if now < entry.nextInfo then return end
+        entry.nextInfo = now + 0.3
+        local info = {}
+        if Config.ESPNames then info[#info+1] = tostring(player.DisplayName or player.Name) end
+        local health, maximum
+        if vitals then
+            local h = vitals.Health
+            local mx = vitals.MaxHealth
+            if type(h) == "number" and type(mx) == "number" and mx > 0
+                and (type(vitals) ~= "table" or vitals.HealthKnown ~= false) then
+                health, maximum = math.max(0, h), mx
+            end
+        end
+        if Config.ESPHealth and health then info[#info+1] = ("HP %d/%d"):format(math.floor(health), math.floor(maximum)) end
+        if Config.ESPRange then info[#info+1] = ("%d studs"):format(math.floor(distance)) end
+        if Config.ESPWeapon then
+            local weapon = modelWeapon(model)
+            if weapon then info[#info+1] = "W " .. weapon:sub(1, 26) end
+        end
+        local newText = table.concat(info, "\n")
+        if entry.text.Text ~= newText then
+            entry.text.Text = newText
+            espStats.writes += 1
+        end
+        if entry.text.Visible ~= (#info > 0) then entry.text.Visible = #info > 0 end
+        local visible = health ~= nil and Config.ESPHealth
+        if entry.healthBack.Visible ~= visible then entry.healthBack.Visible = visible end
+        if visible then
+            local fraction = math.clamp(health / maximum, 0, 1)
+            if fraction ~= entry.lastHealth then
+                entry.healthFill.Size = UDim2.fromScale(1, fraction)
+                entry.lastHealth = fraction
+            end
+        end
+    end
     local function updateESP()
         if not Config.ESPEnabled then clearESP(); return end
         espStats.scanned, espStats.eligible, espStats.noHumanoid = 0, 0, 0
+        local camera = Workspace.CurrentCamera
+        local parent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if not camera or not parent then return end
         local now = os.clock()
-        local budget = MAX_ESP_TARGETS
+        local left = MAX_ESP_TARGETS
+        local origin = camera.CFrame.Position
         for _, player in ipairs(Players:GetPlayers()) do
-            if player == LocalPlayer then
-                clearEntry(player)
-            else
+            if player ~= LocalPlayer then
                 espStats.scanned += 1
-                local model, humanoid = c.Living(player)
-                if model and humanoid and not model:FindFirstChildOfClass("Humanoid") then
+                local model, vitals = c.Living(player)
+                if model and vitals and not model:FindFirstChildOfClass("Humanoid") then
                     espStats.noHumanoid += 1
                 end
-                local valid = model and humanoid and humanoid.Health > 0
-                    and ((not Config.ESPTeam) or c.Enemy(player, true))
+                local permitted = (not Config.ESPTeam) or c.Enemy(player, true)
+                local root = model and renderRoot(model)
+                local dist = root and (root.Position - origin).Magnitude or math.huge
+                local valid = model and vitals and vitals.Health > 0 and root and permitted
+                    and dist <= Config.ESPDistance + (highlights[player] and ESP_DISTANCE_SLACK or 0) and left > 0
+                local entry = highlights[player]
                 if valid then
-                    local camera = Workspace.CurrentCamera
-                    local root = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso") or model:FindFirstChildWhichIsA("BasePart")
-                    if not camera or not root then valid = false end
-                    if camera and root then
-                        local dist = (root.Position - camera.CFrame.Position).Magnitude
-                        if dist > Config.ESPDistance then valid = false end
-                    end
-                end
-                if valid and budget > 0 then
-                    budget -= 1
+                    left -= 1
                     espStats.eligible += 1
-                    local entry = highlights[player]
-                    if not entry or entry.model.Parent ~= model then
+                    if entry and (entry.model ~= model or entry.root ~= root or not entry.gui.Parent) then
                         clearEntry(player)
-                        local highlight = Instance.new("Highlight")
-                        highlight.Name = c.RandomName()
-                        highlight.Adornee = model
-                        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                        highlight.FillTransparency = 0.75
-                        highlight.OutlineTransparency = 0.08
-                        highlight.FillColor = Color3.fromRGB(240, 90, 90)
-                        highlight.OutlineColor = Color3.fromRGB(255, 160, 100)
-                        highlight.Enabled = Config.ESPWorldHighlight
-                        highlight.Parent = model
-                        local conn
-                        conn = model.AncestryChanged:Connect(function(_, parent)
-                            if not parent then
-                                clearEntry(player)
+                        entry = nil
+                    end
+                    if not entry then
+                        entry = makeEntry(player, model, root)
+                        if entry then highlights[player] = entry end
+                    end
+                    if entry then
+                        entry.lastSeen = now
+                        if not entry.gui.Enabled then entry.gui.Enabled = true end
+                        if entry.gui.MaxDistance ~= Config.ESPDistance + ESP_DISTANCE_SLACK then
+                            entry.gui.MaxDistance = Config.ESPDistance + ESP_DISTANCE_SLACK + ESP_DISTANCE_SLACK
+                        end
+                        if entry.stroke.Enabled ~= Config.ESPBox then
+                            entry.stroke.Enabled = Config.ESPBox
+                        end
+                        updateInfo(entry, player, model, vitals, dist)
+                        if Config.ESPVisibility then
+                            local ignore = c.Character(LocalPlayer)
+                            visibilityParams.FilterDescendantsInstances = ignore and {ignore} or {}
+                            local hit = Workspace:Raycast(origin, root.Position - origin, visibilityParams)
+                            local unobstructed = not hit or (hit.Instance and hit.Instance:IsDescendantOf(model))
+                            local color = unobstructed and Color3.fromRGB(86, 231, 144)
+                                or Color3.fromRGB(243, 93, 93)
+                            if entry.stroke.Color ~= color then
+                                entry.stroke.Color = color
+                                entry.text.TextColor3 = color
                             end
-                        end)
-                        local labelGui = Instance.new("BillboardGui")
-                        labelGui.Name = c.RandomName()
-                        labelGui.Adornee = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
-                            or model:FindFirstChildWhichIsA("BasePart", true)
-                        labelGui.AlwaysOnTop = true
-                        labelGui.Size = UDim2.fromOffset(180, 48)
-                        labelGui.StudsOffset = Vector3.new(0, 2.5, 0)
-                        local label = Instance.new("TextLabel")
-                        label.Size = UDim2.fromScale(1, 1)
-                        label.BackgroundTransparency = 1
-                        label.TextSize = 14
-                        label.TextStrokeTransparency = 0.35
-                        label.Parent = labelGui
-                        labelGui.Enabled = false -- 2D labels avoid occlusion/culling differences
-                        labelGui.Parent = model
-                        local entry = { model = highlight, labelGui = labelGui, label = label, adorneeConn = conn }
-                        highlights[player] = entry
-                        makeOverlay(entry)
-                    end
-                    local entry = highlights[player]
-                    entry.lastSeen = now
-                    local camera = Workspace.CurrentCamera
-                    local root = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
-                    local color = Color3.fromRGB(240, 90, 90)
-                    if Config.ESPVisibility and camera and root then
-                        visibilityParams.FilterDescendantsInstances = { c.Character() }
-                        local hit = Workspace:Raycast(camera.CFrame.Position, root.Position - camera.CFrame.Position, visibilityParams)
-                        if not hit or (hit.Instance and hit.Instance:IsDescendantOf(model)) then color = Color3.fromRGB(80, 230, 140) end
-                    end
-                    entry.model.Enabled = Config.ESPWorldHighlight
-                    entry.model.FillColor = color
-                    entry.model.OutlineColor = color
-                    entry.label.TextColor3 = color
-                    local lines = {}
-                    if Config.ESPNames then table.insert(lines, player.DisplayName or player.Name) end
-                    if Config.ESPHealth and (type(humanoid) ~= "table" or humanoid.HealthKnown ~= false) then
-                        table.insert(lines, ("HP %d/%d"):format(math.floor(humanoid.Health), math.floor(humanoid.MaxHealth)))
-                    end
-                    if Config.ESPRange and camera and root then table.insert(lines, ("%d studs"):format(math.floor((root.Position - camera.CFrame.Position).Magnitude))) end
-                    entry.label.Text = table.concat(lines, "\n")
-                    entry.labelGui.Enabled = (not entry.overlay) and (#lines > 0)
-                    if entry.overlay then
-                        local dist = camera and root and (root.Position - camera.CFrame.Position).Magnitude or 0
-                        projectOverlay(entry, camera, root, model, color, lines, dist)
-                    end
-                    if c.HasDrawing and Config.ESPTracer then -- bounded, opt-in 3D projection work
-                        if Config.ESPBox and not entry.box then
-                            entry.box = Drawing.new("Square")
-                            entry.box.Filled = false
-                            entry.box.Thickness = 1.5
+                        elseif entry.visibilityTinted then
+                            local color = Color3.fromRGB(243, 93, 93)
+                            entry.stroke.Color = color
+                            entry.text.TextColor3 = color
                         end
-                        if Config.ESPTracer and not entry.tracer then
-                            entry.tracer = Drawing.new("Line")
-                            entry.tracer.Thickness = 1
+                        entry.visibilityTinted = Config.ESPVisibility
+                        if Config.ESPWorldHighlight then
+                            if not entry.highlight then
+                                local h = Instance.new("Highlight")
+                                h.Adornee = model
+                                h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                                h.FillTransparency = 0.85
+                                h.OutlineTransparency = 0.15
+                                h.Parent = model
+                                entry.highlight = h
+                            end
+                        elseif entry.highlight then
+                            entry.highlight:Destroy()
+                            entry.highlight = nil
                         end
-                        if entry.box then entry.box.Visible = false end
-                        if entry.tracer then entry.tracer.Visible = false end
-                        if camera and root then
+                        if Config.ESPTracer and c.HasDrawing then
+                            if not entry.tracer then
+                                entry.tracer = Drawing.new("Line")
+                                entry.tracer.Thickness = 1
+                            end
                             local point, onScreen = camera:WorldToViewportPoint(root.Position)
-                            if onScreen and point.Z > 0 then
-                                if Config.ESPTracer and entry.tracer then
-                                    entry.tracer.From = Vector2.new(camera.ViewportSize.X / 2, 0)
-                                    entry.tracer.To = Vector2.new(point.X, point.Y)
-                                    entry.tracer.Color = color
-                                    entry.tracer.Visible = true
-                                end
-                                if Config.ESPBox and entry.box then
-                                    local cf, size = model:GetBoundingBox()
-                                    local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
-                                    local inFront = true
-                                    for x=-1,1,2 do for y=-1,1,2 do for z=-1,1,2 do
-                                        local corner = camera:WorldToViewportPoint(cf:PointToWorldSpace(Vector3.new(size.X*x/2,size.Y*y/2,size.Z*z/2)))
-                                        if corner.Z <= 0 then inFront = false end
-                                        minX = math.min(minX,corner.X); minY = math.min(minY,corner.Y)
-                                        maxX = math.max(maxX,corner.X); maxY = math.max(maxY,corner.Y)
-                                    end end end
-                                    if inFront then
-                                        entry.box.Position = Vector2.new(minX,minY)
-                                        entry.box.Size = Vector2.new(maxX-minX,maxY-minY)
-                                        entry.box.Color = color
-                                        entry.box.Visible = true
-                                    end
-                                end
+                            entry.tracer.Visible = onScreen and point.Z > 0
+                            if entry.tracer.Visible then
+                                entry.tracer.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
+                                entry.tracer.To = Vector2.new(point.X, point.Y)
+                                entry.tracer.Color = entry.stroke.Color
                             end
+                        elseif entry.tracer then
+                            entry.tracer:Remove()
+                            entry.tracer = nil
                         end
                     end
-                else
-                    local existing = highlights[player]
-                    -- A roster swap or a brief camera/view-distance miss must
-                    -- not destroy/recreate ESP several times per second.
-                    if existing and existing.overlay then existing.overlay.Visible = false end
-                    if not existing or not existing.lastSeen or now - existing.lastSeen > ESP_GRACE_SECONDS
-                        or (existing.labelGui and not existing.labelGui.Parent) then
+                elseif entry then
+                    -- Preserve the instance for brief replication and roster swaps;
+                    -- never leave a ghost marker visible during that grace period.
+                    -- Hide immediately only if the target really disappeared or is no
+                    -- longer an allowed team; transient distance/replication misses
+                    -- remain visible until the grace window expires.
+                    if (not model or not root or not permitted or now - entry.lastSeen >= ESP_GRACE_SECONDS)
+                        and entry.gui.Enabled then entry.gui.Enabled = false end
+                    if entry.tracer then entry.tracer.Visible = false end
+                    if now - entry.lastSeen >= ESP_GRACE_SECONDS or not entry.model.Parent then
                         clearEntry(player)
                     end
                 end
             end
         end
-        local count = 0
-        for pl in pairs(highlights) do
-            if not pl.Parent then clearEntry(pl) else count += 1 end
+        for player in pairs(highlights) do
+            if not player.Parent then clearEntry(player) end
         end
+        local count = 0
+        for _ in pairs(highlights) do count += 1 end
         espStats.markers = count
     end
-
     local function startESP()
         espAccum = 0
         c.Guard("Visual.ESP", updateESP)
@@ -544,14 +547,14 @@ return function(c)
     c.OnCleanup(function() cameraChanged:Disconnect() end)
 
     local moveAccum = 0
-    local espInterval = 0.12
+    local espInterval = 0.25
     local espRefreshes = 0
     local function visualInterval()
         if c.VisualInterval then
-            local ok, value = pcall(c.VisualInterval, 0.12)
-            if ok and type(value) == "number" and value == value and value > 0 then return math.max(0.12, value) end
+            local ok, value = pcall(c.VisualInterval, 0.25)
+            if ok and type(value) == "number" and value == value and value > 0 then return math.max(0.25, value) end
         end
-        return 0.12
+        return 0.25
     end
     local function refreshESP()
         espRefreshes += 1
@@ -562,13 +565,12 @@ return function(c)
             warn("[Vortexion/Blox/ESP] " .. espStats.lastError)
         end
     end
-    local function forceESPTeardown()
-        -- A camera swap must not wait for the throttled slot: stale highlights
-        -- on a replaced camera are an immediate correctness bug, not pacing.
-        clearESP()
+    local function cameraESPRebind()
+        -- Native billboards track world parts independently of CurrentCamera.
+        -- Never destroy/recreate every marker on a game camera replacement.
         espAccum = espInterval
     end
-    local cameraConnection = Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(forceESPTeardown)
+    local cameraConnection = Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(cameraESPRebind)
     local frameConnection = RunService.Heartbeat:Connect(function(dt)
         if not c.IsCurrent() then return end
         -- Before enabling any feature, skip ALL camera, raycast, or movement
@@ -615,6 +617,7 @@ return function(c)
             markers = espStats.markers, scanned = espStats.scanned,
             eligible = espStats.eligible, refreshes = espStats.refreshes,
             noHumanoid = espStats.noHumanoid, error = espStats.lastError,
+            creates = espStats.creates, writes = espStats.writes, renderer = "NativeBillboard",
             thirdPerson = thirdPerson.enabled, thirdOverrides = thirdPerson.overrides,
         }
     end
@@ -625,7 +628,7 @@ return function(c)
     -- UI.
     --=========================================================================
     local tab = c.Tabs.Visual
-    tab:AddToggle("BloxESP", { Title = "玩家高亮 ESP", Default = false, Callback = function(v)
+    tab:AddToggle("BloxESP", { Title = "原生穿墙 ESP（低负载）", Default = false, Callback = function(v)
         Config.ESPEnabled = v
         if v then startESP() else clearESP() end
     end })
@@ -640,8 +643,9 @@ return function(c)
     tab:AddToggle("BloxESPNames", { Title = "ESP 名称", Default = true, Callback = function(v) Config.ESPNames = v end })
     tab:AddToggle("BloxESPHealth", { Title = "ESP 血量", Default = true, Callback = function(v) Config.ESPHealth = v end })
     tab:AddToggle("BloxESPRange", { Title = "ESP 距离标签", Default = true, Callback = function(v) Config.ESPRange = v end })
+    tab:AddToggle("BloxESPWeapon", { Title = "ESP 显示当前武器", Default = true, Callback = function(v) Config.ESPWeapon = v end })
     tab:AddToggle("BloxESPVisibility", { Title = "ESP 可见性配色（额外射线开销）", Default = false, Callback = function(v) Config.ESPVisibility = v end })
-    tab:AddToggle("BloxESPBox", { Title = "ESP 穿墙屏幕投影框", Default = true, Callback = function(v) Config.ESPBox = v end })
+    tab:AddToggle("BloxESPBox", { Title = "ESP 穿墙原生方框", Default = true, Callback = function(v) Config.ESPBox = v end })
     tab:AddToggle("BloxESPTracer", { Title = "ESP 追踪线（需 Drawing）", Default = false, Callback = function(v) Config.ESPTracer = v end })
     tab:AddToggle("BloxFullbright", { Title = "全亮", Default = false, Callback = function(v)
         Config.Fullbright = v
@@ -654,7 +658,7 @@ return function(c)
                 status.noHumanoid, status.markers, status.refreshes, status.error))
     end})
     tab:AddParagraph({ Title = "视觉刷新节流",
-        Content = "默认使用每秒最多 8 次的非交互式屏幕投影，墙后仍可显示框与标签；3D 高亮和可见性射线需手动开启。上限 24 目标；关闭后立即清理。" })
+        Content = "由 Roblox BillboardGui 引擎直接跟随目标，AlwaysOnTop 透墙；脚本每秒只更新约 4 次目标状态，位置每帧由引擎渲染。复用最多 24 目标的标记，无手动 8 角投影。关闭时立即清理。" })
 
     local movement = c.Tabs.Movement
     movement:AddToggle("BloxThirdPerson", {Title = "第三人称视角", Default = false,

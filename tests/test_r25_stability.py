@@ -179,7 +179,7 @@ assert(a==1 and b==1, 'killer marker not destroyed')
 
     def test_distribution_hashes(self):
         manifest = json.loads((ROOT/'dist/runtime-manifest.json').read_text())
-        self.assertRegex(manifest['build_tag'], r'r2\.(?:[5-9]|1[0-9])(?:[-.]|$)')
+        self.assertRegex(manifest['build_tag'], r'r2\.(?:[5-9]|1[0-9]|2[0-9])(?:[-.]|$)')
         for entry in [manifest['core'], *manifest['modules'].values()]:
             file = ROOT / entry['path']
             data = file.read_bytes()

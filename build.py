@@ -233,7 +233,7 @@ def build(root=ROOT):
         raise ValueError("AOTR universe mismatch")
     runtime_manifest = {
         "schema": 2,
-        "build_tag": "loader-v2-modular-r2.18-forsaken-multi-puzzle-input",
+        "build_tag": "loader-v2-modular-r2.20-blox-runtime-probe-esp-hysteresis",
         "core": modular_bundles["Vortexion_Core.lua"],
         "modules": {name: modular_bundles["Vortexion_Module_" + name + ".lua"] for name in GAMES},
         "routes": routes,

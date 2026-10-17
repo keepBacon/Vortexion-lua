@@ -10,8 +10,8 @@
       "sha256": "a12d997996c9bf3a3f52d2a7740c13ea93d58611f31625864e3963e0b982048b"
     },
     "Vortexion_BloxStrike.lua": {
-      "bytes": 1653906,
-      "sha256": "321be5037e1c69325d0316ed760381e006df416860d00ab4d19675b16ce7d26f"
+      "bytes": 1661138,
+      "sha256": "e0ae3c7bf824db8854dfb1b23921aa111670f3daa8e57a2c4a107bd8139c0000"
     },
     "Vortexion_Forsaken.lua": {
       "bytes": 1568805,
@@ -22,8 +22,8 @@
       "sha256": "42481677da194e53c030a4d2e517df50355af6be86aff3ac08eacb418e550313"
     },
     "Vortexion_Wind.lua": {
-      "bytes": 1997363,
-      "sha256": "ad3d993023baa6fa5e2faab34b1c50bda1632af9e7cdafc6be8fee8c4629982f"
+      "bytes": 2004595,
+      "sha256": "07be68fedb18b68d8f64b6aa89c7fc12ac0e8c817e5db8f8dfb5c1fc8ff9c52f"
     }
   },
   "luau_compiler_tested": false,
@@ -44,9 +44,9 @@
       "sha256": "84a6fc1465708a87ae48157c07b9b922260134ec6235369db3db5d2fd926ed03"
     },
     "Vortexion_Module_BloxStrike.lua": {
-      "bytes": 178118,
+      "bytes": 185350,
       "path": "dist/Vortexion_Module_BloxStrike.lua",
-      "sha256": "177d36f8851af8fee251a36311851161f4d5095f3975b0d801a2e5bb1c60ac8d"
+      "sha256": "367d5c604e8d497a027fc79f0113a343967d12cc6671bb0b1a67204e952bb959"
     },
     "Vortexion_Module_Forsaken.lua": {
       "bytes": 93017,
@@ -83,13 +83,13 @@
     "src/AOTRLobby.luau": "55a066075dec322575f03cb98493c61f00e40407252f05c5f9fe559e554b544f",
     "src/AOTRMovement.luau": "4de9b57f0caf09fd6c072df12698e2a10f40b3242f25378beb9d7d64428078ec",
     "src/AOTRTitans.luau": "d5ccf148f0c2dc1fc53376da59882c39c4d72b94b8ea8d002680eba02554a2cf",
-    "src/BloxStrikeBullet.luau": "bc527c061154bf6ad2070c22d3d87243971c8047a2264c894cd19c4d87932d4c",
+    "src/BloxStrikeBullet.luau": "a3a953716c1a08b28099eaf6f9621f6e4087d4b4dbcd32f18e67bb4b86a81492",
     "src/BloxStrikeCloak.lua": "e2ae697b026ac5f0bed64ab84f0f022d41b166b193897ce22a6680c0383189c4",
-    "src/BloxStrikeCombat.luau": "4223352889130795bf8a0cb060c679c75b754f9325eab2e8f6d3f292276d0074",
+    "src/BloxStrikeCombat.luau": "6bb556e435d36dac66a63ee939de66ec7d8879ae92a007ddb3a647b4ba8628ba",
     "src/BloxStrikeCommon.luau": "63b1f197e95348946332980f7a823bed792437b79845503fdaa1c26df71984bb",
     "src/BloxStrikeCore.luau": "e10b14e9f78101ee31d2ee6b1aa5c6687af8b585a6bca7f68b26d4f4d72cb8c8",
     "src/BloxStrikeCosmetic.luau": "1e7cb2fd71a0983b1a14276fc2b5ba80df7b88ba190f7cf69ee610c2f82a81d5",
-    "src/BloxStrikeVisual.luau": "2627fc982169c9766f8694271f5d0d43e7a3ffa63813f4938e49dc79415ef911",
+    "src/BloxStrikeVisual.luau": "109bbc3f2f6c49020111f667f0360329a2dae7439f76f2ed487f1361dc155ffd",
     "src/ForsakenCore.luau": "02508b048e88c173e41fe0a0e5632946f7b64a932e7304cb142ea670e66aaf70",
     "src/ForsakenEnhancements.luau": "7937a504b3c02f1a9249654b716e1a1b89f4677a565b4d0d09de77a5224b663f",
     "src/ForsakenPuzzleAuto.luau": "1736438f10357f0122f974fb411fc0c1a978f704a019c86a973b305d7c1a5ba7",

@@ -50,8 +50,8 @@ return function(c)
         -- hitbox
         HitboxEnabled = false,
         HitboxSize = 1.6,
-        HitboxMode = "lockedOnly", -- lockedOnly | fullBody
-        HitboxMaxActive = 3,
+        HitboxMode = "fullBody", -- lockedOnly | fullBody
+        HitboxMaxActive = 8,
     }
 
     local Combat_PredictPoint
@@ -426,8 +426,9 @@ return function(c)
 
     local function hitboxEligible(entry)
         if not entryValid(entry) then return false end
-        if entry.worldDist > 250 then return false end
-        if entry.screenDist > 120 then return false end
+        if entry.worldDist > math.min(Config.MaxDistance, 600) then return false end
+        -- Full-body visual target envelopes are not limited to the central 120 pixels.
+        -- The server retains authority over hit validation.
         return true
     end
 
@@ -722,9 +723,21 @@ return function(c)
         return pos + ema * (lead * (Config.Prediction / 0.12))
     end
 
+    local function originalSize(part)
+        if not part then return nil end
+        for _, record in pairs(state.hitEntries) do
+            for _, item in ipairs(record.parts) do
+                if item.part == part then return item.origSize end
+            end
+        end
+        return part.Size
+    end
     function Combat:GetEnvelope(part)
-        if not part then return Vector3.zero end
-        return part.Size * 0.5 + Vector3.new(0.5, 0.5, 0.5)
+        -- Never enlarge the bullet target envelope just because local visual
+        -- parts were expanded: the server still validates original collision.
+        local size = originalSize(part)
+        if not size then return Vector3.zero end
+        return size * 0.5 + Vector3.new(0.5, 0.5, 0.5)
     end
 
     function Combat:GetEnvelopeMargin(part)
@@ -741,6 +754,7 @@ return function(c)
             locked = state.locked and state.locked.player.Name or "-",
             candidates = #state.candidates,
             hitEntries = (function() local n = 0; for _ in pairs(state.hitEntries) do n += 1 end; return n end)(),
+            hitboxScope = Config.HitboxMode, hitboxEnabled = Config.HitboxEnabled,
             firing = state.firing,
             costMs = math.floor(state.cost * 100000) / 100,
             scans = state.scans,
@@ -830,12 +844,12 @@ return function(c)
         if not v then hitboxTick(0) end
         c.Log("Combat", "hitbox", v)
     end })
-    tab:AddDropdown("BloxHitboxMode", { Title = "碰撞箱范围", Values = { "lockedOnly", "fullBody" }, Default = "lockedOnly",
+    tab:AddDropdown("BloxHitboxMode", { Title = "碰撞箱范围", Values = { "lockedOnly", "fullBody" }, Default = "fullBody",
         Callback = function(v) Config.HitboxMode = v end })
     tab:AddSlider("BloxHitboxSize", { Title = "碰撞箱倍率", Min = 1.1, Max = 3, Default = 1.6, Rounding = 1,
         Callback = function(v) Config.HitboxSize = v end })
     tab:AddParagraph({ Title = "碰撞箱说明",
-        Content = "本地 Size 修改不会复制到服务器；扩展仅本地可见，并在角色离开/重开时自动还原。命中改写见武器页签的子弹追踪。" })
+        Content = "默认对视距内最多 8 个目标显示本地碰撞包络；服务器命中范围不会随 Size 扩大。子弹目标仍以原始部件大小约束，避免虚假命中。" })
 
     return Combat
 end

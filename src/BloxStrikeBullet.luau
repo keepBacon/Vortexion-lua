@@ -28,8 +28,8 @@ return function(c)
     local Config = {
         Enabled = false,
         Mode = "LeadOnly",      -- safe startup: no metatable or function hooks
-        HitChance = 0.72,
-        MaxAngle = 15,
+        HitChance = 1,
+        MaxAngle = 35,
         WallCheck = true,
         TeamCheck = true,
         Envelope = true,         -- clamp rewritten world points into orig size
@@ -54,6 +54,139 @@ return function(c)
         errors = 0,
         weaponProbe = "not run",
     }
+
+    --==========================================================================
+    -- R2.19: reversible game-specific weapon effect adapters.
+    -- Based on observed BloxStrike class signatures, NOT a generic hook of
+    -- every remote or every function. Enabled only after user toggles a mod.
+    -- No server acceptance is presumed from local camera/spread changes.
+    --==========================================================================
+    local mods = {recoil=false, spread=false, patches={}, candidates=0,
+        checked=0, status="not scanned", patchErrors=0, calls=0}
+    local function recordPatch(owner, key, replacement)
+        if type(owner) ~= "table" or type(rawget(owner, key)) ~= "function" then return false end
+        for _, entry in ipairs(mods.patches) do
+            if entry.owner == owner and entry.key == key then return true end
+        end
+        local original = rawget(owner, key)
+        local ok = pcall(function() owner[key] = replacement(original) end)
+        if not ok then mods.patchErrors += 1; return false end
+        mods.patches[#mods.patches+1] = {owner=owner,key=key,original=original,wrapper=owner[key]}
+        return true
+    end
+    local function restoreWeaponMods()
+        for i = #mods.patches, 1, -1 do
+            local patch = mods.patches[i]
+            pcall(function()
+                if patch.owner[patch.key] == patch.wrapper then
+                    patch.owner[patch.key] = patch.original
+                end
+            end)
+            mods.patches[i] = nil
+        end
+    end
+    local function findWeaponTables()
+        local results, dedup = {}, {}
+        local function add(item)
+            if type(item) ~= "table" or dedup[item] then return end
+            dedup[item] = true
+            results[#results+1] = item
+        end
+        local function requireAt(start, ...)
+            local path = start
+            for _, name in ipairs({...}) do
+                path = path and path:FindFirstChild(name)
+            end
+            if path and path:IsA("ModuleScript") then
+                local ok, value = pcall(require, path)
+                if ok then add(value) end
+            end
+        end
+        requireAt(ReplicatedStorage, "Controllers", "CameraController")
+        requireAt(ReplicatedStorage, "Components", "Weapon", "Classes", "Bullet")
+        -- Current community sources use a second, structurally different path.
+        -- Probe only known ModuleScripts; never require arbitrary descendants.
+        requireAt(ReplicatedStorage, "Classes", "WeaponComponent", "Classes", "Bullet")
+        requireAt(ReplicatedStorage, "Controllers", "InventoryController")
+        local scanGC = type(getgc) == "function" and getgc
+        if scanGC then
+            local ok, items = pcall(scanGC, true)
+            if ok and type(items) == "table" then
+                local seen = 0
+                for _, item in pairs(items) do
+                    seen += 1
+                    if seen > 3500 then break end
+                    if type(item) == "table" then
+                        if type(rawget(item,"weaponKick")) == "function"
+                            or type(rawget(item,"getTrueSpread")) == "function"
+                            or type(rawget(item,"getSpreadForConfig")) == "function"
+                            or type(rawget(item,"shoot")) == "function" then
+                            add(item)
+                        end
+                    end
+                end
+                mods.checked = seen
+            end
+        end
+        mods.candidates = #results
+        return results
+    end
+    local function installWeaponMods()
+        if not (mods.recoil or mods.spread) then
+            restoreWeaponMods()
+            mods.status = "disabled"
+            return
+        end
+        -- Install once; wrappers read current flags. This avoids churn and
+        -- avoids leaking closures cached by the game's own controller.
+        if #mods.patches > 0 then
+            mods.status = "active=" .. tostring(#mods.patches)
+            return
+        end
+        local tables = findWeaponTables()
+        local patched = 0
+        for _, owner in ipairs(tables) do
+            do
+                for _, key in ipairs({"weaponKick", "setWeaponRecoil", "getWeaponKickRotation"}) do
+                    local name = key
+                    if recordPatch(owner, name, function(original)
+                        return function(...)
+                            if mods.recoil then
+                                mods.calls += 1
+                                if name == "getWeaponKickRotation" then return Vector3.zero end
+                                return nil
+                            end
+                            return original(...)
+                        end
+                    end) then patched += 1 end
+                end
+            end
+            do
+                for _, key in ipairs({"getTrueSpread", "getSpreadForConfig", "getMovementSpreadForConfig",
+                    "getBaseSpreadForConfig", "getBaseSpread"}) do
+                    if recordPatch(owner, key, function(original)
+                        return function(...)
+                            local value = original(...)
+                            if mods.spread then
+                                if type(value) == "number" then mods.calls += 1; return 0 end
+                                if typeof(value) == "Vector3" then mods.calls += 1; return Vector3.zero end
+                            end
+                            return value
+                        end
+                    end) then patched += 1 end
+                end
+            end
+        end
+        mods.status = patched > 0 and ("patched=" .. tostring(patched)) or "not supported: class unavailable"
+    end
+    local function setWeaponMod(kind, enabled)
+        mods[kind] = enabled == true
+        installWeaponMods()
+    end
+    c.OnCleanup(function()
+        mods.recoil, mods.spread = false, false
+        restoreWeaponMods()
+    end)
 
     --=========================================================================
     -- Aim resolution: prefer the Combat lock, else the on-screen candidate
@@ -116,7 +249,9 @@ return function(c)
     local function envelopeClamp(point, part)
         if not Config.Envelope or not part then return point end
         local center = part.Position
-        local half = part.Size * 0.5 + Vector3.new(0.5, 0.5, 0.5)
+        local combat = c.Combat
+        local half = combat and type(combat.GetEnvelope) == "function"
+            and combat:GetEnvelope(part) or (part.Size * 0.5 + Vector3.new(0.5, 0.5, 0.5))
         local offset = point - center
         return center + Vector3.new(
             math.clamp(offset.X, -half.X, half.X),
@@ -531,6 +666,8 @@ return function(c)
             costMs = math.floor(state.cost * 100000) / 100,
             probe = state.weaponProbe,
             needsAim = state.activePath == "LeadOnly" and not (c.Combat and c.Combat.IsActive and c.Combat:IsActive()),
+            weaponMods = mods.status, weaponCalls = mods.calls,
+            weaponCandidates = mods.candidates, weaponPatchErrors = mods.patchErrors,
         }
     end
 
@@ -559,6 +696,16 @@ return function(c)
     -- UI (Weapon tab): bullet tracking controls replace the old placeholder.
     --=========================================================================
     local tab = c.Tabs.Weapon
+    tab:AddParagraph({Title="BloxStrike 武器模块增强", Content="优先检查 CameraController 和 Bullet 实际方法签名；仅在主动开启时安装可撤销的本地方法适配。无法取得类时报告不支持，不伪造效果。"})
+    tab:AddToggle("BloxWeaponNoRecoilR219", {Title="降低本地枪械后坐力", Default=false,
+        Callback=function(v) setWeaponMod("recoil", v) end})
+    tab:AddToggle("BloxWeaponNoSpreadR219", {Title="本地枪械散布控制", Default=false,
+        Callback=function(v) setWeaponMod("spread", v) end})
+    tab:AddButton({Title="检查武器修改器状态", Callback=function()
+        local snapshot = Bullet:Status()
+        print(("[Vortexion/WeaponMods] status=%s candidates=%d calls=%d errors=%d")
+            :format(snapshot.weaponMods, snapshot.weaponCandidates, snapshot.weaponCalls, snapshot.weaponPatchErrors))
+    end})
     tab:AddParagraph({ Title = "子弹追踪",
         Content = "默认 LeadOnly 只提供瞄准预测，不会改写子弹；联动开启瞄准辅助后才有客户端可见效果。Hitscan/Remote 需有效游戏接口和执行器权限，未确认服务器命中。" })
     tab:AddToggle("BloxBulletLinkCombat", { Title = "子弹追踪联动开启瞄准辅助", Default = true,
@@ -580,9 +727,9 @@ return function(c)
             state.activePath = resolveMode()
             if wasEnabled then Bullet:Start() end
         end })
-    tab:AddSlider("BloxBulletHitChance", { Title = "改写命中率（%）", Min = 10, Max = 100, Default = 72, Rounding = 0,
+    tab:AddSlider("BloxBulletHitChance", { Title = "改写命中率（%）", Min = 10, Max = 100, Default = 100, Rounding = 0,
         Callback = function(v) Config.HitChance = v / 100 end })
-    tab:AddSlider("BloxBulletMaxAngle", { Title = "改写最大角（度）", Min = 5, Max = 90, Default = 15, Rounding = 0,
+    tab:AddSlider("BloxBulletMaxAngle", { Title = "改写最大角（度）", Min = 5, Max = 90, Default = 35, Rounding = 0,
         Callback = function(v) Config.MaxAngle = v end })
     tab:AddToggle("BloxBulletEnvelope", { Title = "命中点包络回投", Default = true, Callback = function(v)
         Config.Envelope = v end })

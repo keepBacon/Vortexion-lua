@@ -211,7 +211,7 @@ __enh:Destroy()
         self.assertIn('ForsakenEnhancementsFactory',CORE)
         self.assertIn('"ForsakenEnhancements.luau"',BUILD)
         r=json.loads((ROOT/'dist/runtime-manifest.json').read_text())
-        self.assertRegex(r['build_tag'], r'loader-v2-modular-r2\.(?:[8-9]|1[0-9])(?:[-.]|$)')
+        self.assertRegex(r['build_tag'], r'loader-v2-modular-r2\.(?:[8-9]|1[0-9]|2[0-9])(?:[-.]|$)')
         for k in ['core',*r['modules'].keys()]:
             d=r[k] if k=='core' else r['modules'][k]
             raw=(ROOT/d['path']).read_bytes()

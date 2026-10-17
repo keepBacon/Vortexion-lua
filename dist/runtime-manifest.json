@@ -1,5 +1,5 @@
 {
-  "build_tag": "loader-v2-modular-r2.18-forsaken-multi-puzzle-input",
+  "build_tag": "loader-v2-modular-r2.20-blox-runtime-probe-esp-hysteresis",
   "core": {
     "bytes": 1476436,
     "path": "dist/Vortexion_Core.lua",
@@ -18,9 +18,9 @@
       "sha256": "84a6fc1465708a87ae48157c07b9b922260134ec6235369db3db5d2fd926ed03"
     },
     "BloxStrike": {
-      "bytes": 178118,
+      "bytes": 185350,
       "path": "dist/Vortexion_Module_BloxStrike.lua",
-      "sha256": "177d36f8851af8fee251a36311851161f4d5095f3975b0d801a2e5bb1c60ac8d"
+      "sha256": "367d5c604e8d497a027fc79f0113a343967d12cc6671bb0b1a67204e952bb959"
     },
     "Forsaken": {
       "bytes": 93017,
