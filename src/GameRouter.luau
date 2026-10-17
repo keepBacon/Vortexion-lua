@@ -93,6 +93,15 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
     if type(bridge) == "table" and type(bridge.Destroy) == "function" then
         pcall(function() bridge:Destroy() end)
     end
+    -- A failed vendor CreateWindow destroys the ScreenGui and its Window folder.
+    -- Retrying ShowUnsupported against this *same* WindUI object only hides the
+    -- first error with "Window is not a valid member of ScreenGui". The loader's
+    -- already-visible diagnostic UI is the safe fallback for this case.
+    if summary and string.find(summary, "WindUI/CreateWindow", 1, true) then
+        client.VortexionBootError = summary
+        warn("[Vortexion/Wind] Skipping unsafe UI fallback after constructor failure: " .. summary)
+        return nil
+    end
     local fallbackOk, fallback = pcall(Router.ShowUnsupported, WindUI, WindBridgeFactory, universe, place, reason, summary)
     if fallbackOk and type(fallback) == "table" then
         fallback.BootStatus = entry and "partial" or "unsupported"

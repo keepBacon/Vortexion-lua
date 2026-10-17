@@ -19,18 +19,20 @@ local function badEntry()
     env.VortexionBootError = 'WindUI/CreateWindow: unsupported rendering backend'
     return nil
 end
-local function badBridge() error('fallback is also unavailable') end
+local fallbackCalls = 0
+local function badBridge() fallbackCalls = fallbackCalls + 1; error('fallback is also unavailable') end
 local result = router.Run({}, badBridge, badEntry, 1, 2, 'manual-test')
 assert(result == nil)
 assert(string.find(env.VortexionBootError, 'unsupported rendering backend', 1, true))
-assert(string.find(env.VortexionBootError, 'Generic UI fallback', 1, true))
+assert(fallbackCalls == 0)
+assert(not string.find(env.VortexionBootError, 'Generic UI fallback', 1, true))
 '''
         runtime.run(script)
 
     def test_wind_adapter_reports_exact_error_before_cleanup(self):
         adapter = (ROOT / 'src/WindAdapter.luau').read_text(encoding='utf-8')
-        self.assertIn('recordStartupFailure("CreateWindow", result)', adapter)
-        self.assertLess(adapter.index('recordStartupFailure("CreateWindow", result)'), adapter.index('self:Destroy()',adapter.index('if not initialized or cancelled then')))
+        self.assertIn('recordStartupFailure("CreateWindow", "[" .. creationPhase', adapter)
+        self.assertLess(adapter.index('recordStartupFailure("CreateWindow", "[" .. creationPhase'), adapter.index('self:Destroy()',adapter.index('if not initialized or cancelled then')))
         self.assertIn('Acrylic = not input.TouchEnabled', adapter)
         self.assertIn('pcall(function()\n                native:EditOpenButton(', adapter)
 

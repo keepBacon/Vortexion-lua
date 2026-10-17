@@ -1,6 +1,6 @@
 -- Vortexion Loader V2.1 / modular routing and diagnostic bootstrap.
 -- Keep V1 standalone fallback available for controlled compatibility tests.
-local VERSION = "2.2.1-shared-bootfix"
+local VERSION = "2.2.2-textcompat-bootfix"
 local DEFAULT_BASE = "https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/"
 local LEGACY_BUNDLE = "dist/Vortexion_Wind.lua"
 local MANIFEST_PATH = "dist/runtime-manifest.json"
@@ -356,6 +356,8 @@ local function run()
     state.cacheKeys = {}
     state.newCacheKeys = {}
     env.VortexionBootError = nil
+    env.VortexionTextCompatCount = 0
+    env.VortexionTextCompatLast = nil
     local function work()
         stage("preflight", "检查 Roblox 环境与执行器 API")
         if game == nil then error("Roblox game object unavailable") end

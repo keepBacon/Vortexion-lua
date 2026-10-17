@@ -175,6 +175,9 @@ return function(WindUI, config)
     -- not the secondary "No active WindUI bridge" symptom.
     local function recordStartupFailure(step, reason)
         local message = "WindUI/" .. tostring(step) .. ": " .. tostring(reason)
+        if env.VortexionTextCompatLast then
+            message = message .. " | TextCompat: " .. tostring(env.VortexionTextCompatLast)
+        end
         env.VortexionBootError = message:sub(1, 1500)
         warn("[Vortexion/Wind/BOOT] " .. message)
     end
@@ -904,11 +907,13 @@ return function(WindUI, config)
         info = info or {}
         local existingWindow = WindUI.Window
         local cancelled, acquired = false, false
+        local creationPhase = "vendor-constructor"
         local initialized, result = pcall(function()
             native = WindUI:CreateWindow({Title = info.Title or appName, Author = "- Vortexion", Folder = #missingFileApi == 0 and ((config.Folder or appName) .. "/" .. tostring(game.PlaceId)) or nil, Theme = config.Theme or "Dark", Size = info.Size or UDim2.fromOffset(650, 490), ToggleKey = Enum.KeyCode.K, Background = "", Acrylic = not input.TouchEnabled, Transparent = false, AutoScale = false, SideBarWidth = input.TouchEnabled and 160 or 200})
             assert(native, "WindUI CreateWindow returned no window")
             if not self.Active then cancelled = true; return nil end
             acquired = true
+            creationPhase = "window-theme"
             self.GUI = WindUI.ScreenGui
             native.Debug = config.Debug == true
             local themeOK, themeErr = pcall(function() WindUI:SetTheme(config.Theme or "Dark") end)
@@ -928,6 +933,7 @@ return function(WindUI, config)
                 self.LastError = "OpenButton: " .. tostring(buttonErr)
                 warn("[Vortexion/Wind] " .. self.LastError)
             end
+            creationPhase = "section-creation"
             local groups = {Common = native:Section({Title = "通用", Opened = true}), Game = native:Section({Title = "游戏功能", Opened = true}), UI = native:Section({Title = "UI", Opened = false})}
             local win = {Native = native, Root = native.UIElements.Main, Groups = groups, GameTabs = self.GameTabs}
             function win:AddTab(c)
@@ -942,6 +948,7 @@ return function(WindUI, config)
             function win:Minimize() if bridge.Active then native:Toggle() end end
             function win:Destroy() bridge:Destroy() end
             function win:InstallSettings() end
+            creationPhase = "common-features"
             local common = wrapTab(groups.Common:Tab({Title = "低延迟切服"}))
             local serverFactory = config.ServerSwitchFactory or ServerSwitchFactory
             if type(serverFactory) == "function" then
@@ -964,8 +971,10 @@ return function(WindUI, config)
                     warn("[Vortexion/Wind] " .. bridge.LastError)
                 end
             end
+            creationPhase = "settings"
             installSettings(groups)
             if not self.Active then cancelled = true; return nil end
+            creationPhase = "viewport-events"
             local cameraConnection
             local function bindCamera()
                 if cameraConnection then cameraConnection:Disconnect(); cameraConnection = nil end
@@ -995,7 +1004,7 @@ return function(WindUI, config)
         if not initialized or cancelled then
             if not initialized then
                 self.LastError = tostring(result)
-                recordStartupFailure("CreateWindow", result)
+                recordStartupFailure("CreateWindow", "[" .. creationPhase .. "] " .. tostring(result))
             elseif cancelled then
                 recordStartupFailure("CreateWindow", "Bridge was cancelled during initialization")
             end

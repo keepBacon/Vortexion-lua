@@ -87,6 +87,38 @@ def strip_placeholder(source, name):
     return re.sub(pattern, "", source, count=1)
 
 
+def patch_vendor_text_compat(source):
+    """Normalize malformed vendor Text properties in *generated* bundles only.
+
+    The checked-in third-party WindUI source stays byte-for-byte untouched. This
+    compatibility shim operates at the shared Creator.New boundary so it also
+    covers components constructed by vendored submodules.
+    """
+    marker = 'if z~="ThemeTag"then\nx[z]=A\nend'
+    # Build unit tests also use a minimal WindUI stub without Creator.New.
+    if 'function p.New(r,u,v)' not in source:
+        return source
+    if source.count('function p.New(r,u,v)') != 1 or source.count(marker) != 1:
+        raise ValueError('WindUI Creator.New changed; review text compatibility shim')
+    replacement = '''if z~="ThemeTag"then
+if z=="Text" and type(A)=="table" then
+    local raw=A
+    local fallback=raw.Text or raw.Title or raw.Content or raw.Desc or raw.Name or raw[1] or raw.en or ""
+    if type(fallback)~="string" then fallback=tostring(fallback) end
+    local ctx="class="..tostring(r).." name="..tostring(u and u.Name or "?")
+    local env=(getgenv and getgenv()) or _G
+    env.VortexionTextCompatCount=(tonumber(env.VortexionTextCompatCount) or 0)+1
+    env.VortexionTextCompatLast=ctx.." text="..string.sub(fallback,1,80)
+    if env.VortexionTextCompatCount<=3 then
+        warn("[Vortexion/Wind/TextCompat] "..env.VortexionTextCompatLast)
+    end
+    A=fallback
+end
+x[z]=A
+end'''
+    return source.replace(marker, replacement, 1)
+
+
 def build(root=ROOT):
     root = Path(root)
     sources = {}
@@ -113,7 +145,7 @@ def build(root=ROOT):
     if terminator and banner.startswith("--[["):
         clean_banner = "\n".join(line.rstrip(" \t") for line in banner.split("\n"))
         vendor_source = clean_banner + terminator + remainder
-    shared = HEADER + PRELOAD + embed("WindUI", vendor_source)
+    shared = HEADER + PRELOAD + embed("WindUI", patch_vendor_text_compat(vendor_source))
     # Adapter closures must capture the already-declared server controller factory.
     for name, path in (("ServerSwitchFactory", SERVER_SWITCH), ("RuntimeMonitorFactory", MONITOR), ("WindBridgeFactory", BRIDGE)):
         source = read(path)
@@ -208,7 +240,7 @@ def build(root=ROOT):
         raise ValueError("AOTR universe mismatch")
     runtime_manifest = {
         "schema": 2,
-        "build_tag": "loader-v2-modular-r2-bootfix",
+        "build_tag": "loader-v2-modular-r2.2-textcompat",
         "core": modular_bundles["Vortexion_Core.lua"],
         "modules": {name: modular_bundles["Vortexion_Module_" + name + ".lua"] for name in GAMES},
         "routes": routes,
