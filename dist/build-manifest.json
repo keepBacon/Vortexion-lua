@@ -1,5 +1,5 @@
 {
-  "build_tag": "neverlose-mobile-r231",
+  "build_tag": "neverlose-mobile-r232",
   "bundles": {
     "Vortexion_AOTR_Battle.lua": {
       "bytes": 576636,
@@ -18,16 +18,16 @@
       "sha256": "a66a778d61bbac131e07d2134a0d227f0f1133734c2903aaebfe3de92391d179"
     },
     "Vortexion_Neverlose.lua": {
-      "bytes": 1048157,
-      "sha256": "69b1a669e4797d33b2e9c0b6152d363fabbfb89a2087caef0af2f43189fcaa29"
+      "bytes": 1052791,
+      "sha256": "fb9857f40739617d9c74ce66d76143e0fec58afa1b93d0b572780eb16a1f878f"
     },
     "Vortexion_SCP.lua": {
-      "bytes": 601278,
-      "sha256": "54729c33148c32f686cad3ebe1ef2fa5996a20d678dc01379103bf8fdeddbdd9"
+      "bytes": 605912,
+      "sha256": "f955c7ddd266c1b631deb62fe12edfdb846256db05ea4d2011446ccb0e9505ab"
     },
     "Vortexion_Wind.lua": {
-      "bytes": 1048157,
-      "sha256": "69b1a669e4797d33b2e9c0b6152d363fabbfb89a2087caef0af2f43189fcaa29"
+      "bytes": 1052791,
+      "sha256": "fb9857f40739617d9c74ce66d76143e0fec58afa1b93d0b572780eb16a1f878f"
     }
   },
   "luau_compiler_tested": false,
@@ -58,9 +58,9 @@
       "sha256": "989eb5d397f8afcf28208d183a5c25733ba358c11f231026580531f59dabba8c"
     },
     "Vortexion_Module_SCP.lua": {
-      "bytes": 131843,
+      "bytes": 136477,
       "path": "dist/Vortexion_Module_SCP.lua",
-      "sha256": "db0f4dad6184b00004f13db6fbbdce39d673446ed14cbd9f59be9a0e6aef6c42"
+      "sha256": "465f1dfd21fbc75892af40627a7cb4319b724fdc5366a32b1a7430dd5b596def"
     }
   },
   "neverlose_source_sha256": "839954d5e98f935b8e0b344ff40ea566a9fcbbc78ad825ad94fcc371f8a7d580",
@@ -105,12 +105,12 @@
     "src/NeverloseEmergency.luau": "8fbd0c0071d4eea1f03142d54ed20925cd54c44ee6f04cf86fdb97fd596500fc",
     "src/RuntimeMonitor.luau": "669ef2d0b0063fec329b1cf64df24041c11eaae995ee5b9402f66c997c4683c1",
     "src/SCPCamera.luau": "9f9fe1440251c45d058bffbf347bff3300123180c9706bb0f9e97bfd59293800",
-    "src/SCPCandidates.luau": "71628f30ce55a81d5a673f9a2d7c0e02ea6f56089a7c1a2b2eaf975a4a000106",
+    "src/SCPCandidates.luau": "14f9d068d0b6743c1b0f62baed689dda7a6c11e0d6a22479262b491e3230d231",
     "src/SCPCloak.lua": "6a3640e73ef4dd2f532f73b64aa970a1d6abb2e77e88e175ec7b86a0d6c4c7c8",
     "src/SCPCommon.luau": "54c065a9527c3db68966d4149952e3482ba8e796cc69a1da0a135f18d97e0966",
-    "src/SCPCore.luau": "d5e41ff646b79066d83f0099e918c88037c4f5f09025c22972e9f1059fe8d391",
+    "src/SCPCore.luau": "557bbb9866fd76fd1833b3c9008099a3ad125992f698d5caaece6ece14841727",
     "src/SCPESP.luau": "b859b2a2ae1956d11f3cc62362ea135608217a5f87b57312991621500405b33f",
-    "src/SCPHitbox.luau": "7c14714940177d8c3b9f03015ec94f7053dd9216344dbcb01fa43584063b9989",
+    "src/SCPHitbox.luau": "6349104ec121a149b4235b1c422c1d92cc8083e3a865a1e22564596df6509539",
     "src/SCPInteract.luau": "af57c82f39ff8f101b1d7e18899a5117b9a76610b187070da3808794bf7a79bb",
     "src/SCPMovement.luau": "ae97afebe8523a9063e1598b455c0088bc2ebaf2573118264504e98fd152d47d",
     "src/SCPSilentAim.luau": "c26edcc01c5506ff058daeec8b72c102be02a185c9401213efd676d721de544f",

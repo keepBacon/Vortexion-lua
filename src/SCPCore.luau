@@ -341,6 +341,19 @@ local slowLoops = { Aim = 0, Hitbox = 0, ESP = 0 }
 local lastSnapshot = 0
 local lowFreqTimer = 0
 
+-- R232: hitbox evaluation is independent of the render/ESP loop. On mobile,
+-- RenderStep can be paused/rebound while Heartbeat continues updating parts.
+local hitboxOnHeartbeat = false
+local heartbeatOk, heartbeatConn = pcall(function()
+    return RunService.Heartbeat:Connect(function(dt)
+        if not isCurrent() or not Hitbox.Config or not Hitbox.Config.Enabled then return end
+        common.Guard("HitboxHeartbeat", function() Hitbox:Update(dt) end)
+    end)
+end)
+if heartbeatOk and heartbeatConn then
+    hitboxOnHeartbeat = true
+    ownConnection(heartbeatConn)
+end
 local renderName = "VortexionSCPFrame"
 local function renderFrame(dt)
     if not isCurrent() then return end
@@ -361,7 +374,7 @@ local function renderFrame(dt)
         -- synchronously calls its own reset/restore entrypoint.
         local needCandidates = (Camera.Config and Camera.Config.Enabled)
             or (SilentAim.Config and SilentAim.Config.Enabled)
-            or (Hitbox.Config and Hitbox.Config.Enabled)
+            -- R232 hitbox has its own roster; avoid expensive duplicate scan.
             or (ESP.Config and ESP.Config.Enabled)
         local t0=tick()
         if needCandidates then common.Guard("Candidates", function() Candidates:Update(dt) end) end
@@ -375,10 +388,10 @@ local function renderFrame(dt)
             common.Guard("SilentAim", function() SilentAim:Update() end)
         end
         t0=tick()
-        if Hitbox.Config and Hitbox.Config.Enabled then
+        if not hitboxOnHeartbeat and Hitbox.Config and Hitbox.Config.Enabled then
             common.Guard("Hitbox", function() Hitbox:Update(dt) end)
         end
-        costs.Hitbox=(Hitbox.Config and Hitbox.Config.Enabled) and (tick()-t0)*1000 or 0
+        costs.Hitbox=(Hitbox.Config and Hitbox.Config.Enabled and not hitboxOnHeartbeat) and (tick()-t0)*1000 or 0
         t0=tick()
         if ESP.Config and ESP.Config.Enabled then
             common.Guard("ESP", function() ESP:Update(dt) end)
@@ -453,7 +466,11 @@ tabs.Hitbox:AddSlider("SCPHitboxFov", { Title = "屏幕门 (px)", Min = 50, Max 
 tabs.Hitbox:AddSlider("SCPHitboxActive", { Title = "同帧目标数", Min = 1, Max = 16, Default = 8, Rounding = 0, Callback = function(v) Hitbox.Config.MaxActive = v end })
 tabs.Hitbox:AddToggle("SCPHitboxHostile", {Title="只处理敌对阵营",Default=false,Callback=function(v)Hitbox.Config.OnlyHostile=v end})
 tabs.Hitbox:AddToggle("SCPHitboxNPC", {Title="包含SCP收容体",Default=true,Callback=function(v)Hitbox.Config.TargetNPCs=v end})
-tabs.Hitbox:AddParagraph({ Title = "碰撞箱说明", Content = "20Hz 节流、尺寸平滑与距离衰减；关闭或角色替换时恢复尺寸、透明度和碰撞属性。" })
+tabs.Hitbox:AddToggle("SCPHitboxUseFov", {Title="限制屏幕 FOV（默认不限制）",Default=false,Callback=function(v)Hitbox.Config.UseFOV=v end})
+tabs.Hitbox:AddToggle("SCPHitboxBounds", {Title="显示实际本地碰撞边界",Default=true,Callback=function(v)Hitbox.Config.ShowBounds=v end})
+tabs.Hitbox:AddSlider("SCPHitboxBoundsAlpha", {Title="碰撞框透明度 (%)",Min=0,Max=95,Default=50,Rounding=0,Callback=function(v)Hitbox.Config.BoundsTransparency=v/100 end})
+tabs.Hitbox:AddColorpicker("SCPHitboxBoundsColor", {Title="碰撞边界颜色",Default=Hitbox.Config.BoundsColor,Callback=function(v)if typeof(v)=="Color3" then Hitbox.Config.BoundsColor=v end end})
+tabs.Hitbox:AddParagraph({ Title = "碰撞箱说明", Content = "独立 Heartbeat 与角色目标池；启用后默认显示青色边界。修改仅对客户端有效，服务端命中仍可能采用原尺寸。" })
 
 -- R226 five essential ESP diagnostics: faction, names, hitbox style, role, SCP classification/color.
 tabs.Visual:AddToggle("SCPESPEnabled", {Title="ESP 总开关",Default=false,Callback=function(v)ESP.Config.Enabled=v if not v then ESP:Update(0) end end})
@@ -516,6 +533,14 @@ tabs.World:AddButton({ Title = "低延迟切服（通用）", Callback = functio
     if not ok then ui:Notify({Title = "低延迟切服", Content = reason, Duration = 4}) end
 end })
 
+tabs.Hitbox:AddButton({Title="检查碰撞箱实际生效情况",Callback=function()
+    local hs=Hitbox.Stats or {}
+    local detail=("目标 %d | 扩展 %d | 修改部件 %d | 实际尺寸变化 %d | 边界 %d | 拒绝 %d | 外部重置 %d\n%s\n客户端尺寸变化不代表服务器命中扩展")
+        :format(hs.Eligible or 0,hs.Expanded or 0,hs.PartsChanged or 0,
+            hs.Verified or 0,hs.Preview or 0,hs.Rejected or 0,hs.ExternalResets or 0,
+            tostring(hs.LastError ~= "" and hs.LastError or hs.Reason or "等待刷新"))
+    pcall(function() ui:Notify({Title="SCP 碰撞箱诊断",Content=detail,Duration=9}) end)
+end})
 tabs.Info:AddButton({Title="ESP / 自瞄 / 碰撞箱诊断",Callback=function()
     local es=ESP.Stats or {} local cs=Camera.Stats or {} local hs=Hitbox.Stats or {}
     local text=("ESP %s: %d/%d, %.2fms; 自瞄: %s (%s); 碰撞箱: %d/%d; 秒交互: %d")

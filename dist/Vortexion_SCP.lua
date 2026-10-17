@@ -8443,7 +8443,18 @@ return function(common)
 			if not model:IsA("Model") then return end
 			if Players:GetPlayerFromCharacter(model) then return end
 			local humanoid = model:FindFirstChildWhichIsA("Humanoid")
-			if humanoid then Candidates.NPCs[model] = true end
+            -- A few SCP anomaly entities do not have a Humanoid. Include only
+            -- explicitly named/tagged SCP Models with an immediate BasePart;
+            -- do not treat arbitrary environmental props as NPCs.
+            local labeledSCP = model.Name:lower():match("^scp[%s%-_]?%d+") ~= nil
+                or model:GetAttribute("IsSCP") == true
+            local customBody = false
+            if labeledSCP and not humanoid then
+                for _,child in ipairs(model:GetChildren()) do
+                    if child:IsA("BasePart") then customBody = true break end
+                end
+            end
+			if humanoid or customBody then Candidates.NPCs[model] = true end
 		end
 
 		local connAdded = Workspace.DescendantAdded:Connect(function(inst)
@@ -9320,347 +9331,317 @@ end
 
 end)()
 local SCPHitboxFactory = (function()
--- Vortexion SCP hitbox expander (anti-detection tuned).
---
--- Scope: BasePart.Size writes are local-only. They never enter the replication
--- stream (replication is server -> client), so the server and other clients
--- keep seeing the original size while local raycasts/projections immediately
--- use the expanded one. That makes this feature purely a local-targeting
--- surface; server-validated hit points are SilentAim's job, which clamps its
--- rewrite back into the original envelope (see SCPSilentAim + Hitbox:GetEnvelope).
---
--- Throttling (a per-frame Size write rebuilds broadphase AABBs and physics
--- islands, so the original Heartbeat loop over every player was both jittery
--- and expensive):
---   * 20 Hz tick accumulator, decoupled from the render frame rate
---   * only candidates inside FOV px and MaxDistance studs are touched
---   * at most MaxActive characters per tick, nearest-first
---   * Size is lerped toward the target (0.35), never stepped
---
--- State machine per character: expanding -> pending (250 ms grace after the
--- target leaves the gate, so re-entry does not oscillate) -> collapsing
--- (lerp back at 0.5/tick) -> cleaned. CharacterRemoving / PlayerRemoving
--- bypass pending and restore immediately.
---
--- Stealth defaults: distance-decayed scale (1.5x max at contact, 1x at 250
--- studs), anisotropic XZ 1.6 / Y 1.3, Transparency 0.55 (local-only visual),
--- CanCollide false with restore. lockedOnly couples to the aimbot lock: only
--- the locked character is expanded, which keeps the number of simultaneous
--- Size writers at one in the default configuration.
+-- R232: SCP: Roleplay client-side hitbox adapter.
+-- Independent of the crosshair candidate pool (which has a 56-target cap).
+-- IMPORTANT: changing BasePart.Size on the client cannot enlarge the server's
+-- authoritative hit registration. This adapter verifies LOCAL part writes and
+-- optionally shows the enlarged local bounds; it does not claim server hits.
 return function(common)
-	local Players = common.Services.Players
+    local Players = common.Services.Players
+    local Workspace = common.Services.Workspace
+    local LocalPlayer = common.LocalPlayer or Players.LocalPlayer
 
-	local Hitbox = {}
-	local Config = {
-		Enabled = false,
-		ScaleMax = 1.8,
-		HeadScale = 1,
-		TorsoScale = 1,          -- peak multiplier at point blank
-		MaxDistance = 500,       -- studs; beyond this no expansion
-		FOV = 600,               -- px; only on/near-screen candidates
-		TickRate = 12,           -- Hz
-		MaxActive = 8,           -- simultaneous characters per tick
-		GrowAlpha = 0.35,        -- lerp toward target size
-		ShrinkAlpha = 0.5,       -- lerp back during collapsing
-		PendingMs = 250,         -- grace period before collapsing
-		Transparency = 0.55,
-		AnisoXZ = 1.6,
-		AnisoY = 1.3,
-		MaxEdge = 10,            -- studs, hard clamp on any axis
-		MaxRatio = 2.2,          -- multiplier clamp on any axis
-		Mode = "all",     -- lockedOnly | fullBody | all
-        TargetNPCs = true, OnlyHostile = false,
-		RigParts = {
-			R15 = { "Head", "UpperTorso", "LowerTorso" },
-			R15Full = { "Head", "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg" },
-			R6 = { "Head", "Torso" },
-			R6Full = { "Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "HumanoidRootPart" },
-		},
-	}
-	Hitbox.Config = Config
-    Hitbox.Stats = { Eligible=0, Expanded=0, LastError="" }
+    local Hitbox = {}
+    local Config = {
+        Enabled = false,
+        Mode = "all", -- all / fullBody / lockedOnly
+        ScaleMax = 1.8,
+        HeadScale = 1,
+        TorsoScale = 1,
+        MaxDistance = 500,
+        FOV = 600,
+        UseFOV = false, -- mobile default: do not silently exclude side targets
+        MaxActive = 8,
+        TickRate = 12,
+        GrowAlpha = 0.65,
+        ShrinkAlpha = 0.7,
+        PendingMs = 180,
+        Transparency = 0.55,
+        AnisoXZ = 1.0,
+        AnisoY = 1.0,
+        MaxEdge = 18,
+        MaxRatio = 4,
+        OnlyHostile = false,
+        TargetNPCs = true,
+        ShowBounds = true,
+        BoundsColor = Color3.fromRGB(0, 195, 210),
+        BoundsTransparency = 0.5,
+    }
+    Hitbox.Config = Config
+    Hitbox.Stats = {
+        Eligible = 0, Expanded = 0, PartsChanged = 0, Verified = 0,
+        Preview = 0, Rejected = 0, ExternalResets = 0, LastError = "", Reason = "未开启",
+        ServerVerified = false,
+    }
+    local states = {} -- key = Model; preserves original sizes across re-spawns
+    local accumulator = 0
+    local conns = {}
 
-	-- key: Player (or Model for NPCs) -> state
-	local states = {}
-	local accumulator = 0
-
-	local function rigKey(character)
-		local humanoid = character:FindFirstChildWhichIsA("Humanoid")
-		if not humanoid then return nil end
-		if humanoid.RigType == Enum.HumanoidRigType.R6 then
-			return Config.Mode == "fullBody" and "R6Full" or "R6"
-		end
-		return Config.Mode == "fullBody" and "R15Full" or "R15"
-	end
-
-	local function captureOriginal(state, part)
-		if state.parts[part] then return end
-		state.parts[part] = {
-			size = part.Size,
-			transparency = part.Transparency,
-			canCollide = part.CanCollide,
-		}
-	end
-
-	local function targetSizeFor(orig, distance, partName)
-		-- Distance decay: full scale at contact, 1x at MaxDistance.
-		local falloff = math.clamp(1 - distance / math.max(Config.MaxDistance, 1), 0, 1)
-		local regionScale = partName == "Head" and Config.HeadScale or ((partName == "Torso" or partName == "UpperTorso" or partName == "LowerTorso") and Config.TorsoScale or 1)
-		local scale = 1 + (Config.ScaleMax * regionScale - 1) * falloff
-		local target = Vector3.new(
-			orig.X * Config.AnisoXZ,
-			orig.Y * Config.AnisoY,
-			orig.Z * Config.AnisoXZ
-		) * scale
-		-- Hard clamps: never exceed MaxEdge studs on any axis or MaxRatio x.
-		local maxSize = Vector3.new(
-			math.min(Config.MaxEdge, orig.X * Config.MaxRatio),
-			math.min(Config.MaxEdge, orig.Y * Config.MaxRatio),
-			math.min(Config.MaxEdge, orig.Z * Config.MaxRatio)
-		)
-		return Vector3.new(
-			math.min(target.X, maxSize.X),
-			math.min(target.Y, maxSize.Y),
-			math.min(target.Z, maxSize.Z)
-		)
-	end
-
-	local function newState(key, character, rig)
-		return {
-			key = key,
-			character = character,
-			rig = rig,
-			parts = {},
-			phase = "expanding",
-			phaseTime = 0,
-			distance = 0,
-		}
-	end
-
-	local function collapseState(state, dt)
-		local done = true
-		for part, orig in pairs(state.parts) do
-			if part.Parent then
-				local size = part.Size:Lerp(orig.size, Config.ShrinkAlpha)
-				part.Size = size
-				part.CanCollide = orig.canCollide
-				part.Transparency += (orig.transparency - part.Transparency) * Config.ShrinkAlpha
-				if (size - orig.size).Magnitude > 0.02 then
-					done = false
-				else
-					part.Size = orig.size
-					part.Transparency = orig.transparency
-				end
-			end
-		end
-		if done then
-			states[state.key] = nil
-		end
-	end
-
-	local function restoreState(state)
-		for part, orig in pairs(state.parts) do
-			if part.Parent then
-				part.Size = orig.size
-				part.Transparency = orig.transparency
-				part.CanCollide = orig.canCollide
-			end
-		end
-		states[state.key] = nil
-	end
-
-	local function expandState(state, distance, dt)
-		state.phase = "expanding"
-		state.phaseTime = 0
-		state.distance = distance
-		local names = Config.RigParts[state.rig] or Config.RigParts.R15
-		for _, name in ipairs(names) do
-			local part = state.character:FindFirstChild(name)
-			if part and part:IsA("BasePart") then
-				captureOriginal(state, part)
-				local orig = state.parts[part]
-				local target = targetSizeFor(orig.size, distance, part.Name)
-				part.Size = part.Size:Lerp(target, Config.GrowAlpha)
-				part.Transparency += (Config.Transparency - part.Transparency) * Config.GrowAlpha
-				part.CanCollide = false
-			end
-		end
-	end
-
-	--=========================================================================
-	-- Candidate gating: screen distance from the shared pool projection,
-	-- world distance, liveness. Returns eligible candidates sorted nearest.
-	--=========================================================================
-	local function gatherEligible()
-		local cam = common.Services.Workspace.CurrentCamera
-		if not cam then return {} end
-		local center = cam.ViewportSize / 2
-		local locked = common.Camera and common.Camera:GetCurrentTarget()
-
-		local eligible = {}
-		for _, cand in ipairs(common.Candidates:Get()) do
-			if (not Config.OnlyHostile or not common.Candidates.IsHostile
-                or common.Candidates:IsHostile(cand))
-                and (cand.Player or Config.TargetNPCs)
-                and (Config.Mode ~= "lockedOnly" or (locked and cand.Character == locked.Character)) then
-				if cand.Character.Parent and cand.Humanoid.Health > 0 and (not cand.Player or cand.Player.Character == cand.Character)
-					and cand.WorldDistance <= Config.MaxDistance and cand.TopOnScreen then
-					local screen = Vector2.new(cand.AnchorScreen.X, cand.AnchorScreen.Y)
-					local screenDist = (screen - center).Magnitude
-					if screenDist <= Config.FOV then
-						table.insert(eligible, { cand = cand, screenDist = screenDist })
-					end
-				end
-			end
-		end
-		table.sort(eligible, function(a, b) return a.screenDist < b.screenDist end)
-		return eligible
-	end
-
-	--=========================================================================
-	-- Public envelope query for SilentAim's server-side clamp: the ORIGINAL
-	-- size of a part, so rewritten hit points stay inside what the server
-	-- can validate.
-	--=========================================================================
-	function Hitbox:GetEnvelope(part)
-		for _, state in pairs(states) do
-			local orig = state.parts[part]
-			if orig then return orig.size end
-		end
-		return part.Size
-	end
-
-	function Hitbox:GetEnvelopeMargin(part)
-		for _, state in pairs(states) do
-			local orig = state.parts[part]
-			if orig then return orig.size * 0.5 + Vector3.new(0.5, 0.5, 0.5) end
-		end
-		return part.Size * 0.5 + Vector3.new(0.5, 0.5, 0.5)
-	end
-
-	--=========================================================================
-	-- Update: dt-gated tick.
-	--=========================================================================
-	function Hitbox:Update(dt)
-		if not Config.Enabled then
-			Hitbox:Cleanup()
-			accumulator = 0
-			return
-		end
-
-		accumulator += dt
-		local interval = 1 / math.clamp(Config.TickRate, 1, 60)
-		if accumulator < interval then return end
-		local elapsed = accumulator
-		accumulator %= interval
-
-        local eligible = gatherEligible()
-        Hitbox.Stats.Eligible = #eligible
+    local function isPart(inst)
+        return inst and inst:IsA("BasePart") and inst.Parent ~= nil
+    end
+    local function findPart(model, names)
+        for _,name in ipairs(names) do
+            local part = model:FindFirstChild(name)
+            if not part then part = model:FindFirstChild(name, true) end
+            if isPart(part) then return part end
+        end
+        return nil
+    end
+    local function anchorFor(model)
+        local anchor = findPart(model, {"HumanoidRootPart", "UpperTorso", "Torso", "LowerTorso", "Head"})
+            or (isPart(model.PrimaryPart) and model.PrimaryPart or nil)
+        if anchor then return anchor end
+        -- Some SCP entities are custom Models without a PrimaryPart. Limit
+        -- the fallback to direct children; never traverse the whole map.
+        for _,child in ipairs(model:GetChildren()) do
+            if isPart(child) then return child end
+        end
+        local nested = model:FindFirstChildWhichIsA("BasePart", true)
+        return isPart(nested) and nested or nil
+    end
+    local function isAlive(model)
+        if not model or not model.Parent then return false end
+        if model:GetAttribute("Dead") == true then return false end
+        local hp = model:GetAttribute("Health")
+        if type(hp) == "number" and hp <= 0 then return false end
+        local humanoid = model:FindFirstChildWhichIsA("Humanoid")
+        return not humanoid or humanoid.Health > 0
+    end
+    local function targetsFor(model)
+        local selected = {}
         local seen = {}
-
-		-- Expand nearest-first, capped at MaxActive.
-		local expanded = 0
-		for _, entry in ipairs(eligible) do
-			if expanded >= Config.MaxActive then break end
-			local cand = entry.cand
-			local key = cand.Player or cand.Character
-			seen[key] = true
-			local state = states[key]
-			if state and (state.character ~= cand.Character or state.rig ~= rigKey(cand.Character)) then
-				restoreState(state)
-				state = nil
-			end
-			if not state then
-				local rig = rigKey(cand.Character)
-				if rig then
-					state = newState(key, cand.Character, rig)
-					states[key] = state
-				end
-			end
-			if state then
-				expandState(state, cand.WorldDistance, dt)
-				expanded += 1
-			end
-		end
-
-        Hitbox.Stats.Expanded=expanded
-        -- Grace/collapse the rest.
-		for key, state in pairs(states) do
-			if not seen[key] then
-				if state.phase == "expanding" then
-					state.phase = "pending"
-					state.phaseTime = 0
-				elseif state.phase == "pending" then
-					state.phaseTime += elapsed * 1000
-					if state.phaseTime >= Config.PendingMs then
-						state.phase = "collapsing"
-					end
-				else
-					collapseState(state, interval)
-				end
-			end
-		end
-	end
-
-	--=========================================================================
-	-- Hard cleanup paths: character/player removal restores immediately.
-	--=========================================================================
-	local hookConns = {}
-	local function hookRemovals()
-		local function hookCharacter(player)
-			if hookConns[player] then return end
-			local hooks = {}
-			hookConns[player] = hooks
-			table.insert(hooks, player.CharacterRemoving:Connect(function(character)
-				for key, state in pairs(states) do
-					if state.character == character then
-						restoreState(state)
-					end
-				end
-			end))
-			table.insert(hooks, player:GetPropertyChangedSignal("Character"):Connect(function()
-				for key, state in pairs(states) do
-					if state.key == player then
-						restoreState(state)
-					end
-				end
-			end))
-		end
-		for _, player in ipairs(Players:GetPlayers()) do
-			hookCharacter(player)
-		end
-		local conn = Players.PlayerRemoving:Connect(function(player)
-			for _, hook in ipairs(hookConns[player] or {}) do hook:Disconnect() end
-			hookConns[player] = nil
-			for key, state in pairs(states) do
-				if state.key == player then
-					restoreState(state)
-				end
-			end
-		end)
-		local conn2 = Players.PlayerAdded:Connect(hookCharacter)
-		common.OnCleanup(function()
-			conn:Disconnect()
-			for _, hooks in pairs(hookConns) do
-				for _, hook in ipairs(hooks) do pcall(function() hook:Disconnect() end) end
-			end
-			table.clear(hookConns)
-			conn2:Disconnect()
-		end)
-	end
-	hookRemovals()
-
-	function Hitbox:Cleanup()
-		for _, state in pairs(states) do
-			restoreState(state)
-		end
-	end
-
-	common.OnCleanup(function()
-		Hitbox:Cleanup()
-	end)
-
-	return Hitbox
+        local function add(part)
+            if isPart(part) and not seen[part] then
+                seen[part] = true
+                selected[#selected + 1] = part
+            end
+        end
+        for _,name in ipairs({"Head", "UpperTorso", "LowerTorso", "Torso"}) do
+            add(findPart(model, {name}))
+        end
+        if Config.Mode == "fullBody" then
+            for _,name in ipairs({
+                "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm",
+                "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg",
+                "Left Arm", "Right Arm", "Left Leg", "Right Leg"
+            }) do add(findPart(model, {name})) end
+        end
+        -- SCP custom entity models can lack Humanoid and standard torso names.
+        -- Prefer their PrimaryPart as a bounded fallback, without touching
+        -- HumanoidRootPart for standard player rigs (avoids physics instability).
+        if #selected == 0 then add(anchorFor(model)) end
+        return selected
+    end
+    local function multiplier(name, distance)
+        local region = name == "Head" and Config.HeadScale
+            or ((name == "Torso" or name == "UpperTorso" or name == "LowerTorso") and Config.TorsoScale or 1)
+        local peak = math.max(1, Config.ScaleMax * region)
+        local decay = math.clamp(1 - distance / math.max(1, Config.MaxDistance), 0, 1)
+        return 1 + (peak - 1) * decay
+    end
+    local function expandedSize(original, part, distance)
+        local factor = multiplier(part.Name, distance)
+        local bounds = Vector3.new(
+            original.X * factor * Config.AnisoXZ,
+            original.Y * factor * Config.AnisoY,
+            original.Z * factor * Config.AnisoXZ
+        )
+        return Vector3.new(
+            math.max(original.X, math.min(bounds.X, original.X * Config.MaxRatio, Config.MaxEdge)),
+            math.max(original.Y, math.min(bounds.Y, original.Y * Config.MaxRatio, Config.MaxEdge)),
+            math.max(original.Z, math.min(bounds.Z, original.Z * Config.MaxRatio, Config.MaxEdge))
+        )
+    end
+    local function removePreview(original)
+        if original.preview then
+            pcall(function() original.preview:Destroy() end)
+            original.preview = nil
+        end
+    end
+    local function restore(model)
+        local state = states[model]
+        if not state then return end
+        for part,original in pairs(state.parts) do
+            removePreview(original)
+            if part.Parent then
+                pcall(function()
+                    part.Size = original.size
+                    part.Transparency = original.transparency
+                    part.CanCollide = original.canCollide
+                end)
+            end
+        end
+        states[model] = nil
+    end
+    local function createPreview(part, original)
+        if original.preview or not Config.ShowBounds then return end
+        local ok, adorn = pcall(function()
+            local box = Instance.new("BoxHandleAdornment")
+            box.Name = "VortexionSCPHitboxBounds"
+            box.Adornee = part
+            box.AlwaysOnTop = true
+            box.Color3 = Config.BoundsColor
+            box.Transparency = Config.BoundsTransparency
+            box.Size = part.Size
+            box.Parent = part
+            return box
+        end)
+        if ok then original.preview = adorn
+        else Hitbox.Stats.LastError = "碰撞箱预览创建失败: " .. tostring(adorn) end
+    end
+    local function apply(model, parts, distance)
+        local state = states[model]
+        if not state then
+            state = {parts = {}, lastSeen = os.clock()}
+            states[model] = state
+        end
+        state.lastSeen = os.clock()
+        local verified = 0
+        for _,part in ipairs(parts) do
+            local original = state.parts[part]
+            if not original then
+                original = {size = part.Size, transparency = part.Transparency, canCollide = part.CanCollide}
+                state.parts[part] = original
+            end
+            local desired = expandedSize(original.size, part, distance)
+            if original.lastApplied and (part.Size - original.size).Magnitude < 0.02
+                and (original.lastApplied - original.size).Magnitude > 0.1 then
+                Hitbox.Stats.ExternalResets += 1
+            end
+            local ok, err = pcall(function()
+                part.Size = part.Size:Lerp(desired, Config.GrowAlpha)
+                part.CanCollide = false
+                part.Transparency = original.transparency + (Config.Transparency - original.transparency) * 0.35
+            end)
+            if ok then
+                Hitbox.Stats.PartsChanged += 1
+                original.lastApplied = part.Size
+                if (part.Size - original.size).Magnitude > 0.025 then
+                    verified += 1
+                end
+                if Config.ShowBounds then createPreview(part, original) else removePreview(original) end
+                if original.preview then
+                    pcall(function()
+                        original.preview.Size = part.Size
+                        original.preview.Color3 = Config.BoundsColor
+                        original.preview.Transparency = Config.BoundsTransparency
+                        original.preview.Visible = Config.ShowBounds
+                    end)
+                    Hitbox.Stats.Preview += 1
+                end
+            else
+                Hitbox.Stats.LastError = "部件写入失败: " .. tostring(err)
+                Hitbox.Stats.Rejected += 1
+            end
+        end
+        return verified
+    end
+    local function addModel(list, model, owner, camera, origin, locked)
+        if not isAlive(model) then return end
+        if owner and owner.Character ~= model then return end
+        if Config.OnlyHostile and common.Candidates and common.Candidates.IsHostile then
+            if not common.Candidates:IsHostile({Player = owner, Character = model}) then return end
+        end
+        if Config.Mode == "lockedOnly" and (not locked or locked.Character ~= model) then return end
+        local anchor = anchorFor(model)
+        if not anchor then return end
+        local distance = (anchor.Position - origin).Magnitude
+        if distance > Config.MaxDistance then return end
+        local screen, onScreen = camera:WorldToViewportPoint(anchor.Position)
+        if not onScreen and screen.Z <= 0 then return end
+        local center = camera.ViewportSize * 0.5
+        if Config.UseFOV and (Vector2.new(screen.X, screen.Y) - center).Magnitude > Config.FOV then return end
+        local parts = targetsFor(model)
+        if #parts == 0 then return end
+        list[#list + 1] = { model = model, parts = parts, distance = distance }
+    end
+    local function gather()
+        local camera = Workspace.CurrentCamera
+        if not camera then return {}, "摄像机未就绪" end
+        local localChar = LocalPlayer and LocalPlayer.Character
+        local localRoot = localChar and anchorFor(localChar)
+        local origin = localRoot and localRoot.Position or camera.CFrame.Position
+        local locked = common.Camera and common.Camera.GetCurrentTarget and common.Camera:GetCurrentTarget()
+        local eligible = {}
+        for _,player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                addModel(eligible, player.Character, player, camera, origin, locked)
+            end
+        end
+        if Config.TargetNPCs and common.Candidates and common.Candidates.NPCs then
+            for model in pairs(common.Candidates.NPCs) do
+                if model ~= localChar and model.Parent and not Players:GetPlayerFromCharacter(model) then
+                    addModel(eligible, model, nil, camera, origin, locked)
+                end
+            end
+        end
+        table.sort(eligible, function(a,b) return a.distance < b.distance end)
+        return eligible, #eligible == 0 and "没有符合距离/FOV/阵营的目标" or "正常"
+    end
+    function Hitbox:GetEnvelope(part)
+        for _,state in pairs(states) do
+            local original = state.parts[part]
+            if original then return original.size end
+        end
+        return part.Size
+    end
+    function Hitbox:GetEnvelopeMargin(part)
+        return self:GetEnvelope(part) * 0.5 + Vector3.new(0.5, 0.5, 0.5)
+    end
+    function Hitbox:Cleanup()
+        local keys = {}
+        for model in pairs(states) do keys[#keys + 1] = model end
+        for _,model in ipairs(keys) do restore(model) end
+        Hitbox.Stats.Expanded, Hitbox.Stats.Preview = 0, 0
+    end
+    function Hitbox:Update(dt)
+        if not Config.Enabled then
+            self:Cleanup()
+            accumulator = 0
+            Hitbox.Stats.Reason = "未开启"
+            return
+        end
+        accumulator += (dt or 0)
+        local interval = 1 / math.clamp(Config.TickRate, 1, 60)
+        if accumulator < interval then return end
+        accumulator %= interval
+        local eligible, reason = gather()
+        Hitbox.Stats.Eligible = #eligible
+        Hitbox.Stats.Reason = reason
+        Hitbox.Stats.PartsChanged, Hitbox.Stats.Verified = 0, 0
+        Hitbox.Stats.Preview, Hitbox.Stats.Rejected = 0, 0
+        local active = {}
+        local count = 0
+        for _,item in ipairs(eligible) do
+            if count >= Config.MaxActive then break end
+            count += 1
+            active[item.model] = true
+            Hitbox.Stats.Verified += apply(item.model, item.parts, item.distance)
+        end
+        Hitbox.Stats.Expanded = count
+        local expired = {}
+        for model,state in pairs(states) do
+            if not active[model] and (not model.Parent or (os.clock() - state.lastSeen) * 1000 > Config.PendingMs) then
+                expired[#expired + 1] = model
+            end
+        end
+        for _,model in ipairs(expired) do restore(model) end
+        if count > 0 and Hitbox.Stats.Verified == 0 then
+            Hitbox.Stats.Reason = "已选中目标，但本地尺寸未变化（被还原或尺寸受限）"
+        end
+    end
+    conns[#conns+1] = Players.PlayerRemoving:Connect(function(player)
+        if player.Character then restore(player.Character) end
+    end)
+    conns[#conns+1] = Workspace.DescendantRemoving:Connect(function(inst)
+        if states[inst] then restore(inst) end
+    end)
+    common.OnCleanup(function()
+        Hitbox:Cleanup()
+        for _,conn in ipairs(conns) do pcall(function() conn:Disconnect() end) end
+    end)
+    return Hitbox
 end
 
 end)()
@@ -10725,6 +10706,19 @@ local slowLoops = { Aim = 0, Hitbox = 0, ESP = 0 }
 local lastSnapshot = 0
 local lowFreqTimer = 0
 
+-- R232: hitbox evaluation is independent of the render/ESP loop. On mobile,
+-- RenderStep can be paused/rebound while Heartbeat continues updating parts.
+local hitboxOnHeartbeat = false
+local heartbeatOk, heartbeatConn = pcall(function()
+    return RunService.Heartbeat:Connect(function(dt)
+        if not isCurrent() or not Hitbox.Config or not Hitbox.Config.Enabled then return end
+        common.Guard("HitboxHeartbeat", function() Hitbox:Update(dt) end)
+    end)
+end)
+if heartbeatOk and heartbeatConn then
+    hitboxOnHeartbeat = true
+    ownConnection(heartbeatConn)
+end
 local renderName = "VortexionSCPFrame"
 local function renderFrame(dt)
     if not isCurrent() then return end
@@ -10745,7 +10739,7 @@ local function renderFrame(dt)
         -- synchronously calls its own reset/restore entrypoint.
         local needCandidates = (Camera.Config and Camera.Config.Enabled)
             or (SilentAim.Config and SilentAim.Config.Enabled)
-            or (Hitbox.Config and Hitbox.Config.Enabled)
+            -- R232 hitbox has its own roster; avoid expensive duplicate scan.
             or (ESP.Config and ESP.Config.Enabled)
         local t0=tick()
         if needCandidates then common.Guard("Candidates", function() Candidates:Update(dt) end) end
@@ -10759,10 +10753,10 @@ local function renderFrame(dt)
             common.Guard("SilentAim", function() SilentAim:Update() end)
         end
         t0=tick()
-        if Hitbox.Config and Hitbox.Config.Enabled then
+        if not hitboxOnHeartbeat and Hitbox.Config and Hitbox.Config.Enabled then
             common.Guard("Hitbox", function() Hitbox:Update(dt) end)
         end
-        costs.Hitbox=(Hitbox.Config and Hitbox.Config.Enabled) and (tick()-t0)*1000 or 0
+        costs.Hitbox=(Hitbox.Config and Hitbox.Config.Enabled and not hitboxOnHeartbeat) and (tick()-t0)*1000 or 0
         t0=tick()
         if ESP.Config and ESP.Config.Enabled then
             common.Guard("ESP", function() ESP:Update(dt) end)
@@ -10837,7 +10831,11 @@ tabs.Hitbox:AddSlider("SCPHitboxFov", { Title = "屏幕门 (px)", Min = 50, Max 
 tabs.Hitbox:AddSlider("SCPHitboxActive", { Title = "同帧目标数", Min = 1, Max = 16, Default = 8, Rounding = 0, Callback = function(v) Hitbox.Config.MaxActive = v end })
 tabs.Hitbox:AddToggle("SCPHitboxHostile", {Title="只处理敌对阵营",Default=false,Callback=function(v)Hitbox.Config.OnlyHostile=v end})
 tabs.Hitbox:AddToggle("SCPHitboxNPC", {Title="包含SCP收容体",Default=true,Callback=function(v)Hitbox.Config.TargetNPCs=v end})
-tabs.Hitbox:AddParagraph({ Title = "碰撞箱说明", Content = "20Hz 节流、尺寸平滑与距离衰减；关闭或角色替换时恢复尺寸、透明度和碰撞属性。" })
+tabs.Hitbox:AddToggle("SCPHitboxUseFov", {Title="限制屏幕 FOV（默认不限制）",Default=false,Callback=function(v)Hitbox.Config.UseFOV=v end})
+tabs.Hitbox:AddToggle("SCPHitboxBounds", {Title="显示实际本地碰撞边界",Default=true,Callback=function(v)Hitbox.Config.ShowBounds=v end})
+tabs.Hitbox:AddSlider("SCPHitboxBoundsAlpha", {Title="碰撞框透明度 (%)",Min=0,Max=95,Default=50,Rounding=0,Callback=function(v)Hitbox.Config.BoundsTransparency=v/100 end})
+tabs.Hitbox:AddColorpicker("SCPHitboxBoundsColor", {Title="碰撞边界颜色",Default=Hitbox.Config.BoundsColor,Callback=function(v)if typeof(v)=="Color3" then Hitbox.Config.BoundsColor=v end end})
+tabs.Hitbox:AddParagraph({ Title = "碰撞箱说明", Content = "独立 Heartbeat 与角色目标池；启用后默认显示青色边界。修改仅对客户端有效，服务端命中仍可能采用原尺寸。" })
 
 -- R226 five essential ESP diagnostics: faction, names, hitbox style, role, SCP classification/color.
 tabs.Visual:AddToggle("SCPESPEnabled", {Title="ESP 总开关",Default=false,Callback=function(v)ESP.Config.Enabled=v if not v then ESP:Update(0) end end})
@@ -10900,6 +10898,14 @@ tabs.World:AddButton({ Title = "低延迟切服（通用）", Callback = functio
     if not ok then ui:Notify({Title = "低延迟切服", Content = reason, Duration = 4}) end
 end })
 
+tabs.Hitbox:AddButton({Title="检查碰撞箱实际生效情况",Callback=function()
+    local hs=Hitbox.Stats or {}
+    local detail=("目标 %d | 扩展 %d | 修改部件 %d | 实际尺寸变化 %d | 边界 %d | 拒绝 %d | 外部重置 %d\n%s\n客户端尺寸变化不代表服务器命中扩展")
+        :format(hs.Eligible or 0,hs.Expanded or 0,hs.PartsChanged or 0,
+            hs.Verified or 0,hs.Preview or 0,hs.Rejected or 0,hs.ExternalResets or 0,
+            tostring(hs.LastError ~= "" and hs.LastError or hs.Reason or "等待刷新"))
+    pcall(function() ui:Notify({Title="SCP 碰撞箱诊断",Content=detail,Duration=9}) end)
+end})
 tabs.Info:AddButton({Title="ESP / 自瞄 / 碰撞箱诊断",Callback=function()
     local es=ESP.Stats or {} local cs=Camera.Stats or {} local hs=Hitbox.Stats or {}
     local text=("ESP %s: %d/%d, %.2fms; 自瞄: %s (%s); 碰撞箱: %d/%d; 秒交互: %d")

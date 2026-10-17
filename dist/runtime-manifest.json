@@ -1,5 +1,5 @@
 {
-  "build_tag": "r231-loader-v2-native-neverlose-startup-fix",
+  "build_tag": "r232-loader-v2-scp-hitbox-adapter",
   "core": {
     "bytes": 470088,
     "path": "dist/Vortexion_Core.lua",
@@ -28,9 +28,9 @@
       "sha256": "989eb5d397f8afcf28208d183a5c25733ba358c11f231026580531f59dabba8c"
     },
     "SCP": {
-      "bytes": 131843,
+      "bytes": 136477,
       "path": "dist/Vortexion_Module_SCP.lua",
-      "sha256": "db0f4dad6184b00004f13db6fbbdce39d673446ed14cbd9f59be9a0e6aef6c42"
+      "sha256": "465f1dfd21fbc75892af40627a7cb4319b724fdc5366a32b1a7430dd5b596def"
     }
   },
   "routes": {

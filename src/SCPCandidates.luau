@@ -227,7 +227,18 @@ return function(common)
 			if not model:IsA("Model") then return end
 			if Players:GetPlayerFromCharacter(model) then return end
 			local humanoid = model:FindFirstChildWhichIsA("Humanoid")
-			if humanoid then Candidates.NPCs[model] = true end
+            -- A few SCP anomaly entities do not have a Humanoid. Include only
+            -- explicitly named/tagged SCP Models with an immediate BasePart;
+            -- do not treat arbitrary environmental props as NPCs.
+            local labeledSCP = model.Name:lower():match("^scp[%s%-_]?%d+") ~= nil
+                or model:GetAttribute("IsSCP") == true
+            local customBody = false
+            if labeledSCP and not humanoid then
+                for _,child in ipairs(model:GetChildren()) do
+                    if child:IsA("BasePart") then customBody = true break end
+                end
+            end
+			if humanoid or customBody then Candidates.NPCs[model] = true end
 		end
 
 		local connAdded = Workspace.DescendantAdded:Connect(function(inst)
