@@ -40,6 +40,8 @@ return function(c)
     -- ESP: pooled highlights, random names, cloaked, lifecycle-aware.
     --=========================================================================
     local highlights = {}
+    local espStats = { refreshes = 0, scanned = 0, eligible = 0, markers = 0, noHumanoid = 0, lastError = "none" }
+    local ESP_GRACE_SECONDS = 0.8
     local espAccum = 0
     local visibilityParams = RaycastParams.new()
     visibilityParams.FilterType = Enum.RaycastFilterType.Blacklist
@@ -63,11 +65,17 @@ return function(c)
 
     local function updateESP()
         if not Config.ESPEnabled then clearESP(); return end
+        espStats.scanned, espStats.eligible, espStats.noHumanoid = 0, 0, 0
+        local now = os.clock()
         for _, player in ipairs(Players:GetPlayers()) do
             if player == LocalPlayer then
                 clearEntry(player)
             else
+                espStats.scanned += 1
                 local model, humanoid = c.Living(player)
+                if model and humanoid and not model:FindFirstChildOfClass("Humanoid") then
+                    espStats.noHumanoid += 1
+                end
                 local valid = model and humanoid and humanoid.Health > 0
                     and ((not Config.ESPTeam) or c.Enemy(player, true))
                 if valid then
@@ -80,6 +88,7 @@ return function(c)
                     end
                 end
                 if valid then
+                    espStats.eligible += 1
                     local entry = highlights[player]
                     if not entry or entry.model.Parent ~= model then
                         clearEntry(player)
@@ -102,6 +111,7 @@ return function(c)
                         local labelGui = Instance.new("BillboardGui")
                         labelGui.Name = c.RandomName()
                         labelGui.Adornee = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+                            or model:FindFirstChildWhichIsA("BasePart", true)
                         labelGui.AlwaysOnTop = true
                         labelGui.Size = UDim2.fromOffset(180, 48)
                         labelGui.StudsOffset = Vector3.new(0, 2.5, 0)
@@ -116,6 +126,7 @@ return function(c)
                         highlights[player] = { model = highlight, labelGui = labelGui, label = label, adorneeConn = conn }
                     end
                     local entry = highlights[player]
+                    entry.lastSeen = now
                     local camera = Workspace.CurrentCamera
                     local root = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
                     local color = Color3.fromRGB(240, 90, 90)
@@ -129,7 +140,9 @@ return function(c)
                     entry.label.TextColor3 = color
                     local lines = {}
                     if Config.ESPNames then table.insert(lines, player.DisplayName or player.Name) end
-                    if Config.ESPHealth then table.insert(lines, ("HP %d/%d"):format(math.floor(humanoid.Health), math.floor(humanoid.MaxHealth))) end
+                    if Config.ESPHealth and (type(humanoid) ~= "table" or humanoid.HealthKnown ~= false) then
+                        table.insert(lines, ("HP %d/%d"):format(math.floor(humanoid.Health), math.floor(humanoid.MaxHealth)))
+                    end
                     if Config.ESPRange and camera and root then table.insert(lines, ("%d studs"):format(math.floor((root.Position - camera.CFrame.Position).Magnitude))) end
                     entry.label.Text = table.concat(lines, "\n")
                     entry.labelGui.Enabled = #lines > 0
@@ -186,10 +199,21 @@ return function(c)
                         if entry.nativeBox then entry.nativeBox.Visible = Config.ESPBox; entry.nativeBox.Color3 = color end
                     end
                 else
-                    clearEntry(player)
+                    local existing = highlights[player]
+                    -- A roster swap or a brief camera/view-distance miss must
+                    -- not destroy/recreate ESP several times per second.
+                    if not existing or not existing.lastSeen or now - existing.lastSeen > ESP_GRACE_SECONDS
+                        or (existing.labelGui and not existing.labelGui.Parent) then
+                        clearEntry(player)
+                    end
                 end
             end
         end
+        local count = 0
+        for pl in pairs(highlights) do
+            if not pl.Parent then clearEntry(pl) else count += 1 end
+        end
+        espStats.markers = count
     end
 
     local function startESP()
@@ -251,6 +275,12 @@ return function(c)
     local function updateSpeed()
         local model, humanoid = c.Living(LocalPlayer)
         if not (model and humanoid) then restoreSpeed(); return end
+        -- Virtual HP records support target discovery only. They are NOT
+        -- actual movement controllers; never write fake WalkSpeed onto them.
+        if model:FindFirstChildOfClass("Humanoid") ~= humanoid then
+            restoreSpeed()
+            return
+        end
         local hrp = model:FindFirstChild("HumanoidRootPart")
         if not hrp then restoreSpeed(); return end
         if speedBackup ~= humanoid then
@@ -355,6 +385,75 @@ return function(c)
         end
     end
 
+    -- Third person: native Roblox camera settings, with reversible ownership.
+    -- A game-controlled Scriptable camera can override these values; report
+    -- that instead of pretending the toggle guarantees third person.
+    local thirdPerson = {enabled = false, distance = 12, saved = nil, accumulator = 0, overrides = 0}
+    local function restoreThirdPerson()
+        local saved = thirdPerson.saved
+        thirdPerson.saved = nil
+        if not saved then return end
+        pcall(function() LocalPlayer.CameraMode = saved.mode end)
+        pcall(function()
+            LocalPlayer.CameraMaxZoomDistance = math.max(saved.maxZoom, saved.minZoom)
+            LocalPlayer.CameraMinZoomDistance = saved.minZoom
+            LocalPlayer.CameraMaxZoomDistance = saved.maxZoom
+        end)
+        local cam = saved.camera
+        if cam and cam.Parent then
+            pcall(function() cam.CameraType = saved.cameraType end)
+            if saved.subject and saved.subject.Parent then
+                pcall(function() cam.CameraSubject = saved.subject end)
+            end
+        end
+    end
+    local function updateThirdPerson()
+        if not thirdPerson.enabled then return end
+        local camera = Workspace.CurrentCamera
+        if not camera then return end
+        if not thirdPerson.saved then
+            thirdPerson.saved = {
+                mode = LocalPlayer.CameraMode,
+                minZoom = LocalPlayer.CameraMinZoomDistance,
+                maxZoom = LocalPlayer.CameraMaxZoomDistance,
+                camera = camera,
+                cameraType = camera.CameraType,
+                subject = camera.CameraSubject,
+            }
+        end
+        local d = thirdPerson.distance
+        if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
+            LocalPlayer.CameraMode = Enum.CameraMode.Classic
+            thirdPerson.overrides += 1
+        end
+        -- Set max before min to avoid automatic Roblox min/max clamping.
+        if LocalPlayer.CameraMaxZoomDistance ~= d then LocalPlayer.CameraMaxZoomDistance = d end
+        if LocalPlayer.CameraMinZoomDistance ~= d then LocalPlayer.CameraMinZoomDistance = d end
+        if camera.CameraType == Enum.CameraType.Scriptable then
+            camera.CameraType = Enum.CameraType.Custom
+            thirdPerson.overrides += 1
+        end
+        local model = c.Character(LocalPlayer)
+        if model then
+            local target = model:FindFirstChildOfClass("Humanoid")
+                or model:FindFirstChild("HumanoidRootPart")
+                or model:FindFirstChildWhichIsA("BasePart", true)
+            if target and camera.CameraSubject ~= target then
+                camera.CameraSubject = target
+            end
+        end
+    end
+    local function setThirdPerson(enabled)
+        thirdPerson.enabled = enabled == true
+        if not thirdPerson.enabled then restoreThirdPerson()
+        else thirdPerson.accumulator = 0; c.Guard("Visual.ThirdPerson", updateThirdPerson) end
+    end
+    c.OnCleanup(restoreThirdPerson)
+    local cameraChanged = Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        if thirdPerson.enabled then thirdPerson.accumulator = 0 end
+    end)
+    c.OnCleanup(function() cameraChanged:Disconnect() end)
+
     local moveAccum = 0
     local espInterval = 0.05
     local espRefreshes = 0
@@ -367,7 +466,12 @@ return function(c)
     end
     local function refreshESP()
         espRefreshes += 1
-        c.Guard("Visual.ESP", updateESP)
+        espStats.refreshes = espRefreshes
+        local ok, err = pcall(updateESP)
+        if not ok then
+            espStats.lastError = tostring(err):sub(1, 240)
+            warn("[Vortexion/Blox/ESP] " .. espStats.lastError)
+        end
     end
     local function forceESPTeardown()
         -- A camera swap must not wait for the throttled slot: stale highlights
@@ -380,9 +484,16 @@ return function(c)
         if not c.IsCurrent() then return end
         -- Before enabling any feature, skip ALL camera, raycast, or movement
         -- calculations. The Heartbeat connection stays lightweight for toggles.
-        if not Config.ESPEnabled and not Config.SpeedEnabled and not Config.FlyEnabled and not Config.Noclip then
+        if not Config.ESPEnabled and not Config.SpeedEnabled and not Config.FlyEnabled and not Config.Noclip and not thirdPerson.enabled then
             espAccum, moveAccum = 0, 0
             return
+        end
+        if thirdPerson.enabled then
+            thirdPerson.accumulator += dt
+            if thirdPerson.accumulator >= 0.25 then
+                thirdPerson.accumulator = 0
+                c.Guard("Visual.ThirdPerson", updateThirdPerson)
+            end
         end
         -- Non-critical visual pacing is owned by the shared bridge (ctx.UI),
         -- re-read every frame so a VisualHz switch takes effect immediately.
@@ -414,7 +525,16 @@ return function(c)
         restoreFly()
         restoreNoclip()
         setLight(false)
+        setThirdPerson(false)
     end)
+    function Config:Status()
+        return {
+            markers = espStats.markers, scanned = espStats.scanned,
+            eligible = espStats.eligible, refreshes = espStats.refreshes,
+            noHumanoid = espStats.noHumanoid, error = espStats.lastError,
+            thirdPerson = thirdPerson.enabled, thirdOverrides = thirdPerson.overrides,
+        }
+    end
     function Config.ESPRefreshCount() return espRefreshes end
     function Config.ESPInterval() return espInterval end
 
@@ -442,10 +562,24 @@ return function(c)
         Config.Fullbright = v
         setLight(v)
     end })
+    tab:AddButton({Title = "打印 ESP 目标诊断", Callback = function()
+        local status = Config:Status()
+        print(("[Vortexion/BloxESP] 开关=%s 玩家=%d 合格=%d 无Humanoid=%d 高亮=%d 刷新=%d 错误=%s")
+            :format(tostring(Config.ESPEnabled), status.scanned, status.eligible,
+                status.noHumanoid, status.markers, status.refreshes, status.error))
+    end})
     tab:AddParagraph({ Title = "视觉刷新节流",
         Content = "ESP 属于非关键视觉刷新，节拍由共享桥接 ctx.UI:GetVisualInterval(0.05) 决定（VisualHz 5..60 有界）；桥接未提供该方法时保持 20Hz。移动、输入、重生恢复与飞行不受该节流影响；摄像机更换、关闭与卸载立即清理，不等节流槽。" })
 
     local movement = c.Tabs.Movement
+    movement:AddToggle("BloxThirdPerson", {Title = "第三人称视角", Default = false,
+        Callback = setThirdPerson})
+    movement:AddSlider("BloxThirdDistance", {Title = "第三人称镜头距离", Min = 5, Max = 24,
+        Default = 12, Rounding = 0, Callback = function(value)
+            thirdPerson.distance = value
+            if thirdPerson.enabled then c.Guard("Visual.ThirdPerson", updateThirdPerson) end
+        end})
+    movement:AddParagraph({Title="第三人称说明", Content="基于 Roblox Classic 镜头与缩放距离；关闭时恢复原相机属性。若游戏主动强制接管相机，可能被覆盖。"})
     movement:AddToggle("BloxSpeedEnabled", { Title = "自定义移动速度", Default = false, Callback = function(v)
         Config.SpeedEnabled = v
         if not v then restoreSpeed() end

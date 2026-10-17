@@ -42505,8 +42505,10 @@ return function(c)
         WallCheck = true,
         TeamCheck = true,
         Prediction = 0.12,
-        MaxAngle = 15,
-        HitChance = 0.72,
+        MaxAngle = 35,
+        HitChance = 1,
+        AimTurnRate = 120,
+        Priority = "Crosshair",     -- Crosshair | Distance | LowHealth
         FOVCircle = true,
         Attraction = 0.6,
         -- triggerbot
@@ -42539,6 +42541,8 @@ return function(c)
         rollCache = {},
         rollAt = {},
         cost = 0,
+        scans = 0,
+        candidatesSeen = 0,
     }
 
     --=========================================================================
@@ -42562,6 +42566,7 @@ return function(c)
     -- selection and eligibility gates share one traversal.
     --=========================================================================
     local function scan()
+        state.scans += 1
         state.candidates = {}
         local camera = Workspace.CurrentCamera
         if not camera then return end
@@ -42614,6 +42619,7 @@ return function(c)
             end
         end
 
+        state.candidatesSeen = #state.candidates
         -- Drop EMA state for players that left.
         for player in pairs(state.velEMA) do
             if not player.Parent then state.velEMA[player] = nil end
@@ -42720,7 +42726,12 @@ return function(c)
         local best, bestScore
         for _, entry in ipairs(state.candidates) do
             if entryValid(entry) then
-                local score = entry.screenDist + entry.worldDist * 0.5
+                local score
+                if Config.Priority == "Distance" then score = entry.worldDist
+                elseif Config.Priority == "LowHealth" then
+                    score = (type(entry.humanoid) == "table" and entry.humanoid.HealthKnown == false) and (entry.screenDist + 10000)
+                        or ((entry.humanoid.Health / math.max(entry.humanoid.MaxHealth, 1)) * 400 + entry.screenDist * 0.2)
+                else score = entry.screenDist + entry.worldDist * 0.15 end
                 if not bestScore or score < bestScore then
                     best, bestScore = entry, score
                 end
@@ -42756,7 +42767,7 @@ return function(c)
         if math.abs(targetLook.Y) > 0.6 then alpha = alpha * 0.85 end
         if state.locked ~= state.lastLocked then alpha = math.min(alpha, 0.10) end
         if angle > 1e-4 then
-            alpha = math.min(alpha, (math.rad(22) * dt) / angle)
+            alpha = math.min(alpha, (math.rad(Config.AimTurnRate) * dt) / angle)
         end
         if alpha <= 0.001 then return end
         camera.CFrame = camera.CFrame:Lerp(targetCF, alpha)
@@ -43200,6 +43211,10 @@ return function(c)
             hitEntries = (function() local n = 0; for _ in pairs(state.hitEntries) do n += 1 end; return n end)(),
             firing = state.firing,
             costMs = math.floor(state.cost * 100000) / 100,
+            scans = state.scans,
+            active = Config.Enabled,
+            gate = Config.TriggerKey,
+            turnRate = Config.AimTurnRate,
         }
     end
 
@@ -43244,10 +43259,20 @@ return function(c)
         Callback = function(v) Config.Smoothness = v end })
     tab:AddSlider("BloxAimPrediction", { Title = "预测强度", Min = 0, Max = 0.5, Default = 0.12, Rounding = 2,
         Callback = function(v) Config.Prediction = v end })
-    tab:AddSlider("BloxAimMaxAngle", { Title = "最大锁定角（度）", Min = 5, Max = 90, Default = 15, Rounding = 0,
+    tab:AddSlider("BloxAimMaxAngle", { Title = "最大锁定角（度）", Min = 5, Max = 90, Default = 35, Rounding = 0,
         Callback = function(v) Config.MaxAngle = v end })
-    tab:AddSlider("BloxAimHitChance", { Title = "命中率（%）", Min = 10, Max = 100, Default = 72, Rounding = 0,
+    tab:AddSlider("BloxAimHitChance", { Title = "本地辅助触发概率（%）", Min = 10, Max = 100, Default = 100, Rounding = 0,
         Callback = function(v) Config.HitChance = v / 100 end })
+    tab:AddSlider("BloxAimTurnRate", {Title = "镜头最大转速（度/秒）", Min = 20, Max = 360,
+        Default = 120, Rounding = 0, Callback = function(v) Config.AimTurnRate = v end})
+    tab:AddDropdown("BloxAimPriority", {Title = "目标优先级", Values = {"Crosshair", "Distance", "LowHealth"},
+        Default = "Crosshair", Callback = function(v) Config.Priority = v end})
+    tab:AddButton({Title = "打印战斗识别诊断", Callback = function()
+        local snapshot = Combat:DebugSnapshot()
+        print(("[Vortexion/BloxCombat] 自瞄=%s 扫描=%d 目标=%d 锁定=%s 门控=%s 角度=%d")
+            :format(tostring(snapshot.active), snapshot.scans, snapshot.candidates,
+                snapshot.locked, snapshot.gate, Config.MaxAngle))
+    end})
     tab:AddSlider("BloxAimAttraction", { Title = "鼠标吸附强度", Min = 0.1, Max = 1, Default = 0.6, Rounding = 2,
         Callback = function(v) Config.Attraction = v end })
     tab:AddSlider("BloxAimDistance", { Title = "最大锁定距离", Min = 50, Max = 2000, Default = 500, Rounding = 0,
@@ -43885,6 +43910,8 @@ return function(c)
     -- ESP: pooled highlights, random names, cloaked, lifecycle-aware.
     --=========================================================================
     local highlights = {}
+    local espStats = { refreshes = 0, scanned = 0, eligible = 0, markers = 0, noHumanoid = 0, lastError = "none" }
+    local ESP_GRACE_SECONDS = 0.8
     local espAccum = 0
     local visibilityParams = RaycastParams.new()
     visibilityParams.FilterType = Enum.RaycastFilterType.Blacklist
@@ -43908,11 +43935,17 @@ return function(c)
 
     local function updateESP()
         if not Config.ESPEnabled then clearESP(); return end
+        espStats.scanned, espStats.eligible, espStats.noHumanoid = 0, 0, 0
+        local now = os.clock()
         for _, player in ipairs(Players:GetPlayers()) do
             if player == LocalPlayer then
                 clearEntry(player)
             else
+                espStats.scanned += 1
                 local model, humanoid = c.Living(player)
+                if model and humanoid and not model:FindFirstChildOfClass("Humanoid") then
+                    espStats.noHumanoid += 1
+                end
                 local valid = model and humanoid and humanoid.Health > 0
                     and ((not Config.ESPTeam) or c.Enemy(player, true))
                 if valid then
@@ -43925,6 +43958,7 @@ return function(c)
                     end
                 end
                 if valid then
+                    espStats.eligible += 1
                     local entry = highlights[player]
                     if not entry or entry.model.Parent ~= model then
                         clearEntry(player)
@@ -43947,6 +43981,7 @@ return function(c)
                         local labelGui = Instance.new("BillboardGui")
                         labelGui.Name = c.RandomName()
                         labelGui.Adornee = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+                            or model:FindFirstChildWhichIsA("BasePart", true)
                         labelGui.AlwaysOnTop = true
                         labelGui.Size = UDim2.fromOffset(180, 48)
                         labelGui.StudsOffset = Vector3.new(0, 2.5, 0)
@@ -43961,6 +43996,7 @@ return function(c)
                         highlights[player] = { model = highlight, labelGui = labelGui, label = label, adorneeConn = conn }
                     end
                     local entry = highlights[player]
+                    entry.lastSeen = now
                     local camera = Workspace.CurrentCamera
                     local root = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
                     local color = Color3.fromRGB(240, 90, 90)
@@ -43974,7 +44010,9 @@ return function(c)
                     entry.label.TextColor3 = color
                     local lines = {}
                     if Config.ESPNames then table.insert(lines, player.DisplayName or player.Name) end
-                    if Config.ESPHealth then table.insert(lines, ("HP %d/%d"):format(math.floor(humanoid.Health), math.floor(humanoid.MaxHealth))) end
+                    if Config.ESPHealth and (type(humanoid) ~= "table" or humanoid.HealthKnown ~= false) then
+                        table.insert(lines, ("HP %d/%d"):format(math.floor(humanoid.Health), math.floor(humanoid.MaxHealth)))
+                    end
                     if Config.ESPRange and camera and root then table.insert(lines, ("%d studs"):format(math.floor((root.Position - camera.CFrame.Position).Magnitude))) end
                     entry.label.Text = table.concat(lines, "\n")
                     entry.labelGui.Enabled = #lines > 0
@@ -44031,10 +44069,21 @@ return function(c)
                         if entry.nativeBox then entry.nativeBox.Visible = Config.ESPBox; entry.nativeBox.Color3 = color end
                     end
                 else
-                    clearEntry(player)
+                    local existing = highlights[player]
+                    -- A roster swap or a brief camera/view-distance miss must
+                    -- not destroy/recreate ESP several times per second.
+                    if not existing or not existing.lastSeen or now - existing.lastSeen > ESP_GRACE_SECONDS
+                        or (existing.labelGui and not existing.labelGui.Parent) then
+                        clearEntry(player)
+                    end
                 end
             end
         end
+        local count = 0
+        for pl in pairs(highlights) do
+            if not pl.Parent then clearEntry(pl) else count += 1 end
+        end
+        espStats.markers = count
     end
 
     local function startESP()
@@ -44096,6 +44145,12 @@ return function(c)
     local function updateSpeed()
         local model, humanoid = c.Living(LocalPlayer)
         if not (model and humanoid) then restoreSpeed(); return end
+        -- Virtual HP records support target discovery only. They are NOT
+        -- actual movement controllers; never write fake WalkSpeed onto them.
+        if model:FindFirstChildOfClass("Humanoid") ~= humanoid then
+            restoreSpeed()
+            return
+        end
         local hrp = model:FindFirstChild("HumanoidRootPart")
         if not hrp then restoreSpeed(); return end
         if speedBackup ~= humanoid then
@@ -44200,6 +44255,75 @@ return function(c)
         end
     end
 
+    -- Third person: native Roblox camera settings, with reversible ownership.
+    -- A game-controlled Scriptable camera can override these values; report
+    -- that instead of pretending the toggle guarantees third person.
+    local thirdPerson = {enabled = false, distance = 12, saved = nil, accumulator = 0, overrides = 0}
+    local function restoreThirdPerson()
+        local saved = thirdPerson.saved
+        thirdPerson.saved = nil
+        if not saved then return end
+        pcall(function() LocalPlayer.CameraMode = saved.mode end)
+        pcall(function()
+            LocalPlayer.CameraMaxZoomDistance = math.max(saved.maxZoom, saved.minZoom)
+            LocalPlayer.CameraMinZoomDistance = saved.minZoom
+            LocalPlayer.CameraMaxZoomDistance = saved.maxZoom
+        end)
+        local cam = saved.camera
+        if cam and cam.Parent then
+            pcall(function() cam.CameraType = saved.cameraType end)
+            if saved.subject and saved.subject.Parent then
+                pcall(function() cam.CameraSubject = saved.subject end)
+            end
+        end
+    end
+    local function updateThirdPerson()
+        if not thirdPerson.enabled then return end
+        local camera = Workspace.CurrentCamera
+        if not camera then return end
+        if not thirdPerson.saved then
+            thirdPerson.saved = {
+                mode = LocalPlayer.CameraMode,
+                minZoom = LocalPlayer.CameraMinZoomDistance,
+                maxZoom = LocalPlayer.CameraMaxZoomDistance,
+                camera = camera,
+                cameraType = camera.CameraType,
+                subject = camera.CameraSubject,
+            }
+        end
+        local d = thirdPerson.distance
+        if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
+            LocalPlayer.CameraMode = Enum.CameraMode.Classic
+            thirdPerson.overrides += 1
+        end
+        -- Set max before min to avoid automatic Roblox min/max clamping.
+        if LocalPlayer.CameraMaxZoomDistance ~= d then LocalPlayer.CameraMaxZoomDistance = d end
+        if LocalPlayer.CameraMinZoomDistance ~= d then LocalPlayer.CameraMinZoomDistance = d end
+        if camera.CameraType == Enum.CameraType.Scriptable then
+            camera.CameraType = Enum.CameraType.Custom
+            thirdPerson.overrides += 1
+        end
+        local model = c.Character(LocalPlayer)
+        if model then
+            local target = model:FindFirstChildOfClass("Humanoid")
+                or model:FindFirstChild("HumanoidRootPart")
+                or model:FindFirstChildWhichIsA("BasePart", true)
+            if target and camera.CameraSubject ~= target then
+                camera.CameraSubject = target
+            end
+        end
+    end
+    local function setThirdPerson(enabled)
+        thirdPerson.enabled = enabled == true
+        if not thirdPerson.enabled then restoreThirdPerson()
+        else thirdPerson.accumulator = 0; c.Guard("Visual.ThirdPerson", updateThirdPerson) end
+    end
+    c.OnCleanup(restoreThirdPerson)
+    local cameraChanged = Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        if thirdPerson.enabled then thirdPerson.accumulator = 0 end
+    end)
+    c.OnCleanup(function() cameraChanged:Disconnect() end)
+
     local moveAccum = 0
     local espInterval = 0.05
     local espRefreshes = 0
@@ -44212,7 +44336,12 @@ return function(c)
     end
     local function refreshESP()
         espRefreshes += 1
-        c.Guard("Visual.ESP", updateESP)
+        espStats.refreshes = espRefreshes
+        local ok, err = pcall(updateESP)
+        if not ok then
+            espStats.lastError = tostring(err):sub(1, 240)
+            warn("[Vortexion/Blox/ESP] " .. espStats.lastError)
+        end
     end
     local function forceESPTeardown()
         -- A camera swap must not wait for the throttled slot: stale highlights
@@ -44225,9 +44354,16 @@ return function(c)
         if not c.IsCurrent() then return end
         -- Before enabling any feature, skip ALL camera, raycast, or movement
         -- calculations. The Heartbeat connection stays lightweight for toggles.
-        if not Config.ESPEnabled and not Config.SpeedEnabled and not Config.FlyEnabled and not Config.Noclip then
+        if not Config.ESPEnabled and not Config.SpeedEnabled and not Config.FlyEnabled and not Config.Noclip and not thirdPerson.enabled then
             espAccum, moveAccum = 0, 0
             return
+        end
+        if thirdPerson.enabled then
+            thirdPerson.accumulator += dt
+            if thirdPerson.accumulator >= 0.25 then
+                thirdPerson.accumulator = 0
+                c.Guard("Visual.ThirdPerson", updateThirdPerson)
+            end
         end
         -- Non-critical visual pacing is owned by the shared bridge (ctx.UI),
         -- re-read every frame so a VisualHz switch takes effect immediately.
@@ -44259,7 +44395,16 @@ return function(c)
         restoreFly()
         restoreNoclip()
         setLight(false)
+        setThirdPerson(false)
     end)
+    function Config:Status()
+        return {
+            markers = espStats.markers, scanned = espStats.scanned,
+            eligible = espStats.eligible, refreshes = espStats.refreshes,
+            noHumanoid = espStats.noHumanoid, error = espStats.lastError,
+            thirdPerson = thirdPerson.enabled, thirdOverrides = thirdPerson.overrides,
+        }
+    end
     function Config.ESPRefreshCount() return espRefreshes end
     function Config.ESPInterval() return espInterval end
 
@@ -44287,10 +44432,24 @@ return function(c)
         Config.Fullbright = v
         setLight(v)
     end })
+    tab:AddButton({Title = "打印 ESP 目标诊断", Callback = function()
+        local status = Config:Status()
+        print(("[Vortexion/BloxESP] 开关=%s 玩家=%d 合格=%d 无Humanoid=%d 高亮=%d 刷新=%d 错误=%s")
+            :format(tostring(Config.ESPEnabled), status.scanned, status.eligible,
+                status.noHumanoid, status.markers, status.refreshes, status.error))
+    end})
     tab:AddParagraph({ Title = "视觉刷新节流",
         Content = "ESP 属于非关键视觉刷新，节拍由共享桥接 ctx.UI:GetVisualInterval(0.05) 决定（VisualHz 5..60 有界）；桥接未提供该方法时保持 20Hz。移动、输入、重生恢复与飞行不受该节流影响；摄像机更换、关闭与卸载立即清理，不等节流槽。" })
 
     local movement = c.Tabs.Movement
+    movement:AddToggle("BloxThirdPerson", {Title = "第三人称视角", Default = false,
+        Callback = setThirdPerson})
+    movement:AddSlider("BloxThirdDistance", {Title = "第三人称镜头距离", Min = 5, Max = 24,
+        Default = 12, Rounding = 0, Callback = function(value)
+            thirdPerson.distance = value
+            if thirdPerson.enabled then c.Guard("Visual.ThirdPerson", updateThirdPerson) end
+        end})
+    movement:AddParagraph({Title="第三人称说明", Content="基于 Roblox Classic 镜头与缩放距离；关闭时恢复原相机属性。若游戏主动强制接管相机，可能被覆盖。"})
     movement:AddToggle("BloxSpeedEnabled", { Title = "自定义移动速度", Default = false, Callback = function(v)
         Config.SpeedEnabled = v
         if not v then restoreSpeed() end
@@ -45338,13 +45497,55 @@ local function characterOf(player)
     if candidate and candidate:IsA("Model") then return candidate end
     return player.Character
 end
-local function livingCharacter(player)
-    local model=characterOf(player)
-    if not model or not model.Parent or model:GetAttribute("Dead")==true then return nil end
-    local humanoid=model:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then return nil end
-    return model,humanoid
+-- In BloxStrike the authoritative client roster is Workspace.Characters.
+-- Counter-Strike style character models do not necessarily use a Humanoid.
+-- Requiring one removed EVERY target from ESP, aim assist and trigger logic.
+local virtualVitals = setmetatable({}, {__mode = "k"})
+local renderPartCache = setmetatable({}, {__mode = "k"})
+local function numberVitals(model, player)
+    local health = model:GetAttribute("Health")
+    local maximum = model:GetAttribute("MaxHealth")
+    local healthObject = model:FindFirstChild("Health")
+    if health == nil and healthObject and healthObject:IsA("NumberValue") then health = healthObject.Value end
+    if maximum == nil then
+        local maxObject = model:FindFirstChild("MaxHealth")
+        if maxObject and maxObject:IsA("NumberValue") then maximum = maxObject.Value end
+    end
+    local known = type(health) == "number"
+    if known and health <= 0 then return nil end
+    local vitals = virtualVitals[model]
+    if not vitals then
+        vitals = { Health = 1, MaxHealth = 1, HealthKnown = false }
+        virtualVitals[model] = vitals
+    end
+    vitals.Health = known and health or 1
+    vitals.MaxHealth = (type(maximum) == "number" and maximum > 0) and maximum or (known and math.max(health, 1) or 1)
+    vitals.HealthKnown = known
+    return vitals
 end
+local function livingCharacter(player)
+    local model = characterOf(player)
+    if not model or not model.Parent or not model:IsA("Model") or model:GetAttribute("Dead") == true then return nil end
+    if model:GetAttribute("Alive") == false then return nil end
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    if hum then
+        if hum.Health <= 0 then return nil end
+        return model, hum
+    end
+    -- Cache the renderable-part probe: Combat revalidates locked targets
+    -- every frame, and recursive FindFirstChildWhichIsA is not free on mobile.
+    local part = renderPartCache[model]
+    if not part or not part.Parent then
+        part = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+            or model:FindFirstChildWhichIsA("BasePart", true)
+        renderPartCache[model] = part
+    end
+    if not part then return nil end
+    local vitals = numberVitals(model, player)
+    if vitals then return model, vitals end
+    return nil
+end
+
 local function isEnemy(player,checkTeam)
     if player==LocalPlayer then return false end
     if checkTeam==false or Workspace:GetAttribute("Gamemode")=="Deathmatch" then return true end
@@ -45431,7 +45632,7 @@ end
 
 setup("战斗", BloxCombatFactory, "Combat")
 setup("子弹追踪", BloxBulletFactory, "Bullet")
-setup("视觉", BloxVisualFactory)
+setup("视觉", BloxVisualFactory, "Visual")
 setup("皮肤", BloxCosmeticFactory)
 if type(ui.RegisterFeatureHealth) == "function" then
     ui:RegisterFeatureHealth("BloxStrike", function()
@@ -45439,9 +45640,15 @@ if type(ui.RegisterFeatureHealth) == "function" then
             local item = common[key]
             return item == nil and "missing" or (item.Failed and "failed" or "ready")
         end
-        return ("存活=%s 战斗=%s 子弹=%s 模块失败=%d 阵营缓存=%d")
-            :format(tostring(isCurrent()), status("Combat"), status("Bullet"),
-                #bootFailures, (function() local n=0; for _ in pairs(folderCache.map) do n = n + 1 end; return n end)())
+        local visual = common.Visual
+        local snapshot = visual and type(visual.Status) == "function" and visual:Status() or {}
+        local combat = common.Combat and type(common.Combat.DebugSnapshot) == "function" and common.Combat:DebugSnapshot() or {}
+        return ("存活=%s 战斗=%s 子弹=%s 视觉=%s 失败=%d 阵营=%d 目标=%d ESP=%d/%d/%.0f 倍镜=%s")
+            :format(tostring(isCurrent()), status("Combat"), status("Bullet"), status("Visual"),
+                #bootFailures, (function() local n=0; for _ in pairs(folderCache.map) do n = n + 1 end; return n end)(),
+                tonumber(combat.candidates) or 0, tonumber(snapshot.markers) or 0,
+                tonumber(snapshot.scanned) or 0, tonumber(snapshot.refreshes) or 0,
+                tostring(snapshot.thirdPerson or false))
     end)
 end
 

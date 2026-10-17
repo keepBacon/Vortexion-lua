@@ -1,5 +1,5 @@
 {
-  "build_tag": "loader-v2-modular-r2.14-forsaken-aotr-performance",
+  "build_tag": "loader-v2-modular-r2.15-blox-target-compat-thirdperson",
   "files": {
     "R1_SOURCE_HASHES.json": {
       "bytes": 5590,
@@ -34,8 +34,8 @@
       "sha256": "33c41dbce36ba0e4063611bdf952abb61e2d1e68a2b611d0c7474ca7a2999edf"
     },
     "build.py": {
-      "bytes": 12486,
-      "sha256": "693cdaea080fcaad100f33800538ae3205f7ce4f51d1a19b52e9f3729988f206"
+      "bytes": 12491,
+      "sha256": "21271f9dd96d8596991ab82934daeb61d310ee6981f9c8d703369939db5f03e4"
     },
     "dist/Vortexion_AOTR_Battle.lua": {
       "bytes": 1569236,
@@ -46,8 +46,8 @@
       "sha256": "ce70883a6f60e9235c1190ec637a016f1479aa319503fba39d4ea74a7cc49907"
     },
     "dist/Vortexion_BloxStrike.lua": {
-      "bytes": 1634975,
-      "sha256": "59dd780079c738052d94009b10753b360ee75571041e56398ef0f276419265f5"
+      "bytes": 1645887,
+      "sha256": "ff2112e42116d426f0facdc4c24165e3d1788b79b1600a515b5969910999fa08"
     },
     "dist/Vortexion_Core.lua": {
       "bytes": 1475352,
@@ -66,8 +66,8 @@
       "sha256": "84a6fc1465708a87ae48157c07b9b922260134ec6235369db3db5d2fd926ed03"
     },
     "dist/Vortexion_Module_BloxStrike.lua": {
-      "bytes": 160271,
-      "sha256": "151fb4fae930a1c902ad452657709433de9a96b7fb3451f68d58480733a1cbdb"
+      "bytes": 171183,
+      "sha256": "a53fe1256e9a48f7543110dd1fff04f3402f96efaa9b366570fb11db1127ac52"
     },
     "dist/Vortexion_Module_Forsaken.lua": {
       "bytes": 66345,
@@ -82,16 +82,16 @@
       "sha256": "80fdbc0836cb2bc76ea6d57b3c788c7ea4a7404ae649f3f2477990bb65143476"
     },
     "dist/Vortexion_Wind.lua": {
-      "bytes": 1946900,
-      "sha256": "4b0f3b31bf2638b56a0bedef4430776559d0dd74b38c0fe182fff21b6a06509a"
+      "bytes": 1957812,
+      "sha256": "d6b3963c1d4e6634fe157bbc31c92c55e273c7aec71f3d2661930f122fa64f9a"
     },
     "dist/build-manifest.json": {
       "bytes": 6142,
-      "sha256": "872e3f7c68f3cb3da9f0a9ca9d969556e2f2706b4b1d88dff7c9b4d9a04ca619"
+      "sha256": "8660cea38bbced63956261976749534ba9999ea35ce1462ede8ba1c21da8c713"
     },
     "dist/runtime-manifest.json": {
-      "bytes": 1758,
-      "sha256": "a9f8af4927ef99f864e6ec560b739e2e8bafc12b8c45e44e72102e899aff1b27"
+      "bytes": 1763,
+      "sha256": "a94922774636c97d9da5f7347d8dee84103baefc9c645af9cf9899712b701574"
     },
     "dist/test-mobile-v6.json": {
       "bytes": 266,
@@ -233,6 +233,10 @@
       "bytes": 8276,
       "sha256": "20867169a0db280227c0d5c881bcfed8d331df28f56aea37e91dc3c11432fd74"
     },
+    "docs/R215_BLOX_TARGET_COMBAT_THIRD_PERSON.md": {
+      "bytes": 5730,
+      "sha256": "9f58b9b62a422626220fc2eace1d429183a6aca51ac679c5a126d760c267ece9"
+    },
     "docs/R29_FIELD_REPAIR.md": {
       "bytes": 2223,
       "sha256": "547f085b0a93bd5720ab898d49b00c7428683f250781c2c291f00348f58fca47"
@@ -322,8 +326,8 @@
       "sha256": "afc3a739da53b06bb854237b015e528773490482e7cbbdc59214aa83e873abbe"
     },
     "loader.lua": {
-      "bytes": 23724,
-      "sha256": "f41091583d7b23575bb3521286dba4ff4b5f62a3ec87b55fd9f4cbd4df847459"
+      "bytes": 23717,
+      "sha256": "bd841dc54480cb988ba2ac5b5c78cd883e5f5b92920fb4e9898852f5fe9678fa"
     },
     "package.json": {
       "bytes": 154,
@@ -378,24 +382,24 @@
       "sha256": "e2ae697b026ac5f0bed64ab84f0f022d41b166b193897ce22a6680c0383189c4"
     },
     "src/BloxStrikeCombat.luau": {
-      "bytes": 37437,
-      "sha256": "b93fc6ce3e24cad236f17d9133638612bee189e46fd64f1e8d791eef82bfa826"
+      "bytes": 39036,
+      "sha256": "4223352889130795bf8a0cb060c679c75b754f9325eab2e8f6d3f292276d0074"
     },
     "src/BloxStrikeCommon.luau": {
       "bytes": 11271,
       "sha256": "63b1f197e95348946332980f7a823bed792437b79845503fdaa1c26df71984bb"
     },
     "src/BloxStrikeCore.luau": {
-      "bytes": 15201,
-      "sha256": "3257faf491d47594d2cc3e4b405b0844308a6da3f7dbeb7dcbf89eb2ca2fd907"
+      "bytes": 17725,
+      "sha256": "e10b14e9f78101ee31d2ee6b1aa5c6687af8b585a6bca7f68b26d4f4d72cb8c8"
     },
     "src/BloxStrikeCosmetic.luau": {
       "bytes": 41803,
       "sha256": "1e7cb2fd71a0983b1a14276fc2b5ba80df7b88ba190f7cf69ee610c2f82a81d5"
     },
     "src/BloxStrikeVisual.luau": {
-      "bytes": 23406,
-      "sha256": "2e2cd42cf3e737bc636e73b2ced1fc11ab8e09ad6a0b38f4272412f8d3c9025d"
+      "bytes": 30195,
+      "sha256": "4afb8b6cd766259cdc5ddc6b8707ef9d0582b48ff348125bc42bccf227ac6973"
     },
     "src/ForsakenCore.luau": {
       "bytes": 31902,
@@ -650,8 +654,8 @@
       "sha256": "1d3b28089ae0f5c7101817f9fa3c79cf3811158158481ad0fe753ded8b910830"
     },
     "tests/test_forsaken_r28.py": {
-      "bytes": 9587,
-      "sha256": "5a129ad975be38a038c83c196407039a9ac39d88bdf8b07f5776d3063531e334"
+      "bytes": 9486,
+      "sha256": "7541c341380c84e7ca56b9fb9bfe2dd44aa633b82ededf5fdb26e6a7e00fd4ac"
     },
     "tests/test_forsaken_wind.py": {
       "bytes": 3464,
@@ -701,9 +705,17 @@
       "bytes": 3876,
       "sha256": "33a156eae80b4ab5199b1225a36485c818f075ca0cf932fed98acdc13b08d082"
     },
+    "tests/test_r215_blox_target_and_camera.py": {
+      "bytes": 5188,
+      "sha256": "1a31e45c20a36f4e712d37d4c697cfc2ed11c26fb11497e6a2e3029f07845a11"
+    },
+    "tests/test_r215_blox_visual_runtime.py": {
+      "bytes": 3604,
+      "sha256": "f37d36a83ee14c2359da06a929caaaa7cec65844bc87ceb3ab341c9de4710c7e"
+    },
     "tests/test_r25_stability.py": {
-      "bytes": 8717,
-      "sha256": "c41b7fafd95271e2518d4a4a14356685153ce8769d6568932a794b824428e000"
+      "bytes": 8719,
+      "sha256": "e343c91d82ac173e99457188786c0d704e3f7a2303fbc294d08e03ee03a84492"
     },
     "tests/test_r26_blox_stability.py": {
       "bytes": 5939,

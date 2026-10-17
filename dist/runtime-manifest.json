@@ -1,5 +1,5 @@
 {
-  "build_tag": "loader-v2-modular-r2.14-forsaken-aotr-performance",
+  "build_tag": "loader-v2-modular-r2.15-blox-target-compat-thirdperson",
   "core": {
     "bytes": 1475352,
     "path": "dist/Vortexion_Core.lua",
@@ -18,9 +18,9 @@
       "sha256": "84a6fc1465708a87ae48157c07b9b922260134ec6235369db3db5d2fd926ed03"
     },
     "BloxStrike": {
-      "bytes": 160271,
+      "bytes": 171183,
       "path": "dist/Vortexion_Module_BloxStrike.lua",
-      "sha256": "151fb4fae930a1c902ad452657709433de9a96b7fb3451f68d58480733a1cbdb"
+      "sha256": "a53fe1256e9a48f7543110dd1fff04f3402f96efaa9b366570fb11db1127ac52"
     },
     "Forsaken": {
       "bytes": 66345,

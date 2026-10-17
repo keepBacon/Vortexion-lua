@@ -148,13 +148,55 @@ local function characterOf(player)
     if candidate and candidate:IsA("Model") then return candidate end
     return player.Character
 end
-local function livingCharacter(player)
-    local model=characterOf(player)
-    if not model or not model.Parent or model:GetAttribute("Dead")==true then return nil end
-    local humanoid=model:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then return nil end
-    return model,humanoid
+-- In BloxStrike the authoritative client roster is Workspace.Characters.
+-- Counter-Strike style character models do not necessarily use a Humanoid.
+-- Requiring one removed EVERY target from ESP, aim assist and trigger logic.
+local virtualVitals = setmetatable({}, {__mode = "k"})
+local renderPartCache = setmetatable({}, {__mode = "k"})
+local function numberVitals(model, player)
+    local health = model:GetAttribute("Health")
+    local maximum = model:GetAttribute("MaxHealth")
+    local healthObject = model:FindFirstChild("Health")
+    if health == nil and healthObject and healthObject:IsA("NumberValue") then health = healthObject.Value end
+    if maximum == nil then
+        local maxObject = model:FindFirstChild("MaxHealth")
+        if maxObject and maxObject:IsA("NumberValue") then maximum = maxObject.Value end
+    end
+    local known = type(health) == "number"
+    if known and health <= 0 then return nil end
+    local vitals = virtualVitals[model]
+    if not vitals then
+        vitals = { Health = 1, MaxHealth = 1, HealthKnown = false }
+        virtualVitals[model] = vitals
+    end
+    vitals.Health = known and health or 1
+    vitals.MaxHealth = (type(maximum) == "number" and maximum > 0) and maximum or (known and math.max(health, 1) or 1)
+    vitals.HealthKnown = known
+    return vitals
 end
+local function livingCharacter(player)
+    local model = characterOf(player)
+    if not model or not model.Parent or not model:IsA("Model") or model:GetAttribute("Dead") == true then return nil end
+    if model:GetAttribute("Alive") == false then return nil end
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    if hum then
+        if hum.Health <= 0 then return nil end
+        return model, hum
+    end
+    -- Cache the renderable-part probe: Combat revalidates locked targets
+    -- every frame, and recursive FindFirstChildWhichIsA is not free on mobile.
+    local part = renderPartCache[model]
+    if not part or not part.Parent then
+        part = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+            or model:FindFirstChildWhichIsA("BasePart", true)
+        renderPartCache[model] = part
+    end
+    if not part then return nil end
+    local vitals = numberVitals(model, player)
+    if vitals then return model, vitals end
+    return nil
+end
+
 local function isEnemy(player,checkTeam)
     if player==LocalPlayer then return false end
     if checkTeam==false or Workspace:GetAttribute("Gamemode")=="Deathmatch" then return true end
@@ -241,7 +283,7 @@ end
 
 setup("战斗", BloxCombatFactory, "Combat")
 setup("子弹追踪", BloxBulletFactory, "Bullet")
-setup("视觉", BloxVisualFactory)
+setup("视觉", BloxVisualFactory, "Visual")
 setup("皮肤", BloxCosmeticFactory)
 if type(ui.RegisterFeatureHealth) == "function" then
     ui:RegisterFeatureHealth("BloxStrike", function()
@@ -249,9 +291,15 @@ if type(ui.RegisterFeatureHealth) == "function" then
             local item = common[key]
             return item == nil and "missing" or (item.Failed and "failed" or "ready")
         end
-        return ("存活=%s 战斗=%s 子弹=%s 模块失败=%d 阵营缓存=%d")
-            :format(tostring(isCurrent()), status("Combat"), status("Bullet"),
-                #bootFailures, (function() local n=0; for _ in pairs(folderCache.map) do n = n + 1 end; return n end)())
+        local visual = common.Visual
+        local snapshot = visual and type(visual.Status) == "function" and visual:Status() or {}
+        local combat = common.Combat and type(common.Combat.DebugSnapshot) == "function" and common.Combat:DebugSnapshot() or {}
+        return ("存活=%s 战斗=%s 子弹=%s 视觉=%s 失败=%d 阵营=%d 目标=%d ESP=%d/%d/%.0f 倍镜=%s")
+            :format(tostring(isCurrent()), status("Combat"), status("Bullet"), status("Visual"),
+                #bootFailures, (function() local n=0; for _ in pairs(folderCache.map) do n = n + 1 end; return n end)(),
+                tonumber(combat.candidates) or 0, tonumber(snapshot.markers) or 0,
+                tonumber(snapshot.scanned) or 0, tonumber(snapshot.refreshes) or 0,
+                tostring(snapshot.thirdPerson or false))
     end)
 end
 

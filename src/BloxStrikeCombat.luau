@@ -37,8 +37,10 @@ return function(c)
         WallCheck = true,
         TeamCheck = true,
         Prediction = 0.12,
-        MaxAngle = 15,
-        HitChance = 0.72,
+        MaxAngle = 35,
+        HitChance = 1,
+        AimTurnRate = 120,
+        Priority = "Crosshair",     -- Crosshair | Distance | LowHealth
         FOVCircle = true,
         Attraction = 0.6,
         -- triggerbot
@@ -71,6 +73,8 @@ return function(c)
         rollCache = {},
         rollAt = {},
         cost = 0,
+        scans = 0,
+        candidatesSeen = 0,
     }
 
     --=========================================================================
@@ -94,6 +98,7 @@ return function(c)
     -- selection and eligibility gates share one traversal.
     --=========================================================================
     local function scan()
+        state.scans += 1
         state.candidates = {}
         local camera = Workspace.CurrentCamera
         if not camera then return end
@@ -146,6 +151,7 @@ return function(c)
             end
         end
 
+        state.candidatesSeen = #state.candidates
         -- Drop EMA state for players that left.
         for player in pairs(state.velEMA) do
             if not player.Parent then state.velEMA[player] = nil end
@@ -252,7 +258,12 @@ return function(c)
         local best, bestScore
         for _, entry in ipairs(state.candidates) do
             if entryValid(entry) then
-                local score = entry.screenDist + entry.worldDist * 0.5
+                local score
+                if Config.Priority == "Distance" then score = entry.worldDist
+                elseif Config.Priority == "LowHealth" then
+                    score = (type(entry.humanoid) == "table" and entry.humanoid.HealthKnown == false) and (entry.screenDist + 10000)
+                        or ((entry.humanoid.Health / math.max(entry.humanoid.MaxHealth, 1)) * 400 + entry.screenDist * 0.2)
+                else score = entry.screenDist + entry.worldDist * 0.15 end
                 if not bestScore or score < bestScore then
                     best, bestScore = entry, score
                 end
@@ -288,7 +299,7 @@ return function(c)
         if math.abs(targetLook.Y) > 0.6 then alpha = alpha * 0.85 end
         if state.locked ~= state.lastLocked then alpha = math.min(alpha, 0.10) end
         if angle > 1e-4 then
-            alpha = math.min(alpha, (math.rad(22) * dt) / angle)
+            alpha = math.min(alpha, (math.rad(Config.AimTurnRate) * dt) / angle)
         end
         if alpha <= 0.001 then return end
         camera.CFrame = camera.CFrame:Lerp(targetCF, alpha)
@@ -732,6 +743,10 @@ return function(c)
             hitEntries = (function() local n = 0; for _ in pairs(state.hitEntries) do n += 1 end; return n end)(),
             firing = state.firing,
             costMs = math.floor(state.cost * 100000) / 100,
+            scans = state.scans,
+            active = Config.Enabled,
+            gate = Config.TriggerKey,
+            turnRate = Config.AimTurnRate,
         }
     end
 
@@ -776,10 +791,20 @@ return function(c)
         Callback = function(v) Config.Smoothness = v end })
     tab:AddSlider("BloxAimPrediction", { Title = "预测强度", Min = 0, Max = 0.5, Default = 0.12, Rounding = 2,
         Callback = function(v) Config.Prediction = v end })
-    tab:AddSlider("BloxAimMaxAngle", { Title = "最大锁定角（度）", Min = 5, Max = 90, Default = 15, Rounding = 0,
+    tab:AddSlider("BloxAimMaxAngle", { Title = "最大锁定角（度）", Min = 5, Max = 90, Default = 35, Rounding = 0,
         Callback = function(v) Config.MaxAngle = v end })
-    tab:AddSlider("BloxAimHitChance", { Title = "命中率（%）", Min = 10, Max = 100, Default = 72, Rounding = 0,
+    tab:AddSlider("BloxAimHitChance", { Title = "本地辅助触发概率（%）", Min = 10, Max = 100, Default = 100, Rounding = 0,
         Callback = function(v) Config.HitChance = v / 100 end })
+    tab:AddSlider("BloxAimTurnRate", {Title = "镜头最大转速（度/秒）", Min = 20, Max = 360,
+        Default = 120, Rounding = 0, Callback = function(v) Config.AimTurnRate = v end})
+    tab:AddDropdown("BloxAimPriority", {Title = "目标优先级", Values = {"Crosshair", "Distance", "LowHealth"},
+        Default = "Crosshair", Callback = function(v) Config.Priority = v end})
+    tab:AddButton({Title = "打印战斗识别诊断", Callback = function()
+        local snapshot = Combat:DebugSnapshot()
+        print(("[Vortexion/BloxCombat] 自瞄=%s 扫描=%d 目标=%d 锁定=%s 门控=%s 角度=%d")
+            :format(tostring(snapshot.active), snapshot.scans, snapshot.candidates,
+                snapshot.locked, snapshot.gate, Config.MaxAngle))
+    end})
     tab:AddSlider("BloxAimAttraction", { Title = "鼠标吸附强度", Min = 0.1, Max = 1, Default = 0.6, Rounding = 2,
         Callback = function(v) Config.Attraction = v end })
     tab:AddSlider("BloxAimDistance", { Title = "最大锁定距离", Min = 50, Max = 2000, Default = 500, Rounding = 0,
