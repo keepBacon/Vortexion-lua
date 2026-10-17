@@ -291,6 +291,14 @@ if Farm then
         Callback=function(v) c.AutoReload=v end})
     tab:AddToggle("AOTRAutoRefill",{Title="自动补给（气罐/弹药）",Default=false,
         Callback=function(v) c.AutoRefill=v end})
+    tab:AddButton({Title="查看自动补给状态",Callback=function()
+        local r=Farm:DebugSnapshot()
+        local info=("请求 %d / 未确认 %d / 距离 %s / 状态 %s")
+            :format(r.attempts or 0,r.unconfirmed or 0,
+                r.distance and ("%.0f"):format(r.distance) or "-",r.status or "unknown")
+        print("[Vortexion/AOTR/Refill] " .. info)
+        app:Notify(info)
+    end})
     tab:AddToggle("AOTRFPSSettings",{Title="服务端画质设置（关特效）",Default=true,
         Callback=function(v)
             c.FPSSettings=v

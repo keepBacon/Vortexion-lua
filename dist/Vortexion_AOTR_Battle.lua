@@ -43860,20 +43860,59 @@ return function(app)
         settingsApplied=false,
         reloads=0,
         refills=0,
+        refillAttempts=0,
+        lastRefillStatus="idle",
+        lastRefillAt=-math.huge,
+        lastFuel=nil,
+        lastSpears=nil,
+        lastRefillDistance=nil,
+        denied=0,
     }
 
     --=========================================================================
     -- Refill point: workspace.Unclimbable.Reloads.<something>.Refill
     --=========================================================================
     local function resolveRefill()
-        local root=Workspace:FindFirstChild("Unclimbable")
-        local reloads=root and root:FindFirstChild("Reloads")
-        if not reloads then return nil end
-        for _,station in ipairs(reloads:GetChildren()) do
-            local refill=station:FindFirstChild("Refill")
-            if refill and refill:IsA("BasePart") then return refill end
+        -- Map-dependent refill locations found in the uploaded AOTR scripts.
+        -- Select a nearby station; the old implementation always returned
+        -- the first station, often on a completely different map/zone.
+        local folders = {}
+        local unclimbable = Workspace:FindFirstChild("Unclimbable")
+        local climbable = Workspace:FindFirstChild("Climbable")
+        local function path(root, ...)
+            for _, key in ipairs({...}) do
+                root = root and root:FindFirstChild(key)
+            end
+            return root
         end
-        return nil
+        folders[#folders+1] = path(unclimbable,"Reloads")
+        folders[#folders+1] = path(unclimbable,"Camps","Camp","GasTanks")
+        folders[#folders+1] = path(climbable,"Walls","Gate","GasTanks")
+        folders[#folders+1] = path(climbable,"_Walls","Gate","GasTanks")
+        local localPlayer = Players.LocalPlayer
+        local character = localPlayer and localPlayer.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        if not root then return nil end
+        local best, distance = nil, math.huge
+        for _, folder in pairs(folders) do
+            if folder then
+                local options = {folder}
+                for _, child in ipairs(folder:GetDescendants()) do
+                    if child:IsA("BasePart") and child.Name == "Refill" then
+                        options[#options+1] = child
+                    end
+                end
+                for _, node in ipairs(options) do
+                    local candidate = node.Name == "Refill" and node:IsA("BasePart") and node or node:FindFirstChild("Refill")
+                    if candidate and candidate:IsA("BasePart") then
+                        local delta = (candidate.Position-root.Position).Magnitude
+                        if delta < distance then best, distance = candidate, delta end
+                    end
+                end
+            end
+        end
+        state.lastRefillDistance = best and distance or nil
+        return best
     end
     Farm.ResolveRefill=resolveRefill
 
@@ -43892,16 +43931,63 @@ return function(app)
 
     local function doRefill()
         local Remotes=app.Remotes
-        if not Remotes.POST then return false end
-        if not state.refillPart or not state.refillPart.Parent then
-            state.refillPart=resolveRefill()
-            if not state.refillPart then return false end
+        if not Remotes.POST then state.lastRefillStatus="POST missing"; return false end
+        local now=os.clock()
+        if now-state.lastRefillAt<2.5 then return false end
+        app.ProbeHUD(false)
+        local gas=app.ReadPercent(app.HUD.gas)
+        local spears=app.ReadCount(app.HUD.spears)
+        local blades=app.ReadCount(app.HUD.blades)
+        -- Do not spam refill every 0.5s when already full.
+        local needsGas=type(gas)=="number" and gas<85
+        local needsSpears=type(spears)=="number" and spears<=0
+        local needsBlades=type(blades)=="number" and blades<=0
+        if type(gas)=="number" or type(spears)=="number" or type(blades)=="number" then
+            if not needsGas and not needsSpears and not needsBlades then
+                state.lastRefillStatus="supply healthy"
+                return false
+            end
         end
-        local ok=pcall(function()
-            Remotes.POST:FireServer("Attacks","Reload",state.refillPart)
+        local refill=state.refillPart
+        if not refill or not refill.Parent then refill=resolveRefill() end
+        if not refill then state.lastRefillStatus="station not found"; return false end
+        state.refillPart=refill
+        local char=Players.LocalPlayer and Players.LocalPlayer.Character
+        local root=char and char:FindFirstChild("HumanoidRootPart")
+        if not root then state.lastRefillStatus="character not ready"; return false end
+        local dist=(refill.Position-root.Position).Magnitude
+        state.lastRefillDistance=dist
+        if dist>18 then
+            state.lastRefillStatus=("station too far (%.0f studs)"):format(dist)
+            return false
+        end
+        state.lastRefillAt=now
+        state.refillAttempts+=1
+        state.lastFuel,state.lastSpears=gas,spears
+        local ok,err=pcall(function()
+            Remotes.POST:FireServer("Attacks","Reload",refill)
         end)
-        if ok then state.refills+=1 end
+        if ok then
+            state.refills+=1 -- request counter, NOT proof of success
+            state.lastRefillStatus="request sent, awaiting resource change"
+        else
+            state.denied+=1
+            state.lastRefillStatus=tostring(err):sub(1,150)
+        end
         return ok
+    end
+    local function observeRefill()
+        if state.lastRefillStatus~="request sent, awaiting resource change" then return end
+        app.ProbeHUD(false)
+        local gas=app.ReadPercent(app.HUD.gas)
+        local spears=app.ReadCount(app.HUD.spears)
+        if (type(gas)=="number" and type(state.lastFuel)=="number" and gas>state.lastFuel)
+            or (type(spears)=="number" and type(state.lastSpears)=="number" and spears>state.lastSpears) then
+            state.lastRefillStatus="confirmed by HUD"
+        elseif os.clock()-state.lastRefillAt>3 then
+            state.denied+=1
+            state.lastRefillStatus="server unconfirmed (HUD unchanged)"
+        end
     end
 
     --=========================================================================
@@ -43923,6 +44009,7 @@ return function(app)
 
     local accum=0
     local function tickFarm(dt)
+        if Config.AutoRefill then app.Guard("Farm.RefillObserve",observeRefill) end
         if Config.AutoReload then app.Guard("Farm.Reload",doReload) end
         if Config.AutoRefill then app.Guard("Farm.Refill",doRefill) end
     end
@@ -43939,7 +44026,9 @@ return function(app)
 
     function Farm:DebugSnapshot()
         return {reloads=state.reloads,refills=state.refills,
-            refill=state.refillPart and state.refillPart.Parent and true or false}
+            refill=state.refillPart and state.refillPart.Parent and true or false,
+            attempts=state.refillAttempts, status=state.lastRefillStatus,
+            distance=state.lastRefillDistance, unconfirmed=state.denied}
     end
 
     app:OnStop(function()
@@ -44239,6 +44328,14 @@ if Farm then
         Callback=function(v) c.AutoReload=v end})
     tab:AddToggle("AOTRAutoRefill",{Title="自动补给（气罐/弹药）",Default=false,
         Callback=function(v) c.AutoRefill=v end})
+    tab:AddButton({Title="查看自动补给状态",Callback=function()
+        local r=Farm:DebugSnapshot()
+        local info=("请求 %d / 未确认 %d / 距离 %s / 状态 %s")
+            :format(r.attempts or 0,r.unconfirmed or 0,
+                r.distance and ("%.0f"):format(r.distance) or "-",r.status or "unknown")
+        print("[Vortexion/AOTR/Refill] " .. info)
+        app:Notify(info)
+    end})
     tab:AddToggle("AOTRFPSSettings",{Title="服务端画质设置（关特效）",Default=true,
         Callback=function(v)
             c.FPSSettings=v

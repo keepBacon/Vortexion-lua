@@ -1,5 +1,5 @@
 {
-  "build_tag": "loader-v2-modular-r2.16-menu-safe-hud-puzzle-reader",
+  "build_tag": "loader-v2-modular-r2.17-blox-esp-camera-weapon-aotr-refill",
   "core": {
     "bytes": 1476436,
     "path": "dist/Vortexion_Core.lua",
@@ -8,9 +8,9 @@
   "fallback": "standalone-bundle-manual-only",
   "modules": {
     "AOTR_Battle": {
-      "bytes": 94532,
+      "bytes": 99392,
       "path": "dist/Vortexion_Module_AOTR_Battle.lua",
-      "sha256": "c64c9601ebf7ab246e653995356983f7ccbaf3ed17f887305adac22f1277aa88"
+      "sha256": "df94ed1675cb38063327f786d875cd4922d96359a095b3a644c885d3b46e5ea2"
     },
     "AOTR_Lobby": {
       "bytes": 25377,
@@ -18,9 +18,9 @@
       "sha256": "84a6fc1465708a87ae48157c07b9b922260134ec6235369db3db5d2fd926ed03"
     },
     "BloxStrike": {
-      "bytes": 171183,
+      "bytes": 178118,
       "path": "dist/Vortexion_Module_BloxStrike.lua",
-      "sha256": "a53fe1256e9a48f7543110dd1fff04f3402f96efaa9b366570fb11db1127ac52"
+      "sha256": "177d36f8851af8fee251a36311851161f4d5095f3975b0d801a2e5bb1c60ac8d"
     },
     "Forsaken": {
       "bytes": 76317,

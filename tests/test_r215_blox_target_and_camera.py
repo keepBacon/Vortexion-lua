@@ -54,30 +54,43 @@ assert(livingCharacter(pl)==nil)
         end=VISUAL.index('    local moveAccum = 0',start)
         src=VISUAL[start:end].replace('thirdPerson.overrides += 1','thirdPerson.overrides = thirdPerson.overrides + 1')
         script='''
-local player={CameraMode='Locked',CameraMinZoomDistance=0.5,CameraMaxZoomDistance=0.5}
-local subject={Parent=true}
-local camera={Parent=true,CameraType='Scriptable',CameraSubject=subject}
-local model={}
-function model:FindFirstChildOfClass()return nil end
-function model:FindFirstChild(name) if name=='HumanoidRootPart' then return subject end end
-function model:FindFirstChildWhichIsA()return subject end
-local signal={Connect=function(self,fn)return {Disconnect=function()end} end}
-local Workspace={CurrentCamera=camera,GetPropertyChangedSignal=function()return signal end}
+local player={UserId=123,CameraMode='Locked',CameraMinZoomDistance=0.5,CameraMaxZoomDistance=0.5}
+local base={Position={x=0,y=0,z=0},LookVector={x=0,y=0,z=1}}
+local cm={__mul=function(a,b)return b end}
+local vectorMeta={}
+function vectorMeta.__sub(a,b) return setmetatable({x=a.x-b.x,y=a.y-b.y,z=a.z-b.z},vectorMeta) end
+function vectorMeta.__add(a,b) return setmetatable({x=a.x+b.x,y=a.y+b.y,z=a.z+b.z},vectorMeta) end
+function vectorMeta.__mul(a,n) return setmetatable({x=a.x*n,y=a.y*n,z=a.z*n},vectorMeta) end
+local function vec(x,y,z)return setmetatable({x=x,y=y,z=z},vectorMeta) end
+base.Position=vec(0,0,0);base.LookVector=vec(0,0,1)
+local camera={Parent=true,CFrame=base}
+local renderCallbacks={}
+local RunService={BindToRenderStep=function(self,name,priority,fn)renderCallbacks[name]=fn end,
+UnbindFromRenderStep=function(self,name)renderCallbacks[name]=nil end}
+local Workspace={CurrentCamera=camera,Raycast=function()return nil end,GetPropertyChangedSignal=function()
+return {Connect=function(self,fn)return {Disconnect=function()end}end}end}
 local LocalPlayer=player
-local Enum={CameraMode={Classic='Classic'},CameraType={Scriptable='Scriptable',Custom='Custom'}}
+local Enum={CameraMode={Classic='Classic'},RenderPriority={Camera={Value=200},Last={Value=2000}},RaycastFilterType={Exclude='Exclude'}}
+local RaycastParams={new=function()return {}end}
+local Vector3={new=vec}
+local CFrame={lookAt=function(a,b)return {Position=a,LookVector=vec(0,0,1)} end}
+math.clamp=function(v,lo,hi)return math.max(lo,math.min(hi,v))end
 local savedCleanups={}
-local c={Character=function()return model end,OnCleanup=function(fn)table.insert(savedCleanups,fn)end,
-Guard=function(name,fn)assert(pcall(fn))end}
+local c={Character=function()return nil end,OnCleanup=function(fn)table.insert(savedCleanups,fn)end,
+Guard=function(name,fn)assert(pcall(fn))end,IsCurrent=function()return true end}
 ''' + src + '''
 setThirdPerson(true)
-assert(player.CameraMode=='Classic' and player.CameraMinZoomDistance==12 and player.CameraMaxZoomDistance==12)
-assert(camera.CameraType=='Custom' and camera.CameraSubject==subject)
-thirdPerson.distance=19
-updateThirdPerson()
-assert(player.CameraMinZoomDistance==19 and player.CameraMaxZoomDistance==19)
+assert(player.CameraMode=='Classic')
+local k=next(renderCallbacks)
+assert(k~=nil, 'third-person must bind after native camera')
+renderCallbacks[k]()
+assert(camera.CFrame~=base, 'camera offset should render at end of frame')
+local first=camera.CFrame
+renderCallbacks[k]()
+assert(camera.CFrame.Position.x == first.Position.x and camera.CFrame.Position.z == first.Position.z, 'offset must never stack')
 setThirdPerson(false)
+assert(next(renderCallbacks)==nil)
 assert(player.CameraMode=='Locked' and player.CameraMinZoomDistance==0.5 and player.CameraMaxZoomDistance==0.5)
-assert(camera.CameraType=='Scriptable' and camera.CameraSubject==subject)
 assert(thirdPerson.saved==nil)
 '''
         LuaRuntime().run(script)

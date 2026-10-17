@@ -44947,6 +44947,7 @@ return function(c)
         ProjectileLerp = 0.35,
         ProjectileMax = 8,
         Debug = false,
+        LinkCombat = true, -- LeadOnly needs aim prediction to be running
     }
 
     local state = {
@@ -44961,6 +44962,7 @@ return function(c)
         rollAt = {},
         cost = 0,
         errors = 0,
+        weaponProbe = "not run",
     }
 
     --=========================================================================
@@ -45319,6 +45321,46 @@ return function(c)
         table.insert(bulletConns, conn)
     end
 
+    -- Recent public BloxStrike Luau sources identify runtime weapon classes
+    -- by getgc tables (shoot/setupRecoil/getSpread), not solely by a fixed
+    -- ReplicatedStorage.Components.Weapon path. Read-only and bounded: native
+    -- hooking is intentionally never initiated by this diagnostic probe.
+    local function probeRuntimeWeapon()
+        local seen = 0
+        local gun, bullet, camera = false, false, false
+        if type(getgc) ~= "function" then
+            state.weaponProbe = "getgc unavailable; only game hierarchy can be inspected"
+            return state.weaponProbe
+        end
+        local ok, items = pcall(getgc, true)
+        if not ok or type(items) ~= "table" then
+            state.weaponProbe = "getgc unsupported or returned non-table"
+            return state.weaponProbe
+        end
+        for _, item in pairs(items) do
+            seen += 1
+            if seen > 2500 then break end
+            if type(item) == "table" then
+                if rawget(item, "shoot") and rawget(item, "setupRecoil") then gun = true end
+                if rawget(item, "getTrueSpread") and rawget(item, "getSpreadForConfig") then bullet = true end
+                if rawget(item, "weaponKick") and rawget(item, "setWeaponRecoil") then camera = true end
+            end
+        end
+        state.weaponProbe = ("runtime classes: gun=%s bullet=%s camera=%s scanned=%d")
+            :format(tostring(gun), tostring(bullet), tostring(camera), seen)
+        return state.weaponProbe
+    end
+
+    local function linkAimAssistant()
+        if not Config.LinkCombat then return end
+        local bridge = c.UI
+        local option = bridge and bridge.Options and bridge.Options.BloxAimEnabled
+        if option and option.Value ~= true and type(option.SetValue) == "function" then
+            -- Native SetValue keeps the actual control and game state aligned.
+            option:SetValue(true)
+        end
+    end
+
     --=========================================================================
     -- Mode resolution.
     --=========================================================================
@@ -45341,6 +45383,7 @@ return function(c)
     function Bullet:Start()
         if Config.Enabled then return end
         Config.Enabled = true
+        linkAimAssistant()
         -- On mobile, never attempt native/global hooks merely because the
         -- user enables the generic toggle. Explicit high-risk modes can be
         -- selected separately; LeadOnly remains a hook-free safe default.
@@ -45396,6 +45439,8 @@ return function(c)
             bullets = #state.bullets,
             errors = state.errors,
             costMs = math.floor(state.cost * 100000) / 100,
+            probe = state.weaponProbe,
+            needsAim = state.activePath == "LeadOnly" and not (c.Combat and c.Combat.IsActive and c.Combat:IsActive()),
         }
     end
 
@@ -45425,7 +45470,14 @@ return function(c)
     --=========================================================================
     local tab = c.Tabs.Weapon
     tab:AddParagraph({ Title = "子弹追踪",
-        Content = "四条路径自动选择：预测提前量（始终）、武器射线输入改写、远程事件参数改写、投射物速度追踪。能力不足时自动降级。" })
+        Content = "默认 LeadOnly 只提供瞄准预测，不会改写子弹；联动开启瞄准辅助后才有客户端可见效果。Hitscan/Remote 需有效游戏接口和执行器权限，未确认服务器命中。" })
+    tab:AddToggle("BloxBulletLinkCombat", { Title = "子弹追踪联动开启瞄准辅助", Default = true,
+        Callback = function(v) Config.LinkCombat = v end })
+    tab:AddButton({ Title = "检查真实武器类（只读安全扫描）", Callback = function()
+        local msg = probeRuntimeWeapon()
+        print("[Vortexion/Blox/Weapon] " .. msg)
+        if c.Notify then c.Notify("武器接口", msg) end
+    end })
     tab:AddToggle("BloxBulletEnabled", { Title = "启用子弹追踪", Default = false, Callback = function(v)
         if v then Bullet:Start() else Bullet:Stop() end
     end })
@@ -45458,7 +45510,8 @@ return function(c)
         Bullet:Rescan()
         local status = Bullet:Status()
         c.Notify("子弹追踪", ("路径 %s · 钩子 %d · 监听远程 %d/%d"):format(
-            status.path, status.hooks, status.remotes, status.totalRemotes))
+            status.path, status.hooks, status.remotes, status.totalRemotes)
+            .. " / " .. tostring(status.probe))
     end })
 
     return Bullet
@@ -45489,8 +45542,10 @@ return function(c)
         ESPNames = true,
         ESPHealth = true,
         ESPRange = true,
-        ESPVisibility = true,
-        ESPBox = false,
+        ESPVisibility = false, -- avoid a raycast per target on mobile; optional diagnostics
+        ESPWorldHighlight = false, -- 2D projected overlay is reliable through walls
+        ESPOverlay = true,
+        ESPBox = true,
         ESPTracer = false,
         Fullbright = false,
         SpeedEnabled = false,
@@ -45509,7 +45564,77 @@ return function(c)
     --=========================================================================
     local highlights = {}
     local espStats = { refreshes = 0, scanned = 0, eligible = 0, markers = 0, noHumanoid = 0, lastError = "none" }
-    local ESP_GRACE_SECONDS = 0.8
+    local ESP_GRACE_SECONDS = 1.4
+    local MAX_ESP_TARGETS = 24
+    -- 2D projected labels do not rely on 3D Highlight rendering, which can
+    -- be culled even when HighlightDepthMode is AlwaysOnTop.
+    local overlayGui
+    local function ensureOverlay()
+        if overlayGui and overlayGui.Parent then return overlayGui end
+        local parent = (c.GetGuiParent and c.GetGuiParent()) or LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if not parent then return nil end
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "VortexionBloxReadOnlyESP"
+        gui.ResetOnSpawn = false
+        gui.IgnoreGuiInset = true
+        gui.DisplayOrder = 24
+        gui.Enabled = true
+        gui.Parent = parent
+        overlayGui = gui
+        return gui
+    end
+    local function makeOverlay(entry)
+        local gui = ensureOverlay()
+        if not gui then return end
+        local frame = Instance.new("Frame")
+        frame.Name = "Target"
+        frame.BackgroundTransparency = 1
+        frame.BorderSizePixel = 0
+        frame.Active = false
+        frame.Visible = false
+        frame.Parent = gui
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 1.5
+        stroke.Color = Color3.fromRGB(255, 90, 90)
+        stroke.Parent = frame
+        local text = Instance.new("TextLabel")
+        text.Name = "Info"
+        text.BackgroundTransparency = 1
+        text.BorderSizePixel = 0
+        text.Active = false
+        text.TextSize = 13
+        text.TextStrokeTransparency = 0.4
+        text.TextColor3 = stroke.Color
+        text.Size = UDim2.fromOffset(174, 43)
+        text.AnchorPoint = Vector2.new(0.5, 1)
+        text.Position = UDim2.new(0.5, 0, 0, -3)
+        text.Parent = frame
+        entry.overlay, entry.overlayStroke, entry.overlayText = frame, stroke, text
+    end
+    local function projectOverlay(entry, camera, root, model, color, lines, distance)
+        local frame = entry.overlay
+        if not frame or not camera or not root then return end
+        local point, onScreen = camera:WorldToViewportPoint(root.Position)
+        if not onScreen or point.Z <= 0 then frame.Visible = false; return end
+        local head = model:FindFirstChild("Head")
+        local height
+        if head and head:IsA("BasePart") then
+            local hp = camera:WorldToViewportPoint(head.Position)
+            height = math.abs(hp.Y - point.Y) * 3.0
+        end
+        if not height or height < 20 then height = 880 / math.max(distance, 4) end
+        height = math.clamp(height, 25, 210)
+        local width = math.clamp(height * 0.45, 16, 100)
+        frame.Position = UDim2.fromOffset(math.floor(point.X - width / 2), math.floor(point.Y - height * 0.65))
+        frame.Size = UDim2.fromOffset(width, height)
+        frame.Visible = Config.ESPOverlay
+        entry.overlayStroke.Color = color
+        entry.overlayStroke.Enabled = Config.ESPBox
+        entry.overlayText.TextColor3 = color
+        local label = table.concat(lines, "\n")
+        if entry.overlayText.Text ~= label then entry.overlayText.Text = label end
+        entry.overlayText.Visible = #lines > 0
+    end
     local espAccum = 0
     local visibilityParams = RaycastParams.new()
     visibilityParams.FilterType = Enum.RaycastFilterType.Blacklist
@@ -45519,6 +45644,7 @@ return function(c)
         local entry = highlights[player]
         if not entry then return end
         if entry.model then pcall(function() entry.model:Destroy() end) end
+        if entry.overlay then pcall(function() entry.overlay:Destroy() end) end
         if entry.labelGui then pcall(function() entry.labelGui:Destroy() end) end
         if entry.box then pcall(function() entry.box:Remove() end) end
         if entry.tracer then pcall(function() entry.tracer:Remove() end) end
@@ -45529,12 +45655,14 @@ return function(c)
 
     local function clearESP()
         for player in pairs(highlights) do clearEntry(player) end
+        if overlayGui then pcall(function() overlayGui:Destroy() end); overlayGui = nil end
     end
 
     local function updateESP()
         if not Config.ESPEnabled then clearESP(); return end
         espStats.scanned, espStats.eligible, espStats.noHumanoid = 0, 0, 0
         local now = os.clock()
+        local budget = MAX_ESP_TARGETS
         for _, player in ipairs(Players:GetPlayers()) do
             if player == LocalPlayer then
                 clearEntry(player)
@@ -45555,7 +45683,8 @@ return function(c)
                         if dist > Config.ESPDistance then valid = false end
                     end
                 end
-                if valid then
+                if valid and budget > 0 then
+                    budget -= 1
                     espStats.eligible += 1
                     local entry = highlights[player]
                     if not entry or entry.model.Parent ~= model then
@@ -45568,8 +45697,8 @@ return function(c)
                         highlight.OutlineTransparency = 0.08
                         highlight.FillColor = Color3.fromRGB(240, 90, 90)
                         highlight.OutlineColor = Color3.fromRGB(255, 160, 100)
+                        highlight.Enabled = Config.ESPWorldHighlight
                         highlight.Parent = model
-                        if c.Cloak then highlight = c.Cloak.Protect(highlight) end
                         local conn
                         conn = model.AncestryChanged:Connect(function(_, parent)
                             if not parent then
@@ -45589,9 +45718,11 @@ return function(c)
                         label.TextSize = 14
                         label.TextStrokeTransparency = 0.35
                         label.Parent = labelGui
+                        labelGui.Enabled = false -- 2D labels avoid occlusion/culling differences
                         labelGui.Parent = model
-                        if c.Cloak then c.Cloak.Protect(labelGui) end
-                        highlights[player] = { model = highlight, labelGui = labelGui, label = label, adorneeConn = conn }
+                        local entry = { model = highlight, labelGui = labelGui, label = label, adorneeConn = conn }
+                        highlights[player] = entry
+                        makeOverlay(entry)
                     end
                     local entry = highlights[player]
                     entry.lastSeen = now
@@ -45603,6 +45734,7 @@ return function(c)
                         local hit = Workspace:Raycast(camera.CFrame.Position, root.Position - camera.CFrame.Position, visibilityParams)
                         if not hit or (hit.Instance and hit.Instance:IsDescendantOf(model)) then color = Color3.fromRGB(80, 230, 140) end
                     end
+                    entry.model.Enabled = Config.ESPWorldHighlight
                     entry.model.FillColor = color
                     entry.model.OutlineColor = color
                     entry.label.TextColor3 = color
@@ -45613,8 +45745,12 @@ return function(c)
                     end
                     if Config.ESPRange and camera and root then table.insert(lines, ("%d studs"):format(math.floor((root.Position - camera.CFrame.Position).Magnitude))) end
                     entry.label.Text = table.concat(lines, "\n")
-                    entry.labelGui.Enabled = #lines > 0
-                    if c.HasDrawing then
+                    entry.labelGui.Enabled = (not entry.overlay) and (#lines > 0)
+                    if entry.overlay then
+                        local dist = camera and root and (root.Position - camera.CFrame.Position).Magnitude or 0
+                        projectOverlay(entry, camera, root, model, color, lines, dist)
+                    end
+                    if c.HasDrawing and Config.ESPTracer then -- bounded, opt-in 3D projection work
                         if Config.ESPBox and not entry.box then
                             entry.box = Drawing.new("Square")
                             entry.box.Filled = false
@@ -45654,22 +45790,12 @@ return function(c)
                                 end
                             end
                         end
-                    else
-                        if Config.ESPBox and not entry.nativeBox then
-                            entry.nativeBox = Instance.new("SelectionBox")
-                            entry.nativeBox.Name = c.RandomName()
-                            entry.nativeBox.Adornee = model
-                            entry.nativeBox.LineThickness = 0.025
-                            entry.nativeBox.SurfaceTransparency = 1
-                            entry.nativeBox.Parent = model
-                            if c.Cloak then c.Cloak.Protect(entry.nativeBox) end
-                        end
-                        if entry.nativeBox then entry.nativeBox.Visible = Config.ESPBox; entry.nativeBox.Color3 = color end
                     end
                 else
                     local existing = highlights[player]
                     -- A roster swap or a brief camera/view-distance miss must
                     -- not destroy/recreate ESP several times per second.
+                    if existing and existing.overlay then existing.overlay.Visible = false end
                     if not existing or not existing.lastSeen or now - existing.lastSeen > ESP_GRACE_SECONDS
                         or (existing.labelGui and not existing.labelGui.Parent) then
                         clearEntry(player)
@@ -45853,84 +45979,100 @@ return function(c)
         end
     end
 
-    -- Third person: native Roblox camera settings, with reversible ownership.
-    -- A game-controlled Scriptable camera can override these values; report
-    -- that instead of pretending the toggle guarantees third person.
-    local thirdPerson = {enabled = false, distance = 12, saved = nil, accumulator = 0, overrides = 0}
+    -- Third-person ownership: one post-camera render pass, not periodic
+    -- CameraMode/CameraType writes fighting the game's first-person controller.
+    local thirdPerson = {enabled = false, distance = 12, saved = nil,
+        overrides = 0, lastApplied = nil, lastBase = nil, bound = false}
+    local cameraBindName = "VortexionBloxThirdPerson_" .. tostring(LocalPlayer.UserId)
     local function restoreThirdPerson()
+        if thirdPerson.bound then
+            RunService:UnbindFromRenderStep(cameraBindName)
+            thirdPerson.bound = false
+        end
         local saved = thirdPerson.saved
         thirdPerson.saved = nil
+        local cam = Workspace.CurrentCamera
+        if cam and thirdPerson.lastBase and thirdPerson.lastApplied
+            and cam.CFrame == thirdPerson.lastApplied then
+            pcall(function() cam.CFrame = thirdPerson.lastBase end)
+        end
+        thirdPerson.lastApplied, thirdPerson.lastBase = nil, nil
         if not saved then return end
-        pcall(function() LocalPlayer.CameraMode = saved.mode end)
         pcall(function()
             LocalPlayer.CameraMaxZoomDistance = math.max(saved.maxZoom, saved.minZoom)
             LocalPlayer.CameraMinZoomDistance = saved.minZoom
             LocalPlayer.CameraMaxZoomDistance = saved.maxZoom
+            LocalPlayer.CameraMode = saved.mode
         end)
-        local cam = saved.camera
-        if cam and cam.Parent then
-            pcall(function() cam.CameraType = saved.cameraType end)
-            if saved.subject and saved.subject.Parent then
-                pcall(function() cam.CameraSubject = saved.subject end)
-            end
-        end
     end
     local function updateThirdPerson()
         if not thirdPerson.enabled then return end
-        local camera = Workspace.CurrentCamera
-        if not camera then return end
+        local cam = Workspace.CurrentCamera
+        if not cam then return end
+        local observed = cam.CFrame
+        -- If the native camera didn't update, never apply the offset twice.
+        local base = observed
+        if thirdPerson.lastApplied and observed == thirdPerson.lastApplied then
+            base = thirdPerson.lastBase or observed
+        end
+        local d = math.clamp(thirdPerson.distance, 5, 24)
+        local origin = base.Position
+        local goal = origin - base.LookVector * d + Vector3.new(0, 1.3, 0)
+        local filter = c.Character(LocalPlayer)
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = filter and {filter} or {}
+        params.IgnoreWater = true
+        local hit = Workspace:Raycast(origin, goal-origin, params)
+        if hit then goal = origin + (hit.Position-origin)*0.85 end
+        local placed = CFrame.lookAt(goal, goal + base.LookVector)
+        thirdPerson.lastBase, thirdPerson.lastApplied = base, placed
+        cam.CFrame = placed
+        thirdPerson.overrides += 1
+    end
+    local function setThirdPerson(enabled)
+        enabled = enabled == true
+        if not enabled then
+            thirdPerson.enabled = false
+            restoreThirdPerson()
+            return
+        end
         if not thirdPerson.saved then
             thirdPerson.saved = {
                 mode = LocalPlayer.CameraMode,
                 minZoom = LocalPlayer.CameraMinZoomDistance,
                 maxZoom = LocalPlayer.CameraMaxZoomDistance,
-                camera = camera,
-                cameraType = camera.CameraType,
-                subject = camera.CameraSubject,
             }
+            -- One-time setup. The per-frame pass only changes the final CFrame.
+            pcall(function() LocalPlayer.CameraMode = Enum.CameraMode.Classic end)
+            pcall(function()
+                LocalPlayer.CameraMaxZoomDistance = math.max(thirdPerson.distance, LocalPlayer.CameraMaxZoomDistance)
+                LocalPlayer.CameraMinZoomDistance = math.min(thirdPerson.distance, LocalPlayer.CameraMaxZoomDistance)
+            end)
         end
-        local d = thirdPerson.distance
-        if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
-            LocalPlayer.CameraMode = Enum.CameraMode.Classic
-            thirdPerson.overrides += 1
-        end
-        -- Set max before min to avoid automatic Roblox min/max clamping.
-        if LocalPlayer.CameraMaxZoomDistance ~= d then LocalPlayer.CameraMaxZoomDistance = d end
-        if LocalPlayer.CameraMinZoomDistance ~= d then LocalPlayer.CameraMinZoomDistance = d end
-        if camera.CameraType == Enum.CameraType.Scriptable then
-            camera.CameraType = Enum.CameraType.Custom
-            thirdPerson.overrides += 1
-        end
-        local model = c.Character(LocalPlayer)
-        if model then
-            local target = model:FindFirstChildOfClass("Humanoid")
-                or model:FindFirstChild("HumanoidRootPart")
-                or model:FindFirstChildWhichIsA("BasePart", true)
-            if target and camera.CameraSubject ~= target then
-                camera.CameraSubject = target
-            end
+        thirdPerson.enabled = true
+        if not thirdPerson.bound then
+            RunService:BindToRenderStep(cameraBindName, Enum.RenderPriority.Last.Value + 5, function()
+                if c.IsCurrent() then c.Guard("Visual.ThirdPerson", updateThirdPerson) end
+            end)
+            thirdPerson.bound = true
         end
     end
-    local function setThirdPerson(enabled)
-        thirdPerson.enabled = enabled == true
-        if not thirdPerson.enabled then restoreThirdPerson()
-        else thirdPerson.accumulator = 0; c.Guard("Visual.ThirdPerson", updateThirdPerson) end
-    end
-    c.OnCleanup(restoreThirdPerson)
+    c.OnCleanup(function() thirdPerson.enabled = false; restoreThirdPerson() end)
     local cameraChanged = Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-        if thirdPerson.enabled then thirdPerson.accumulator = 0 end
+        thirdPerson.lastApplied, thirdPerson.lastBase = nil, nil
     end)
     c.OnCleanup(function() cameraChanged:Disconnect() end)
 
     local moveAccum = 0
-    local espInterval = 0.05
+    local espInterval = 0.12
     local espRefreshes = 0
     local function visualInterval()
         if c.VisualInterval then
-            local ok, value = pcall(c.VisualInterval, 0.05)
-            if ok and type(value) == "number" and value == value and value > 0 then return value end
+            local ok, value = pcall(c.VisualInterval, 0.12)
+            if ok and type(value) == "number" and value == value and value > 0 then return math.max(0.12, value) end
         end
-        return 0.05
+        return 0.12
     end
     local function refreshESP()
         espRefreshes += 1
@@ -45956,13 +46098,7 @@ return function(c)
             espAccum, moveAccum = 0, 0
             return
         end
-        if thirdPerson.enabled then
-            thirdPerson.accumulator += dt
-            if thirdPerson.accumulator >= 0.25 then
-                thirdPerson.accumulator = 0
-                c.Guard("Visual.ThirdPerson", updateThirdPerson)
-            end
-        end
+        -- Third-person camera is bound at Camera+10, not polled on Heartbeat.
         -- Non-critical visual pacing is owned by the shared bridge (ctx.UI),
         -- re-read every frame so a VisualHz switch takes effect immediately.
         -- Movement, input and recovery paths below keep their original cadence.
@@ -46014,6 +46150,8 @@ return function(c)
         Config.ESPEnabled = v
         if v then startESP() else clearESP() end
     end })
+    tab:AddToggle("BloxESPWorldHighlight", { Title = "额外启用 3D 高亮（性能消耗较高）", Default = false,
+        Callback = function(v) Config.ESPWorldHighlight = v end })
     tab:AddToggle("BloxESPTeam", { Title = "仅显示敌方", Default = true, Callback = function(v)
         Config.ESPTeam = v
         c.Guard("Visual.ESP", updateESP)
@@ -46023,8 +46161,8 @@ return function(c)
     tab:AddToggle("BloxESPNames", { Title = "ESP 名称", Default = true, Callback = function(v) Config.ESPNames = v end })
     tab:AddToggle("BloxESPHealth", { Title = "ESP 血量", Default = true, Callback = function(v) Config.ESPHealth = v end })
     tab:AddToggle("BloxESPRange", { Title = "ESP 距离标签", Default = true, Callback = function(v) Config.ESPRange = v end })
-    tab:AddToggle("BloxESPVisibility", { Title = "ESP 可见性配色", Default = true, Callback = function(v) Config.ESPVisibility = v end })
-    tab:AddToggle("BloxESPBox", { Title = "ESP 方框（无 Drawing 时为原生框）", Default = false, Callback = function(v) Config.ESPBox = v end })
+    tab:AddToggle("BloxESPVisibility", { Title = "ESP 可见性配色（额外射线开销）", Default = false, Callback = function(v) Config.ESPVisibility = v end })
+    tab:AddToggle("BloxESPBox", { Title = "ESP 穿墙屏幕投影框", Default = true, Callback = function(v) Config.ESPBox = v end })
     tab:AddToggle("BloxESPTracer", { Title = "ESP 追踪线（需 Drawing）", Default = false, Callback = function(v) Config.ESPTracer = v end })
     tab:AddToggle("BloxFullbright", { Title = "全亮", Default = false, Callback = function(v)
         Config.Fullbright = v
@@ -46037,7 +46175,7 @@ return function(c)
                 status.noHumanoid, status.markers, status.refreshes, status.error))
     end})
     tab:AddParagraph({ Title = "视觉刷新节流",
-        Content = "ESP 属于非关键视觉刷新，节拍由共享桥接 ctx.UI:GetVisualInterval(0.05) 决定（VisualHz 5..60 有界）；桥接未提供该方法时保持 20Hz。移动、输入、重生恢复与飞行不受该节流影响；摄像机更换、关闭与卸载立即清理，不等节流槽。" })
+        Content = "默认使用每秒最多 8 次的非交互式屏幕投影，墙后仍可显示框与标签；3D 高亮和可见性射线需手动开启。上限 24 目标；关闭后立即清理。" })
 
     local movement = c.Tabs.Movement
     movement:AddToggle("BloxThirdPerson", {Title = "第三人称视角", Default = false,
@@ -46045,9 +46183,9 @@ return function(c)
     movement:AddSlider("BloxThirdDistance", {Title = "第三人称镜头距离", Min = 5, Max = 24,
         Default = 12, Rounding = 0, Callback = function(value)
             thirdPerson.distance = value
-            if thirdPerson.enabled then c.Guard("Visual.ThirdPerson", updateThirdPerson) end
+            if thirdPerson.enabled then thirdPerson.lastApplied = nil end
         end})
-    movement:AddParagraph({Title="第三人称说明", Content="基于 Roblox Classic 镜头与缩放距离；关闭时恢复原相机属性。若游戏主动强制接管相机，可能被覆盖。"})
+    movement:AddParagraph({Title="第三人称说明", Content="启用后每帧于相机和战斗更新之后只偏移最终镜头，不再周期抢写 CameraMode；关闭后解绑并恢复。游戏强制镜头仍可能影响实际观感。"})
     movement:AddToggle("BloxSpeedEnabled", { Title = "自定义移动速度", Default = false, Callback = function(v)
         Config.SpeedEnabled = v
         if not v then restoreSpeed() end
@@ -49679,20 +49817,59 @@ return function(app)
         settingsApplied=false,
         reloads=0,
         refills=0,
+        refillAttempts=0,
+        lastRefillStatus="idle",
+        lastRefillAt=-math.huge,
+        lastFuel=nil,
+        lastSpears=nil,
+        lastRefillDistance=nil,
+        denied=0,
     }
 
     --=========================================================================
     -- Refill point: workspace.Unclimbable.Reloads.<something>.Refill
     --=========================================================================
     local function resolveRefill()
-        local root=Workspace:FindFirstChild("Unclimbable")
-        local reloads=root and root:FindFirstChild("Reloads")
-        if not reloads then return nil end
-        for _,station in ipairs(reloads:GetChildren()) do
-            local refill=station:FindFirstChild("Refill")
-            if refill and refill:IsA("BasePart") then return refill end
+        -- Map-dependent refill locations found in the uploaded AOTR scripts.
+        -- Select a nearby station; the old implementation always returned
+        -- the first station, often on a completely different map/zone.
+        local folders = {}
+        local unclimbable = Workspace:FindFirstChild("Unclimbable")
+        local climbable = Workspace:FindFirstChild("Climbable")
+        local function path(root, ...)
+            for _, key in ipairs({...}) do
+                root = root and root:FindFirstChild(key)
+            end
+            return root
         end
-        return nil
+        folders[#folders+1] = path(unclimbable,"Reloads")
+        folders[#folders+1] = path(unclimbable,"Camps","Camp","GasTanks")
+        folders[#folders+1] = path(climbable,"Walls","Gate","GasTanks")
+        folders[#folders+1] = path(climbable,"_Walls","Gate","GasTanks")
+        local localPlayer = Players.LocalPlayer
+        local character = localPlayer and localPlayer.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        if not root then return nil end
+        local best, distance = nil, math.huge
+        for _, folder in pairs(folders) do
+            if folder then
+                local options = {folder}
+                for _, child in ipairs(folder:GetDescendants()) do
+                    if child:IsA("BasePart") and child.Name == "Refill" then
+                        options[#options+1] = child
+                    end
+                end
+                for _, node in ipairs(options) do
+                    local candidate = node.Name == "Refill" and node:IsA("BasePart") and node or node:FindFirstChild("Refill")
+                    if candidate and candidate:IsA("BasePart") then
+                        local delta = (candidate.Position-root.Position).Magnitude
+                        if delta < distance then best, distance = candidate, delta end
+                    end
+                end
+            end
+        end
+        state.lastRefillDistance = best and distance or nil
+        return best
     end
     Farm.ResolveRefill=resolveRefill
 
@@ -49711,16 +49888,63 @@ return function(app)
 
     local function doRefill()
         local Remotes=app.Remotes
-        if not Remotes.POST then return false end
-        if not state.refillPart or not state.refillPart.Parent then
-            state.refillPart=resolveRefill()
-            if not state.refillPart then return false end
+        if not Remotes.POST then state.lastRefillStatus="POST missing"; return false end
+        local now=os.clock()
+        if now-state.lastRefillAt<2.5 then return false end
+        app.ProbeHUD(false)
+        local gas=app.ReadPercent(app.HUD.gas)
+        local spears=app.ReadCount(app.HUD.spears)
+        local blades=app.ReadCount(app.HUD.blades)
+        -- Do not spam refill every 0.5s when already full.
+        local needsGas=type(gas)=="number" and gas<85
+        local needsSpears=type(spears)=="number" and spears<=0
+        local needsBlades=type(blades)=="number" and blades<=0
+        if type(gas)=="number" or type(spears)=="number" or type(blades)=="number" then
+            if not needsGas and not needsSpears and not needsBlades then
+                state.lastRefillStatus="supply healthy"
+                return false
+            end
         end
-        local ok=pcall(function()
-            Remotes.POST:FireServer("Attacks","Reload",state.refillPart)
+        local refill=state.refillPart
+        if not refill or not refill.Parent then refill=resolveRefill() end
+        if not refill then state.lastRefillStatus="station not found"; return false end
+        state.refillPart=refill
+        local char=Players.LocalPlayer and Players.LocalPlayer.Character
+        local root=char and char:FindFirstChild("HumanoidRootPart")
+        if not root then state.lastRefillStatus="character not ready"; return false end
+        local dist=(refill.Position-root.Position).Magnitude
+        state.lastRefillDistance=dist
+        if dist>18 then
+            state.lastRefillStatus=("station too far (%.0f studs)"):format(dist)
+            return false
+        end
+        state.lastRefillAt=now
+        state.refillAttempts+=1
+        state.lastFuel,state.lastSpears=gas,spears
+        local ok,err=pcall(function()
+            Remotes.POST:FireServer("Attacks","Reload",refill)
         end)
-        if ok then state.refills+=1 end
+        if ok then
+            state.refills+=1 -- request counter, NOT proof of success
+            state.lastRefillStatus="request sent, awaiting resource change"
+        else
+            state.denied+=1
+            state.lastRefillStatus=tostring(err):sub(1,150)
+        end
         return ok
+    end
+    local function observeRefill()
+        if state.lastRefillStatus~="request sent, awaiting resource change" then return end
+        app.ProbeHUD(false)
+        local gas=app.ReadPercent(app.HUD.gas)
+        local spears=app.ReadCount(app.HUD.spears)
+        if (type(gas)=="number" and type(state.lastFuel)=="number" and gas>state.lastFuel)
+            or (type(spears)=="number" and type(state.lastSpears)=="number" and spears>state.lastSpears) then
+            state.lastRefillStatus="confirmed by HUD"
+        elseif os.clock()-state.lastRefillAt>3 then
+            state.denied+=1
+            state.lastRefillStatus="server unconfirmed (HUD unchanged)"
+        end
     end
 
     --=========================================================================
@@ -49742,6 +49966,7 @@ return function(app)
 
     local accum=0
     local function tickFarm(dt)
+        if Config.AutoRefill then app.Guard("Farm.RefillObserve",observeRefill) end
         if Config.AutoReload then app.Guard("Farm.Reload",doReload) end
         if Config.AutoRefill then app.Guard("Farm.Refill",doRefill) end
     end
@@ -49758,7 +49983,9 @@ return function(app)
 
     function Farm:DebugSnapshot()
         return {reloads=state.reloads,refills=state.refills,
-            refill=state.refillPart and state.refillPart.Parent and true or false}
+            refill=state.refillPart and state.refillPart.Parent and true or false,
+            attempts=state.refillAttempts, status=state.lastRefillStatus,
+            distance=state.lastRefillDistance, unconfirmed=state.denied}
     end
 
     app:OnStop(function()
@@ -50058,6 +50285,14 @@ if Farm then
         Callback=function(v) c.AutoReload=v end})
     tab:AddToggle("AOTRAutoRefill",{Title="自动补给（气罐/弹药）",Default=false,
         Callback=function(v) c.AutoRefill=v end})
+    tab:AddButton({Title="查看自动补给状态",Callback=function()
+        local r=Farm:DebugSnapshot()
+        local info=("请求 %d / 未确认 %d / 距离 %s / 状态 %s")
+            :format(r.attempts or 0,r.unconfirmed or 0,
+                r.distance and ("%.0f"):format(r.distance) or "-",r.status or "unknown")
+        print("[Vortexion/AOTR/Refill] " .. info)
+        app:Notify(info)
+    end})
     tab:AddToggle("AOTRFPSSettings",{Title="服务端画质设置（关特效）",Default=true,
         Callback=function(v)
             c.FPSSettings=v

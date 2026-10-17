@@ -37,6 +37,7 @@ return function(c)
         ProjectileLerp = 0.35,
         ProjectileMax = 8,
         Debug = false,
+        LinkCombat = true, -- LeadOnly needs aim prediction to be running
     }
 
     local state = {
@@ -51,6 +52,7 @@ return function(c)
         rollAt = {},
         cost = 0,
         errors = 0,
+        weaponProbe = "not run",
     }
 
     --=========================================================================
@@ -409,6 +411,46 @@ return function(c)
         table.insert(bulletConns, conn)
     end
 
+    -- Recent public BloxStrike Luau sources identify runtime weapon classes
+    -- by getgc tables (shoot/setupRecoil/getSpread), not solely by a fixed
+    -- ReplicatedStorage.Components.Weapon path. Read-only and bounded: native
+    -- hooking is intentionally never initiated by this diagnostic probe.
+    local function probeRuntimeWeapon()
+        local seen = 0
+        local gun, bullet, camera = false, false, false
+        if type(getgc) ~= "function" then
+            state.weaponProbe = "getgc unavailable; only game hierarchy can be inspected"
+            return state.weaponProbe
+        end
+        local ok, items = pcall(getgc, true)
+        if not ok or type(items) ~= "table" then
+            state.weaponProbe = "getgc unsupported or returned non-table"
+            return state.weaponProbe
+        end
+        for _, item in pairs(items) do
+            seen += 1
+            if seen > 2500 then break end
+            if type(item) == "table" then
+                if rawget(item, "shoot") and rawget(item, "setupRecoil") then gun = true end
+                if rawget(item, "getTrueSpread") and rawget(item, "getSpreadForConfig") then bullet = true end
+                if rawget(item, "weaponKick") and rawget(item, "setWeaponRecoil") then camera = true end
+            end
+        end
+        state.weaponProbe = ("runtime classes: gun=%s bullet=%s camera=%s scanned=%d")
+            :format(tostring(gun), tostring(bullet), tostring(camera), seen)
+        return state.weaponProbe
+    end
+
+    local function linkAimAssistant()
+        if not Config.LinkCombat then return end
+        local bridge = c.UI
+        local option = bridge and bridge.Options and bridge.Options.BloxAimEnabled
+        if option and option.Value ~= true and type(option.SetValue) == "function" then
+            -- Native SetValue keeps the actual control and game state aligned.
+            option:SetValue(true)
+        end
+    end
+
     --=========================================================================
     -- Mode resolution.
     --=========================================================================
@@ -431,6 +473,7 @@ return function(c)
     function Bullet:Start()
         if Config.Enabled then return end
         Config.Enabled = true
+        linkAimAssistant()
         -- On mobile, never attempt native/global hooks merely because the
         -- user enables the generic toggle. Explicit high-risk modes can be
         -- selected separately; LeadOnly remains a hook-free safe default.
@@ -486,6 +529,8 @@ return function(c)
             bullets = #state.bullets,
             errors = state.errors,
             costMs = math.floor(state.cost * 100000) / 100,
+            probe = state.weaponProbe,
+            needsAim = state.activePath == "LeadOnly" and not (c.Combat and c.Combat.IsActive and c.Combat:IsActive()),
         }
     end
 
@@ -515,7 +560,14 @@ return function(c)
     --=========================================================================
     local tab = c.Tabs.Weapon
     tab:AddParagraph({ Title = "子弹追踪",
-        Content = "四条路径自动选择：预测提前量（始终）、武器射线输入改写、远程事件参数改写、投射物速度追踪。能力不足时自动降级。" })
+        Content = "默认 LeadOnly 只提供瞄准预测，不会改写子弹；联动开启瞄准辅助后才有客户端可见效果。Hitscan/Remote 需有效游戏接口和执行器权限，未确认服务器命中。" })
+    tab:AddToggle("BloxBulletLinkCombat", { Title = "子弹追踪联动开启瞄准辅助", Default = true,
+        Callback = function(v) Config.LinkCombat = v end })
+    tab:AddButton({ Title = "检查真实武器类（只读安全扫描）", Callback = function()
+        local msg = probeRuntimeWeapon()
+        print("[Vortexion/Blox/Weapon] " .. msg)
+        if c.Notify then c.Notify("武器接口", msg) end
+    end })
     tab:AddToggle("BloxBulletEnabled", { Title = "启用子弹追踪", Default = false, Callback = function(v)
         if v then Bullet:Start() else Bullet:Stop() end
     end })
@@ -548,7 +600,8 @@ return function(c)
         Bullet:Rescan()
         local status = Bullet:Status()
         c.Notify("子弹追踪", ("路径 %s · 钩子 %d · 监听远程 %d/%d"):format(
-            status.path, status.hooks, status.remotes, status.totalRemotes))
+            status.path, status.hooks, status.remotes, status.totalRemotes)
+            .. " / " .. tostring(status.probe))
     end })
 
     return Bullet
