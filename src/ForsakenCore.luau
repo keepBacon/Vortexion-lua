@@ -5,6 +5,7 @@ local WindBridgeFactory = nil
 local WindUI = nil
 local ForsakenEnhancementsFactory = nil
 local ForsakenPuzzlePlannerFactory = nil
+local ForsakenPuzzleAutoFactory = nil
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -32,7 +33,11 @@ local tabs = {
 }
 window:InstallSettings(tabs.system)
 
-local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Tabs=tabs, PuzzlePlanner=type(ForsakenPuzzlePlannerFactory) == "function" and ForsakenPuzzlePlannerFactory() or nil})
+local puzzlePlanner = type(ForsakenPuzzlePlannerFactory) == "function" and ForsakenPuzzlePlannerFactory() or nil
+local puzzleAuto = puzzlePlanner and type(ForsakenPuzzleAutoFactory) == "function"
+    and ForsakenPuzzleAutoFactory(puzzlePlanner, user) or nil
+local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Tabs=tabs,
+    PuzzlePlanner=puzzlePlanner, PuzzleAuto=puzzleAuto})
 
 local state = {alive = true, killers = false, survivors = false,
     generators = false, alert = false, fovEnabled = false, fov = 80,

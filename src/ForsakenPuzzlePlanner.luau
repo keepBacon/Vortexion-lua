@@ -19,7 +19,14 @@ return function()
         if not puzzle then return nil, "PuzzleUI missing" end
         local container = sub(puzzle, "Container") or puzzle
         local grid = path(container, {"GridHolder", "Grid"})
-        if not grid then return nil, "GridHolder.Grid missing (gear / transition phase?)" end
+        if not grid then
+            local hasGears = sub(container, "Inventory") or sub(container, "CenterLeft") or sub(container, "CenterRight")
+            if hasGears then
+                return {phase="gear", cells={}, count=0, maxIndex=0, pairs={}, ambiguous=0,
+                    path=puzzle:GetFullName(), container=container}, nil
+            end
+            return nil, "GridHolder.Grid missing (lock / transition / unknown phase)"
+        end
         local source = sub(grid, "Blobs") or grid
         local cells = {}
         local detected = {}
@@ -45,11 +52,11 @@ return function()
                 if number and number:IsA("TextLabel") then
                     markerText = tostring(number.Text or ""):match("^%s*(.-)%s*$") or ""
                 end
-                local color = circle and rgb(circle.BackgroundColor3) or "-"
+                local color = circle and rgb(circle.BackgroundColor3) or rgb(item.BackgroundColor3)
                 local button = sub(item, "Button")
                 local record = {
                     index = i,
-                    mark = circle ~= nil,
+                    mark = circle ~= nil or source ~= grid,
                     number = markerText,
                     color = color,
                     button = button ~= nil and button:IsA("GuiButton"),
@@ -57,10 +64,11 @@ return function()
                     visible = item.Visible,
                 }
                 cells[#cells + 1] = record
-                if circle then
-                    -- The text may be a unique cell index, not a pair identifier;
+                if circle or source ~= grid then
+                    -- Blob labels may be perimeter indices; pair blobs by colour.
                     -- only exactly two identical markers form a candidate pair.
-                    local key = markerText ~= "" and "text:" .. markerText or "color:" .. color
+                    local key = (source ~= grid and "color:" .. color)
+                            or (markerText ~= "" and "text:" .. markerText or "color:" .. color)
                     if key ~= "color:-" and key ~= "color:?" then
                         groups[key] = groups[key] or {}
                         groups[key][#groups[key] + 1] = i
@@ -82,6 +90,7 @@ return function()
         return {
             phase = source == grid and "grid" or "blobs", size = square and side or nil,
             cells = cells, count = distinct, maxIndex = count, pairs = pairedEndpoints, ambiguous = ambiguous,
+            nodes = detected, grid = grid, container = container,
             path = puzzle:GetFullName(),
         }
     end
@@ -145,6 +154,43 @@ return function()
         end
         if solvePair(1) then return paths, "solved", visits end
         return nil, timedOut and "budget exceeded" or "no compatible routes", visits
+    end
+    -- Sample animated lock needles / gear inventory without reading unrelated game GUI.
+    -- Capture twice from a user request; never synthesize input here.
+    function planner.InspectDynamic(puzzle, maxItems)
+        if not puzzle then return "PuzzleUI missing" end
+        local output = {}
+        local count = 0
+        local limit = math.clamp(tonumber(maxItems) or 240, 40, 320)
+        for _, item in ipairs(puzzle:GetDescendants()) do
+            if item:IsA("GuiObject") then
+                count += 1
+                if count > limit then break end
+                local ok, line = pcall(function()
+                    local text = ""
+                    if item:IsA("TextLabel") or item:IsA("TextButton") then text = tostring(item.Text):sub(1,60) end
+                    local img = ""
+                    if item:IsA("ImageLabel") or item:IsA("ImageButton") then
+                        img = tostring(item.Image) .. "@" .. rgb(item.ImageColor3)
+                    end
+                    local attrs = {}
+                    local found = 0
+                    for key, val in pairs(item:GetAttributes()) do
+                        found += 1
+                        if found > 6 then break end
+                        attrs[#attrs+1] = tostring(key) .. "=" .. tostring(val):sub(1,28)
+                    end
+                    local p, sz = item.AbsolutePosition, item.AbsoluteSize
+                    return string.format("%s [%s] xy=(%.1f,%.1f) size=(%.1f,%.1f) rot=%.1f visible=%s active=%s bg=%s img=%s text=%s attrs=%s",
+                        item.Name, item.ClassName, p.X,p.Y,sz.X,sz.Y,
+                        item.Rotation, tostring(item.Visible), tostring(item.Active),
+                        rgb(item.BackgroundColor3), img, text, table.concat(attrs,";"))
+                end)
+                if ok then output[#output+1] = line end
+            end
+        end
+        output[#output+1] = "sampled=" .. tostring(#output) .. " cap=" .. tostring(limit)
+        return table.concat(output,"\n")
     end
     function planner.Summary(data)
         if not data then return "没有可以读取的谜题结构" end

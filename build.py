@@ -39,7 +39,7 @@ SCP_MODULES = [
     ("SCPESPFactory", "SCPESP.luau"),
 ]
 GAMES = {
-    "Forsaken": ("ForsakenCore.luau", [("ForsakenEnhancementsFactory", "ForsakenEnhancements.luau"), ("ForsakenPuzzlePlannerFactory", "ForsakenPuzzlePlanner.luau")]),
+    "Forsaken": ("ForsakenCore.luau", [("ForsakenEnhancementsFactory", "ForsakenEnhancements.luau"), ("ForsakenPuzzlePlannerFactory", "ForsakenPuzzlePlanner.luau"), ("ForsakenPuzzleAutoFactory", "ForsakenPuzzleAuto.luau")]),
     "BloxStrike": ("BloxStrikeCore.luau", BLOX_MODULES),
     "AOTR_Lobby": ("AOTRLobby.luau", [("AOTRCommon", "AOTRCommon.luau")]),
     "AOTR_Battle": ("AOTRBattle.luau", [("AOTRCommon", "AOTRCommon.luau")] + AOTR_BATTLE_MODULES),
@@ -233,7 +233,7 @@ def build(root=ROOT):
         raise ValueError("AOTR universe mismatch")
     runtime_manifest = {
         "schema": 2,
-        "build_tag": "loader-v2-modular-r2.17-blox-esp-camera-weapon-aotr-refill",
+        "build_tag": "loader-v2-modular-r2.18-forsaken-multi-puzzle-input",
         "core": modular_bundles["Vortexion_Core.lua"],
         "modules": {name: modular_bundles["Vortexion_Module_" + name + ".lua"] for name in GAMES},
         "routes": routes,

@@ -8,6 +8,7 @@ return function(options)
     local Workspace = game:GetService("Workspace")
     local Lighting = game:GetService("Lighting")
     local player, bridge, tabs = options.Player, options.Bridge, options.Tabs
+    local puzzleAuto = options.PuzzleAuto
     local state = {
         alive = true, stamina = false, antiSlow = false, antiTaph = false,
         autoPopup = false, moveMultiplier = 1, autoRepair = false,
@@ -375,17 +376,12 @@ return function(options)
     local function puzzleIsOpen()
         local pg = player:FindFirstChildOfClass("PlayerGui")
         if not pg then return false end
-        local inspected = 0
-        for _, item in ipairs(pg:GetDescendants()) do
-            inspected += 1
-            if inspected > 300 then break end
-            local name = item.Name:lower()
-            if (name:find("generator", 1, true) or name:find("puzzle", 1, true)
-                or name:find("wire", 1, true))
-                and (item:IsA("ScreenGui") and item.Enabled
-                    or item:IsA("GuiObject") and item.Visible) then
-                return true
-            end
+        local puzzle = pg:FindFirstChild("PuzzleUI")
+        if puzzle then
+            if puzzle:IsA("ScreenGui") and not puzzle.Enabled then return false end
+            local frame = puzzle:FindFirstChild("Container")
+            if frame and frame:IsA("GuiObject") then return frame.Visible end
+            return puzzle:IsA("ScreenGui") and puzzle.Enabled == true
         end
         return false
     end
@@ -413,6 +409,26 @@ return function(options)
                 end
             end
         end
+        if puzzleIsOpen() then
+            state.repairPhase = "puzzle-open"
+            local pg = player:FindFirstChildOfClass("PlayerGui")
+            local puzzle = pg and pg:FindFirstChild("PuzzleUI")
+            if puzzleAuto and puzzle then
+                local started = puzzleAuto:Try(puzzle,
+                    function() return state.alive and state.autoRepair end,
+                    function(phase, detail)
+                        if state.alive then
+                            state.repairPhase = "puzzle-" .. tostring(phase)
+                            state.lastAction = tostring(detail)
+                        end
+                    end)
+                if started then state.repairPhase = "puzzle-executing" end
+            else
+                state.repairPhase = "puzzle-unsupported"
+                state.lastAction = "谜题界面存在，但本版本没有可用的解析与执行模块"
+            end
+            return
+        end
         local gen, distance, part = nearestGenerator()
         if not gen then
             state.repairPhase = "no-target"
@@ -435,12 +451,6 @@ return function(options)
                 if humanoid then humanoid:MoveTo(part.Position - part.CFrame.LookVector * 5) end
             end)
             state.lastAction = "正在尝试使用 Humanoid:MoveTo 接近发电机"
-            return
-        end
-        if puzzleIsOpen() then
-            state.repairPhase = "puzzle-open"
-            state.repairPaused = true
-            state.lastAction = "已出现发电机拼图；未适配拼图节点与连线协议，不能谎报自动完成"
             return
         end
         if stagnant >= 3 then
@@ -562,6 +572,7 @@ return function(options)
             restoreHidden(function(obj) return obj.Name == "1x1x1x1Popup" end)
         end
         if field == "autoRepair" then
+            if puzzleAuto then puzzleAuto:Stop() end
             promptToken += 1
             promptInFlight = false
             state.repairPhase = value and "waiting" or "disabled"
@@ -579,6 +590,7 @@ return function(options)
     local function shutdown()
         if not state.alive then return end
         state.alive = false
+        if puzzleAuto then puzzleAuto:Stop() end
         promptToken += 1
         stopScheduler()
         for _, link in ipairs(links) do safe("disconnect", function() link:Disconnect() end) end
@@ -656,16 +668,21 @@ return function(options)
         lastTarget, lastProgress = nil, nil
         awaitingProgress = false
         state.repairPaused = false
+        if puzzleAuto then puzzleAuto:Reset() end
         state.nextRepair = os.clock() + 0.25
         if state.autoRepair then manageScheduler() end
         notify("发电机", "已重置失败计数，等待下一次修理")
     end})
+    tabs.generators:AddParagraph({Title="新版发电机适配状态", Content="7×7 数字配对拼图：路径规划＋可用执行器虚拟鼠标输入；12 节点外围连线：仅在颜色成对时尝试；圆锁／齿轮：仅识别并提示，缺输入协议时不自动乱点。每条路径必须看到界面变化，否则停止。打开谜题后请收起 Vortexion 界面以避免遮挡。"})
     local repairStatusParagraph=tabs.generators:AddParagraph({Title="修理诊断", Content="点击查看修理与防御诊断，状态在此显示，不覆盖手机触控"})
     tabs.generators:AddButton({Title="查看修理与防御诊断", Callback=function()
-        local detail=("交互尝试=%d 进度变化=%d 弹窗=%d 阶段=%s\n%s\n速度模式=%s 实测WalkSpeed=%.2f\n错误：%s")
+        local detail=("交互尝试=%d 进度变化=%d 弹窗=%d 阶段=%s\n%s\n路径执行=%s / %d，失败=%d\n速度模式=%s 实测WalkSpeed=%.2f\n错误：%s")
             :format(state.repairsSent, state.progressSeen, state.popupsClosed,
-                state.repairPhase, state.lastAction, state.speedMode,
-                state.speedObserved, state.lastError)
+                state.repairPhase, state.lastAction,
+                puzzleAuto and puzzleAuto.Status or "unavailable",
+                puzzleAuto and puzzleAuto.Paths or 0,
+                puzzleAuto and puzzleAuto.Failed or 0,
+                state.speedMode, state.speedObserved, state.lastError)
         if repairStatusParagraph and type(repairStatusParagraph.SetDesc)=="function" then
             repairStatusParagraph:SetDesc(detail)
         else
@@ -734,6 +751,28 @@ return function(options)
         end
         state.lastAction = string.format("已采集 %d 个谜题 GUI 节点；用于验证当前版本结构", count)
     end})
-    tabs.generators:AddParagraph({Title="修理限制", Content="旧版 RE 仅作兼容尝试并验证 Progress；谜题可能具有不同阶段或 7×7 格。已支持只读端点分析和路径规划，但缺少真实输入协议，不会伪造自动完成。"})
+    tabs.generators:AddButton({Title="复制齿轮／开锁动态结构（两次采样）", Callback=function()
+        local planner = options.PuzzlePlanner
+        local pg = player:FindFirstChildOfClass("PlayerGui")
+        local puzzle = pg and pg:FindFirstChild("PuzzleUI")
+        if not (planner and planner.InspectDynamic and puzzle) then
+            state.lastAction = "请先手动打开齿轮/开锁谜题；当前无有效 PuzzleUI"
+            return
+        end
+        task.spawn(function()
+            local ok1, first = pcall(planner.InspectDynamic, puzzle, 260)
+            task.wait(0.22)
+            if not state.alive then return end
+            local ok2, second = pcall(planner.InspectDynamic, puzzle, 260)
+            local output = "[PuzzleUI dynamic before]\n" .. tostring(ok1 and first or "failed")
+                .. "\n[PuzzleUI dynamic after 0.22s]\n" .. tostring(ok2 and second or "failed")
+            local env = (getgenv and getgenv()) or _G
+            local clipboard = env.setclipboard or env.toclipboard or setclipboard or toclipboard
+            if type(clipboard) == "function" then safe("dynamic copy", function() clipboard(output) end)
+            else print(output) end
+            state.lastAction = "已采集两次 GUI 属性；用于确认动态指针／齿轮输入规则"
+        end)
+    end})
+    tabs.generators:AddParagraph({Title="修理限制", Content="连线题根据当前 GUI 的真实端点规划路径，尝试执行器虚拟鼠标，并以界面连线变化作为确认。虚拟输入不被支持或不产生实际连线时立即暂停。圆锁/齿轮尚缺当前版本的实时控制信息及操作接口，不能保证自动完成。"})
     return {Destroy = shutdown, State = state, EnumerateGenerators = enumerateGenerators}
 end

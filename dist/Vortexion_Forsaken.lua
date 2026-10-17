@@ -42089,6 +42089,7 @@ return function(options)
     local Workspace = game:GetService("Workspace")
     local Lighting = game:GetService("Lighting")
     local player, bridge, tabs = options.Player, options.Bridge, options.Tabs
+    local puzzleAuto = options.PuzzleAuto
     local state = {
         alive = true, stamina = false, antiSlow = false, antiTaph = false,
         autoPopup = false, moveMultiplier = 1, autoRepair = false,
@@ -42456,17 +42457,12 @@ return function(options)
     local function puzzleIsOpen()
         local pg = player:FindFirstChildOfClass("PlayerGui")
         if not pg then return false end
-        local inspected = 0
-        for _, item in ipairs(pg:GetDescendants()) do
-            inspected += 1
-            if inspected > 300 then break end
-            local name = item.Name:lower()
-            if (name:find("generator", 1, true) or name:find("puzzle", 1, true)
-                or name:find("wire", 1, true))
-                and (item:IsA("ScreenGui") and item.Enabled
-                    or item:IsA("GuiObject") and item.Visible) then
-                return true
-            end
+        local puzzle = pg:FindFirstChild("PuzzleUI")
+        if puzzle then
+            if puzzle:IsA("ScreenGui") and not puzzle.Enabled then return false end
+            local frame = puzzle:FindFirstChild("Container")
+            if frame and frame:IsA("GuiObject") then return frame.Visible end
+            return puzzle:IsA("ScreenGui") and puzzle.Enabled == true
         end
         return false
     end
@@ -42494,6 +42490,26 @@ return function(options)
                 end
             end
         end
+        if puzzleIsOpen() then
+            state.repairPhase = "puzzle-open"
+            local pg = player:FindFirstChildOfClass("PlayerGui")
+            local puzzle = pg and pg:FindFirstChild("PuzzleUI")
+            if puzzleAuto and puzzle then
+                local started = puzzleAuto:Try(puzzle,
+                    function() return state.alive and state.autoRepair end,
+                    function(phase, detail)
+                        if state.alive then
+                            state.repairPhase = "puzzle-" .. tostring(phase)
+                            state.lastAction = tostring(detail)
+                        end
+                    end)
+                if started then state.repairPhase = "puzzle-executing" end
+            else
+                state.repairPhase = "puzzle-unsupported"
+                state.lastAction = "谜题界面存在，但本版本没有可用的解析与执行模块"
+            end
+            return
+        end
         local gen, distance, part = nearestGenerator()
         if not gen then
             state.repairPhase = "no-target"
@@ -42516,12 +42532,6 @@ return function(options)
                 if humanoid then humanoid:MoveTo(part.Position - part.CFrame.LookVector * 5) end
             end)
             state.lastAction = "正在尝试使用 Humanoid:MoveTo 接近发电机"
-            return
-        end
-        if puzzleIsOpen() then
-            state.repairPhase = "puzzle-open"
-            state.repairPaused = true
-            state.lastAction = "已出现发电机拼图；未适配拼图节点与连线协议，不能谎报自动完成"
             return
         end
         if stagnant >= 3 then
@@ -42643,6 +42653,7 @@ return function(options)
             restoreHidden(function(obj) return obj.Name == "1x1x1x1Popup" end)
         end
         if field == "autoRepair" then
+            if puzzleAuto then puzzleAuto:Stop() end
             promptToken += 1
             promptInFlight = false
             state.repairPhase = value and "waiting" or "disabled"
@@ -42660,6 +42671,7 @@ return function(options)
     local function shutdown()
         if not state.alive then return end
         state.alive = false
+        if puzzleAuto then puzzleAuto:Stop() end
         promptToken += 1
         stopScheduler()
         for _, link in ipairs(links) do safe("disconnect", function() link:Disconnect() end) end
@@ -42737,16 +42749,21 @@ return function(options)
         lastTarget, lastProgress = nil, nil
         awaitingProgress = false
         state.repairPaused = false
+        if puzzleAuto then puzzleAuto:Reset() end
         state.nextRepair = os.clock() + 0.25
         if state.autoRepair then manageScheduler() end
         notify("发电机", "已重置失败计数，等待下一次修理")
     end})
+    tabs.generators:AddParagraph({Title="新版发电机适配状态", Content="7×7 数字配对拼图：路径规划＋可用执行器虚拟鼠标输入；12 节点外围连线：仅在颜色成对时尝试；圆锁／齿轮：仅识别并提示，缺输入协议时不自动乱点。每条路径必须看到界面变化，否则停止。打开谜题后请收起 Vortexion 界面以避免遮挡。"})
     local repairStatusParagraph=tabs.generators:AddParagraph({Title="修理诊断", Content="点击查看修理与防御诊断，状态在此显示，不覆盖手机触控"})
     tabs.generators:AddButton({Title="查看修理与防御诊断", Callback=function()
-        local detail=("交互尝试=%d 进度变化=%d 弹窗=%d 阶段=%s\n%s\n速度模式=%s 实测WalkSpeed=%.2f\n错误：%s")
+        local detail=("交互尝试=%d 进度变化=%d 弹窗=%d 阶段=%s\n%s\n路径执行=%s / %d，失败=%d\n速度模式=%s 实测WalkSpeed=%.2f\n错误：%s")
             :format(state.repairsSent, state.progressSeen, state.popupsClosed,
-                state.repairPhase, state.lastAction, state.speedMode,
-                state.speedObserved, state.lastError)
+                state.repairPhase, state.lastAction,
+                puzzleAuto and puzzleAuto.Status or "unavailable",
+                puzzleAuto and puzzleAuto.Paths or 0,
+                puzzleAuto and puzzleAuto.Failed or 0,
+                state.speedMode, state.speedObserved, state.lastError)
         if repairStatusParagraph and type(repairStatusParagraph.SetDesc)=="function" then
             repairStatusParagraph:SetDesc(detail)
         else
@@ -42815,7 +42832,29 @@ return function(options)
         end
         state.lastAction = string.format("已采集 %d 个谜题 GUI 节点；用于验证当前版本结构", count)
     end})
-    tabs.generators:AddParagraph({Title="修理限制", Content="旧版 RE 仅作兼容尝试并验证 Progress；谜题可能具有不同阶段或 7×7 格。已支持只读端点分析和路径规划，但缺少真实输入协议，不会伪造自动完成。"})
+    tabs.generators:AddButton({Title="复制齿轮／开锁动态结构（两次采样）", Callback=function()
+        local planner = options.PuzzlePlanner
+        local pg = player:FindFirstChildOfClass("PlayerGui")
+        local puzzle = pg and pg:FindFirstChild("PuzzleUI")
+        if not (planner and planner.InspectDynamic and puzzle) then
+            state.lastAction = "请先手动打开齿轮/开锁谜题；当前无有效 PuzzleUI"
+            return
+        end
+        task.spawn(function()
+            local ok1, first = pcall(planner.InspectDynamic, puzzle, 260)
+            task.wait(0.22)
+            if not state.alive then return end
+            local ok2, second = pcall(planner.InspectDynamic, puzzle, 260)
+            local output = "[PuzzleUI dynamic before]\n" .. tostring(ok1 and first or "failed")
+                .. "\n[PuzzleUI dynamic after 0.22s]\n" .. tostring(ok2 and second or "failed")
+            local env = (getgenv and getgenv()) or _G
+            local clipboard = env.setclipboard or env.toclipboard or setclipboard or toclipboard
+            if type(clipboard) == "function" then safe("dynamic copy", function() clipboard(output) end)
+            else print(output) end
+            state.lastAction = "已采集两次 GUI 属性；用于确认动态指针／齿轮输入规则"
+        end)
+    end})
+    tabs.generators:AddParagraph({Title="修理限制", Content="连线题根据当前 GUI 的真实端点规划路径，尝试执行器虚拟鼠标，并以界面连线变化作为确认。虚拟输入不被支持或不产生实际连线时立即暂停。圆锁/齿轮尚缺当前版本的实时控制信息及操作接口，不能保证自动完成。"})
     return {Destroy = shutdown, State = state, EnumerateGenerators = enumerateGenerators}
 end
 
@@ -42842,7 +42881,14 @@ return function()
         if not puzzle then return nil, "PuzzleUI missing" end
         local container = sub(puzzle, "Container") or puzzle
         local grid = path(container, {"GridHolder", "Grid"})
-        if not grid then return nil, "GridHolder.Grid missing (gear / transition phase?)" end
+        if not grid then
+            local hasGears = sub(container, "Inventory") or sub(container, "CenterLeft") or sub(container, "CenterRight")
+            if hasGears then
+                return {phase="gear", cells={}, count=0, maxIndex=0, pairs={}, ambiguous=0,
+                    path=puzzle:GetFullName(), container=container}, nil
+            end
+            return nil, "GridHolder.Grid missing (lock / transition / unknown phase)"
+        end
         local source = sub(grid, "Blobs") or grid
         local cells = {}
         local detected = {}
@@ -42868,11 +42914,11 @@ return function()
                 if number and number:IsA("TextLabel") then
                     markerText = tostring(number.Text or ""):match("^%s*(.-)%s*$") or ""
                 end
-                local color = circle and rgb(circle.BackgroundColor3) or "-"
+                local color = circle and rgb(circle.BackgroundColor3) or rgb(item.BackgroundColor3)
                 local button = sub(item, "Button")
                 local record = {
                     index = i,
-                    mark = circle ~= nil,
+                    mark = circle ~= nil or source ~= grid,
                     number = markerText,
                     color = color,
                     button = button ~= nil and button:IsA("GuiButton"),
@@ -42880,10 +42926,11 @@ return function()
                     visible = item.Visible,
                 }
                 cells[#cells + 1] = record
-                if circle then
-                    -- The text may be a unique cell index, not a pair identifier;
+                if circle or source ~= grid then
+                    -- Blob labels may be perimeter indices; pair blobs by colour.
                     -- only exactly two identical markers form a candidate pair.
-                    local key = markerText ~= "" and "text:" .. markerText or "color:" .. color
+                    local key = (source ~= grid and "color:" .. color)
+                            or (markerText ~= "" and "text:" .. markerText or "color:" .. color)
                     if key ~= "color:-" and key ~= "color:?" then
                         groups[key] = groups[key] or {}
                         groups[key][#groups[key] + 1] = i
@@ -42905,6 +42952,7 @@ return function()
         return {
             phase = source == grid and "grid" or "blobs", size = square and side or nil,
             cells = cells, count = distinct, maxIndex = count, pairs = pairedEndpoints, ambiguous = ambiguous,
+            nodes = detected, grid = grid, container = container,
             path = puzzle:GetFullName(),
         }
     end
@@ -42969,6 +43017,43 @@ return function()
         if solvePair(1) then return paths, "solved", visits end
         return nil, timedOut and "budget exceeded" or "no compatible routes", visits
     end
+    -- Sample animated lock needles / gear inventory without reading unrelated game GUI.
+    -- Capture twice from a user request; never synthesize input here.
+    function planner.InspectDynamic(puzzle, maxItems)
+        if not puzzle then return "PuzzleUI missing" end
+        local output = {}
+        local count = 0
+        local limit = math.clamp(tonumber(maxItems) or 240, 40, 320)
+        for _, item in ipairs(puzzle:GetDescendants()) do
+            if item:IsA("GuiObject") then
+                count += 1
+                if count > limit then break end
+                local ok, line = pcall(function()
+                    local text = ""
+                    if item:IsA("TextLabel") or item:IsA("TextButton") then text = tostring(item.Text):sub(1,60) end
+                    local img = ""
+                    if item:IsA("ImageLabel") or item:IsA("ImageButton") then
+                        img = tostring(item.Image) .. "@" .. rgb(item.ImageColor3)
+                    end
+                    local attrs = {}
+                    local found = 0
+                    for key, val in pairs(item:GetAttributes()) do
+                        found += 1
+                        if found > 6 then break end
+                        attrs[#attrs+1] = tostring(key) .. "=" .. tostring(val):sub(1,28)
+                    end
+                    local p, sz = item.AbsolutePosition, item.AbsoluteSize
+                    return string.format("%s [%s] xy=(%.1f,%.1f) size=(%.1f,%.1f) rot=%.1f visible=%s active=%s bg=%s img=%s text=%s attrs=%s",
+                        item.Name, item.ClassName, p.X,p.Y,sz.X,sz.Y,
+                        item.Rotation, tostring(item.Visible), tostring(item.Active),
+                        rgb(item.BackgroundColor3), img, text, table.concat(attrs,";"))
+                end)
+                if ok then output[#output+1] = line end
+            end
+        end
+        output[#output+1] = "sampled=" .. tostring(#output) .. " cap=" .. tostring(limit)
+        return table.concat(output,"\n")
+    end
     function planner.Summary(data)
         if not data then return "没有可以读取的谜题结构" end
         local lines = {
@@ -42996,6 +43081,254 @@ return function()
         return table.concat(lines, "\n")
     end
     return planner
+end
+
+end)()
+local ForsakenPuzzleAutoFactory = (function()
+-- R2.18: bounded, observable Forsaken puzzle path execution.
+-- No guessed game remotes. Executes only paired endpoints verified from the current live GUI.
+-- Requires an executor capable of virtual mouse input; mobile compatibility varies.
+return function(planner, player)
+    local worker = {Active = false, Status = "idle", Detail = "", Paths = 0, Failed = 0, LastPhase = "none"}
+    local token, held = 0, false
+    local lastX, lastY = 0, 0
+    local releaseInput
+    local inputSource, VIM
+    local function inputBackend()
+        if inputSource then return inputSource end
+        local env = (getgenv and getgenv()) or _G
+        local move = env.mousemoveabs or mousemoveabs
+        local down = env.mouse1press or mouse1press
+        local up = env.mouse1release or mouse1release
+        if type(move) == "function" and type(down) == "function" and type(up) == "function" then
+            inputSource = {
+                name = "executor-mouse",
+                move = function(x, y) move(math.floor(x+.5), math.floor(y+.5)) end,
+                down = function(x, y) move(math.floor(x+.5), math.floor(y+.5)); down() end,
+                up = function() up() end,
+            }
+            return inputSource
+        end
+        local ok, service = pcall(function() return game:GetService("VirtualInputManager") end)
+        local hasTouch = false
+        local uok, userInput = pcall(function() return game:GetService("UserInputService") end)
+        if uok and userInput then hasTouch = userInput.TouchEnabled == true end
+        -- Prefer a single dedicated touch ID on Android, never a screen-wide overlay.
+        -- This API is RobloxScriptSecurity; normal game scripts cannot call it.
+        -- An executor must provide access or we fail visibly rather than claiming success.
+        if ok and service and hasTouch then
+            local have, method = pcall(function() return service.SendTouchEvent end)
+            if have and type(method) == "function" then
+                local pointerId = 43182
+                local begin = Enum.UserInputState.Begin.Value
+                local changed = Enum.UserInputState.Change.Value
+                local ended = Enum.UserInputState.End.Value
+                inputSource = {
+                    name = "virtual-touch",
+                    move = function(x, y) service:SendTouchEvent(pointerId, changed, x, y) end,
+                    down = function(x, y) service:SendTouchEvent(pointerId, begin, x, y) end,
+                    up = function(x, y) service:SendTouchEvent(pointerId, ended, x, y) end,
+                }
+                return inputSource
+            end
+        end
+        local haveMouse, hasMouse = false, false
+        if ok and service then
+            haveMouse, hasMouse = pcall(function()
+                return type(service.SendMouseButtonEvent) == "function"
+                    and type(service.SendMouseMoveEvent) == "function"
+            end)
+        end
+        if haveMouse and hasMouse then
+            VIM = service
+            inputSource = {
+                name = "virtual-mouse",
+                move = function(x, y) service:SendMouseMoveEvent(x, y, game) end,
+                down = function(x, y) service:SendMouseButtonEvent(x, y, 0, true, game, 0) end,
+                up = function(x, y) service:SendMouseButtonEvent(x, y, 0, false, game, 0) end,
+            }
+            return inputSource
+        end
+        return nil
+    end
+    local function center(node)
+        if not node or not node.Parent then return nil end
+        local p, s = node.AbsolutePosition, node.AbsoluteSize
+        if not p or not s or s.X < 1 or s.Y < 1 then return nil end
+        return math.floor(p.X + s.X * .5), math.floor(p.Y + s.Y * .5)
+    end
+    local function connected(grid)
+        local found, inspected = 0, 0
+        for _, element in ipairs(grid:GetDescendants()) do
+            inspected += 1
+            if inspected > 650 then break end
+            local name = element.Name:lower()
+            if name:find("line", 1, true) and element:IsA("GuiObject") and element.Visible then
+                found += 1
+            end
+        end
+        return found
+    end
+    local function fingerprint(data)
+        local pieces = {data.phase, tostring(data.count)}
+        for _, pair in ipairs(data.pairs) do
+            pieces[#pieces+1] = tostring(pair.id) .. ":" .. pair.a .. ":" .. pair.b
+        end
+        return table.concat(pieces, "/")
+    end
+    local lastFingerprint
+    local function live(puzzle, grid)
+        if not puzzle.Parent or not grid.Parent
+            or (puzzle:IsA("ScreenGui") and not puzzle.Enabled) then return false end
+        if type(puzzle.IsA) == "function" and puzzle:IsA("GuiObject") and puzzle.Visible == false then return false end
+        if type(grid.IsA) == "function" and grid:IsA("GuiObject") and grid.Visible == false then return false end
+        local ok, menuOpen = pcall(function()
+            return game:GetService("GuiService").MenuIsOpen
+        end)
+        return not (ok and menuOpen == true)
+    end
+    local function drag(path, data, interface, myToken, enabled)
+        local first, last
+        local function put(node, kind)
+            local x, y = center(node)
+            if not x then error("grid cell has no screen position") end
+            lastX, lastY = x, y
+            if kind == "down" then
+                interface.move(x, y)
+                task.wait(0.035)
+                interface.down(x, y)
+                held = true
+            elseif kind == "move" then
+                interface.move(x, y)
+            else
+                interface.up(x, y)
+                held = false
+            end
+            return x, y
+        end
+        for i, index in ipairs(path) do
+            local node = data.nodes[index]
+            if not node then error("missing cell " .. tostring(index)) end
+            if myToken ~= token or not enabled() or not live(data.container, data.grid) then
+                error("cancelled or puzzle changed")
+            end
+            if i == 1 then
+                put(node, "down")
+            else
+                put(node, "move")
+            end
+            last = node
+            task.wait(0.055)
+        end
+        put(last, "up")
+        task.wait(0.16)
+    end
+    local function run(puzzle, enabled, update, myToken)
+        local current, message = planner.Read(puzzle)
+        if not current then
+            worker.Status, worker.Detail = "unsupported", tostring(message)
+            update(worker.Status, worker.Detail)
+            return
+        end
+        worker.LastPhase = current.phase
+        if current.phase ~= "grid" and current.phase ~= "blobs" then
+            worker.Status, worker.Detail = "unsupported", "题型 " .. current.phase .. " 尚缺输入/求解规则"
+            update(worker.Status, worker.Detail)
+            return
+        end
+        if current.ambiguous > 0 or #current.pairs == 0 or (current.phase == "grid" and not current.size) then
+            worker.Status, worker.Detail = "incomplete", "端点配对不完整或存在歧义"
+            update(worker.Status, worker.Detail)
+            return
+        end
+        local fp = fingerprint(current)
+        if lastFingerprint == fp then
+            worker.Status, worker.Detail = "waiting", "等待下一张不同的谜题界面"
+            update(worker.Status, worker.Detail)
+            return
+        end
+        local interface = inputBackend()
+        if not interface then
+            worker.Status, worker.Detail = "input-unavailable", "执行器未提供受支持的虚拟鼠标接口"
+            update(worker.Status, worker.Detail)
+            return
+        end
+        local paths
+        if current.phase == "grid" then
+            local why
+            paths, why = planner.Solve(current.size, current.pairs, 14000)
+            if not paths then
+                worker.Status, worker.Detail = "unsolved", tostring(why)
+                update(worker.Status, worker.Detail)
+                return
+            end
+        else
+            paths = {}
+            -- This phase has perimeter points and straight, possibly intersecting lines.
+            for _, pair in ipairs(current.pairs) do paths[pair.id] = {pair.a, pair.b} end
+        end
+        local initial = connected(current.grid)
+        worker.Status, worker.Detail = "executing", "使用 " .. interface.name .. " 连接端点"
+        update(worker.Status, worker.Detail)
+        local changed = false
+        for _, pair in ipairs(current.pairs) do
+            if myToken ~= token or not enabled() then break end
+            if not live(puzzle, current.grid) then changed = true; break end
+            local route = paths[pair.id]
+            if route then
+                drag(route, current, interface, myToken, enabled)
+                worker.Paths += 1
+                local observed = connected(current.grid)
+                local confirmed = observed > initial or not live(puzzle, current.grid)
+                if confirmed then changed = true end
+                initial = observed
+                if not confirmed then
+                    worker.Failed += 1
+                    lastFingerprint = fp -- do not replay an unconfirmed board without reset
+                    worker.Status, worker.Detail = "unconfirmed", "模拟输入后未观察到连线产生；已停止避免抢占触控"
+                    update(worker.Status, worker.Detail)
+                    return
+                end
+            end
+        end
+        lastFingerprint = fp -- Do not replay a possibly solved board.
+        worker.Status, worker.Detail = "await-next-board", "已执行路径；等待游戏刷新下一谜题或进度"
+        update(worker.Status, worker.Detail)
+    end
+    function worker:Try(puzzle, enabled, update)
+        if self.Active then return false end
+        if not puzzle or not puzzle.Parent then return false end
+        token += 1
+        local current = token
+        self.Active = true
+        task.spawn(function()
+            local ok, err = xpcall(function() run(puzzle, enabled, update, current) end, debug.traceback)
+            if held then
+                local source = inputSource
+                if source then pcall(function() source.up(lastX, lastY) end) end
+                held = false
+            end
+            if not ok and current == token then
+                self.Failed += 1
+                self.Status, self.Detail = "error", tostring(err):sub(1,240)
+                update(self.Status, self.Detail)
+            end
+            self.Active = false
+        end)
+        return true
+    end
+    function worker:Stop()
+        token += 1
+        -- Keep Active until the current coroutine exits to prevent overlapping input jobs.
+        if held and inputSource then pcall(function() inputSource.up(lastX, lastY) end) end
+        held = false
+        self.Status, self.Detail = "stopped", ""
+    end
+    function worker:Reset()
+        lastFingerprint = nil
+        self:Stop()
+    end
+    return worker
 end
 
 end)()
@@ -43029,7 +43362,11 @@ local tabs = {
 }
 window:InstallSettings(tabs.system)
 
-local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Tabs=tabs, PuzzlePlanner=type(ForsakenPuzzlePlannerFactory) == "function" and ForsakenPuzzlePlannerFactory() or nil})
+local puzzlePlanner = type(ForsakenPuzzlePlannerFactory) == "function" and ForsakenPuzzlePlannerFactory() or nil
+local puzzleAuto = puzzlePlanner and type(ForsakenPuzzleAutoFactory) == "function"
+    and ForsakenPuzzleAutoFactory(puzzlePlanner, user) or nil
+local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Tabs=tabs,
+    PuzzlePlanner=puzzlePlanner, PuzzleAuto=puzzleAuto})
 
 local state = {alive = true, killers = false, survivors = false,
     generators = false, alert = false, fovEnabled = false, fov = 80,

@@ -1,5 +1,5 @@
 {
-  "build_tag": "loader-v2-modular-r2.17-blox-esp-camera-weapon-aotr-refill",
+  "build_tag": "loader-v2-modular-r2.18-forsaken-multi-puzzle-input",
   "core": {
     "bytes": 1476436,
     "path": "dist/Vortexion_Core.lua",
@@ -23,9 +23,9 @@
       "sha256": "177d36f8851af8fee251a36311851161f4d5095f3975b0d801a2e5bb1c60ac8d"
     },
     "Forsaken": {
-      "bytes": 76317,
+      "bytes": 93017,
       "path": "dist/Vortexion_Module_Forsaken.lua",
-      "sha256": "87fad3a0a2641e2a7c868ee43c67b9b2fb0fe7b33d7546a3c4cb2dfde66e63d1"
+      "sha256": "36b888b983e3397439fe6a20320055732d422bb5b60934192a09f3498607d204"
     },
     "SCP": {
       "bytes": 127959,

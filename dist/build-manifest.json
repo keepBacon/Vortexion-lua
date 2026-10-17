@@ -14,16 +14,16 @@
       "sha256": "321be5037e1c69325d0316ed760381e006df416860d00ab4d19675b16ce7d26f"
     },
     "Vortexion_Forsaken.lua": {
-      "bytes": 1552105,
-      "sha256": "264644e5b925f9257d2937ca35fe4f36d1c0160b1b5fcf33db0229e80cf4b09a"
+      "bytes": 1568805,
+      "sha256": "9eced8852606383e6201022198d20440cc4a6bd85fdf1790fa294c429760448e"
     },
     "Vortexion_SCP.lua": {
       "bytes": 1603747,
       "sha256": "42481677da194e53c030a4d2e517df50355af6be86aff3ac08eacb418e550313"
     },
     "Vortexion_Wind.lua": {
-      "bytes": 1980663,
-      "sha256": "828e253dfe0fe3b41485b21d1146d42885cc19614f21683c3ae4ebf360ab047f"
+      "bytes": 1997363,
+      "sha256": "ad3d993023baa6fa5e2faab34b1c50bda1632af9e7cdafc6be8fee8c4629982f"
     }
   },
   "luau_compiler_tested": false,
@@ -49,9 +49,9 @@
       "sha256": "177d36f8851af8fee251a36311851161f4d5095f3975b0d801a2e5bb1c60ac8d"
     },
     "Vortexion_Module_Forsaken.lua": {
-      "bytes": 76317,
+      "bytes": 93017,
       "path": "dist/Vortexion_Module_Forsaken.lua",
-      "sha256": "87fad3a0a2641e2a7c868ee43c67b9b2fb0fe7b33d7546a3c4cb2dfde66e63d1"
+      "sha256": "36b888b983e3397439fe6a20320055732d422bb5b60934192a09f3498607d204"
     },
     "Vortexion_Module_SCP.lua": {
       "bytes": 127959,
@@ -90,9 +90,10 @@
     "src/BloxStrikeCore.luau": "e10b14e9f78101ee31d2ee6b1aa5c6687af8b585a6bca7f68b26d4f4d72cb8c8",
     "src/BloxStrikeCosmetic.luau": "1e7cb2fd71a0983b1a14276fc2b5ba80df7b88ba190f7cf69ee610c2f82a81d5",
     "src/BloxStrikeVisual.luau": "2627fc982169c9766f8694271f5d0d43e7a3ffa63813f4938e49dc79415ef911",
-    "src/ForsakenCore.luau": "37e6528fc2081b51510bbeeedd0e435ae434a15f1069096dbf1d31b0637add78",
-    "src/ForsakenEnhancements.luau": "f98649338c60a7333687d8a054e4f9ee4367e30d6105eb2c3b84ac05e1c0f05c",
-    "src/ForsakenPuzzlePlanner.luau": "f92e6323ada04bf408245d1e6f891db63f3635a2c21730dc66fbbed0b28ad2a2",
+    "src/ForsakenCore.luau": "02508b048e88c173e41fe0a0e5632946f7b64a932e7304cb142ea670e66aaf70",
+    "src/ForsakenEnhancements.luau": "7937a504b3c02f1a9249654b716e1a1b89f4677a565b4d0d09de77a5224b663f",
+    "src/ForsakenPuzzleAuto.luau": "1736438f10357f0122f974fb411fc0c1a978f704a019c86a973b305d7c1a5ba7",
+    "src/ForsakenPuzzlePlanner.luau": "671dd3e5d0ee91a4a5e5dbcaf44bad538a5783daa8ff44e08c699cbaeaccd3b4",
     "src/GameRouter.luau": "12cd8b7e44ca5396b0ddbea315b96f4e70b18a61dc265ab4514b74e036a50651",
     "src/RuntimeMonitor.luau": "669ef2d0b0063fec329b1cf64df24041c11eaae995ee5b9402f66c997c4683c1",
     "src/SCPCamera.luau": "dcb1afda4dc974a315a4a278e5e894c756b5e72aa9d5a71052e3780417a90274",

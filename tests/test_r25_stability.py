@@ -185,7 +185,7 @@ assert(a==1 and b==1, 'killer marker not destroyed')
             data = file.read_bytes()
             self.assertEqual(entry['bytes'], len(data))
             self.assertEqual(entry['sha256'], hashlib.sha256(data).hexdigest())
-        self.assertLess(manifest['modules']['Forsaken']['bytes'], 90000) # New ESP details require bounded extra code
+        self.assertLess(manifest['modules']['Forsaken']['bytes'], 120000) # R2.18 adds bounded puzzle input and diagnostics; monitor byte budget
         self.assertLess(manifest['modules']['AOTR_Battle']['bytes'], 110000)
 
 if __name__ == '__main__': unittest.main()
