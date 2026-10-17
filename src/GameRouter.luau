@@ -62,7 +62,13 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
     local bridge = client.VortexionWindBridge
     local summary = not ok and tostring(result):sub(1, 500) or nil
     local failure = client.VortexionBootError
-    if failure and not summary then summary = tostring(failure):sub(1, 800) end
+    -- Prefer the actual constructor error over the caller's abbreviated Lua location.
+    -- Entry points often rethrow at CreateWindow({...}), losing the vendor frame.
+    if type(failure) == "string" and failure:find("WindUI/CreateWindow", 1, true) then
+        summary = failure:sub(1, 1400)
+    elseif failure and not summary then
+        summary = tostring(failure):sub(1, 800)
+    end
     local window
     if type(bridge) == "table" and bridge.Active ~= false then
         if type(bridge.Window) == "function" then
@@ -97,9 +103,12 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
     -- Retrying ShowUnsupported against this *same* WindUI object only hides the
     -- first error with "Window is not a valid member of ScreenGui". The loader's
     -- already-visible diagnostic UI is the safe fallback for this case.
-    if summary and string.find(summary, "WindUI/CreateWindow", 1, true) then
-        client.VortexionBootError = summary
-        warn("[Vortexion/Wind] Skipping unsafe UI fallback after constructor failure: " .. summary)
+    -- Constructor failure can destroy the vendor ScreenGui even when the entry's
+    -- error string is just the outer calling line. Never reuse this WindUI instance.
+    if (summary and string.find(summary, "WindUI/CreateWindow", 1, true))
+        or (type(failure) == "string" and failure:find("WindUI/CreateWindow", 1, true)) then
+        client.VortexionBootError = type(failure) == "string" and failure or summary
+        warn("[Vortexion/Wind] Skipping unsafe UI fallback after constructor failure: " .. tostring(client.VortexionBootError))
         return nil
     end
     local fallbackOk, fallback = pcall(Router.ShowUnsupported, WindUI, WindBridgeFactory, universe, place, reason, summary)

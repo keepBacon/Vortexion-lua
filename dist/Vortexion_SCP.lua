@@ -41488,7 +41488,34 @@ return function(WindUI, config)
         local cancelled, acquired = false, false
         local creationPhase = "vendor-constructor"
         local initialized, result = pcall(function()
-            native = WindUI:CreateWindow({Title = info.Title or appName, Author = "- Vortexion", Folder = #missingFileApi == 0 and ((config.Folder or appName) .. "/" .. tostring(game.PlaceId)) or nil, Theme = config.Theme or "Dark", Size = info.Size or UDim2.fromOffset(650, 490), ToggleKey = Enum.KeyCode.K, Background = "", Acrylic = not input.TouchEnabled, Transparent = false, AutoScale = false, SideBarWidth = input.TouchEnabled and 160 or 200})
+            -- xpcall must surround the vendor call itself. A later outer pcall only
+            -- reports the calling game module's CreateWindow line, not the actual
+            -- vendor function and property assignment which failed.
+            local function vendorTrace(err)
+                local message = tostring(err)
+                if type(debug) == "table" and type(debug.traceback) == "function" then
+                    local okTrace, frames = pcall(debug.traceback, message, 2)
+                    if okTrace and type(frames) == "string" then return frames end
+                end
+                -- Roblox Luau commonly exposes debug.info rather than debug.traceback.
+                -- Inspect the stack while xpcall's error handler is still running;
+                -- once the game entry catches it, the internal vendor frames are gone.
+                if type(debug) == "table" and type(debug.info) == "function" then
+                    local frames = {}
+                    for level = 2, 12 do
+                        local okFrame, source, line, name = pcall(debug.info, level, "sln")
+                        if not okFrame or source == nil then break end
+                        frames[#frames + 1] = tostring(source) .. ":" .. tostring(line) .. " " .. tostring(name or "")
+                    end
+                    if #frames > 0 then return message .. "\nVendor frames:\n" .. table.concat(frames, "\n") end
+                end
+                return message
+            end
+            local vendorOK, vendorValue = xpcall(function()
+                return WindUI:CreateWindow({Title = info.Title or appName, Author = "- Vortexion", Folder = #missingFileApi == 0 and ((config.Folder or appName) .. "/" .. tostring(game.PlaceId)) or nil, Theme = config.Theme or "Dark", Size = info.Size or UDim2.fromOffset(650, 490), ToggleKey = Enum.KeyCode.K, Background = "", Acrylic = not input.TouchEnabled, Transparent = false, AutoScale = false, SideBarWidth = input.TouchEnabled and 160 or 200})
+            end, vendorTrace)
+            if not vendorOK then error("WindUI vendor constructor: " .. tostring(vendorValue), 0) end
+            native = vendorValue
             assert(native, "WindUI CreateWindow returned no window")
             if not self.Active then cancelled = true; return nil end
             acquired = true
@@ -41680,7 +41707,13 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
     local bridge = client.VortexionWindBridge
     local summary = not ok and tostring(result):sub(1, 500) or nil
     local failure = client.VortexionBootError
-    if failure and not summary then summary = tostring(failure):sub(1, 800) end
+    -- Prefer the actual constructor error over the caller's abbreviated Lua location.
+    -- Entry points often rethrow at CreateWindow({...}), losing the vendor frame.
+    if type(failure) == "string" and failure:find("WindUI/CreateWindow", 1, true) then
+        summary = failure:sub(1, 1400)
+    elseif failure and not summary then
+        summary = tostring(failure):sub(1, 800)
+    end
     local window
     if type(bridge) == "table" and bridge.Active ~= false then
         if type(bridge.Window) == "function" then
@@ -41715,9 +41748,12 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
     -- Retrying ShowUnsupported against this *same* WindUI object only hides the
     -- first error with "Window is not a valid member of ScreenGui". The loader's
     -- already-visible diagnostic UI is the safe fallback for this case.
-    if summary and string.find(summary, "WindUI/CreateWindow", 1, true) then
-        client.VortexionBootError = summary
-        warn("[Vortexion/Wind] Skipping unsafe UI fallback after constructor failure: " .. summary)
+    -- Constructor failure can destroy the vendor ScreenGui even when the entry's
+    -- error string is just the outer calling line. Never reuse this WindUI instance.
+    if (summary and string.find(summary, "WindUI/CreateWindow", 1, true))
+        or (type(failure) == "string" and failure:find("WindUI/CreateWindow", 1, true)) then
+        client.VortexionBootError = type(failure) == "string" and failure or summary
+        warn("[Vortexion/Wind] Skipping unsafe UI fallback after constructor failure: " .. tostring(client.VortexionBootError))
         return nil
     end
     local fallbackOk, fallback = pcall(Router.ShowUnsupported, WindUI, WindBridgeFactory, universe, place, reason, summary)

@@ -1,9 +1,9 @@
 {
-  "build_tag": "loader-v2-modular-r2.2-textcompat",
+  "build_tag": "loader-v2-modular-r2.3-vendor-trace",
   "core": {
-    "bytes": 1456052,
+    "bytes": 1458421,
     "path": "dist/Vortexion_Core.lua",
-    "sha256": "7d46a6b84afaaa3c22c9af64a6084ab400c749e2e8e8e10a937bb81c12f44612"
+    "sha256": "ec7258caa836b17125dcacd067763da3d81e6438c765cfe2e45d737509519530"
   },
   "fallback": "standalone-bundle-manual-only",
   "modules": {
