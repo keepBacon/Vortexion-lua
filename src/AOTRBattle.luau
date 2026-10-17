@@ -78,7 +78,26 @@ end
 local budgets={Titans=0.4,Combat=1.5,ESP=1.0,Farm=0.2}
 local costs={Titans=0,Combat=0,ESP=0,Farm=0}
 local slowLoops=0
-local throttled = {Titans=0, ESP=0, Farm=0}
+local throttled = {Titans=0, ESP=0}
+-- Resource automation cannot depend on a rendered frame being produced.
+-- The worker stays alive if the game disables 3D rendering or the UI is closed.
+local farmTime=0
+if Farm then
+    app:Track(app.Services.RunService.Heartbeat:Connect(function(dt)
+        if not app:Alive() then return end
+        farmTime+=math.min(dt,0.25)
+        if farmTime<0.25 or farmBusy then return end
+        local slice=farmTime
+        farmTime=0
+        farmBusy=true
+        task.spawn(function()
+            local t0=tick()
+            if app:Alive() then app.Guard("FarmWorker",function() Farm:Update(slice) end) end
+            costs.Farm=tick()-t0
+            farmBusy=false
+        end)
+    end))
+end
 local farmBusy = false
 app:OnStop(function()
     app.Services.RunService:UnbindFromRenderStep("VortexionAOTRFrame")
@@ -93,7 +112,6 @@ app.Services.RunService:BindToRenderStep("VortexionAOTRFrame",Enum.RenderPriorit
         if not (combatOn or espOn or movementOn or (Farm and (Farm.Config.AutoReload or Farm.Config.AutoRefill))) then return end
         throttled.Titans = throttled.Titans + math.min(dt, 0.2)
         throttled.ESP = throttled.ESP + math.min(dt, 0.2)
-        throttled.Farm = throttled.Farm + math.min(dt, 0.2)
         if Titans and throttled.Titans >= 0.10 then
             throttled.Titans = 0
             local t0=tick()
@@ -110,20 +128,6 @@ app.Services.RunService:BindToRenderStep("VortexionAOTRFrame",Enum.RenderPriorit
             local t0=tick()
             app.Guard("ESP",function() ESP:Update(dt) end)
             costs.ESP=tick()-t0
-        end
-        if Farm and throttled.Farm >= 0.25 then
-            throttled.Farm = 0
-            if not farmBusy then
-                farmBusy = true
-                task.spawn(function()
-                    local t0=tick()
-                    if app:Alive() then
-                        app.Guard("Farm",function() Farm:Update(0.25) end)
-                    end
-                    costs.Farm=tick()-t0
-                    farmBusy = false
-                end)
-            end
         end
         for name,cost in pairs(costs) do
             if cost*1000>budgets[name] then slowLoops+=1 end
@@ -291,20 +295,35 @@ if Farm then
         Callback=function(v) c.AutoReload=v end})
     tab:AddToggle("AOTRAutoRefill",{Title="自动补给（气罐/弹药）",Default=false,
         Callback=function(v) c.AutoRefill=v end})
+    tab:AddSlider("AOTRGasRefillThreshold",{Title="气体补给阈值 (%)",Min=10,Max=75,Default=35,Rounding=0,
+        Callback=function(v) c.GasThreshold=v end})
     tab:AddButton({Title="查看自动补给状态",Callback=function()
         local r=Farm:DebugSnapshot()
-        local info=("请求 %d / 未确认 %d / 距离 %s / 状态 %s")
-            :format(r.attempts or 0,r.unconfirmed or 0,
-                r.distance and ("%.0f"):format(r.distance) or "-",r.status or "unknown")
+        local info=("换刃 %d/%d | 补给确认 %d/%d | %s | %s | 站距 %s | %s")
+            :format(r.reloadVerified or 0,r.reloadAttempts or 0,
+                r.refillVerified or 0,r.attempts or 0,
+                tostring(r.weapon or "?"),tostring(r.reloadStatus or "?"),
+                r.distance and ("%.0f"):format(r.distance) or "-",
+                tostring(r.status or "unknown"))
         print("[Vortexion/AOTR/Refill] " .. info)
         app:Notify(info)
+    end})
+    tab:AddButton({Title="立即尝试补给一次（诊断）",Callback=function()
+        local ok=Farm:ManualRefill()
+        local r=Farm:DebugSnapshot()
+        app:Notify((ok and "已发起；等待 HUD 确认 | " or "未发起 | ")..tostring(r.status))
+    end})
+    tab:AddButton({Title="重新扫描补给站",Callback=function()
+        local ok=Farm:RefreshStation()
+        local r=Farm:DebugSnapshot()
+        app:Notify((ok and "发现补给站：" or "尚未发现补给站：")..tostring(r.station))
     end})
     tab:AddToggle("AOTRFPSSettings",{Title="服务端画质设置（关特效）",Default=true,
         Callback=function(v)
             c.FPSSettings=v
         end})
     tab:AddParagraph({Title="农场说明",
-        Content="换刃/补给读取 HUD 计数后调用游戏远程；画质设置走服务端 Settings 远程，不留本地渲染改动。"})
+        Content="自动换刃需要有备用刀刃且手持刀刃已消失；自动补给用于备用刀刃/雷枪耗尽或气体不足。系统可从远距离向补给站发起请求，但是否允许由服务器决定。诊断按 HUD 实际增长计数，未确认不代表成功。"})
 end
 
 --=========================================================================

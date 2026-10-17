@@ -181,16 +181,16 @@ local Library do
 
     local Themes = {
         ["Preset"] = {
-            ["AccentGradient"] = FromRGB(0, 195, 255),   -- Slightly deeper blue accent
-            ["Background 2"] = FromRGB(10, 10, 12),      -- Very dark gray
-            ["Background"] = FromRGB(12, 12, 14),        -- Main near-black background
-            ["Text"] = FromRGB(235, 235, 235),           -- Slightly dimmed light text
-            ["Outline"] = FromRGB(25, 25, 28),           -- Subtle outline, almost invisible
-            ["Section Top"] = FromRGB(28, 27, 31),       -- Dark section header
-            ["Section Background"] = FromRGB(10, 10, 12),-- Deep black section background
-            ["Section Background 2"] = FromRGB(14, 14, 16),-- Alternate section, minimal difference
-            ["Accent"] = FromRGB(0, 116, 224),           -- Darker blue accent for consistency
-            ["Element"] = FromRGB(16, 16, 18)            -- Deep gray for UI elements
+            ["AccentGradient"] = FromRGB(106, 210, 218),   -- Slightly deeper blue accent
+            ["Background 2"] = FromRGB(10, 14, 16),      -- Very dark gray
+            ["Background"] = FromRGB(15, 21, 24),        -- Main near-black background
+            ["Text"] = FromRGB(228, 236, 239),           -- Slightly dimmed light text
+            ["Outline"] = FromRGB(33, 42, 46),           -- Subtle outline, almost invisible
+            ["Section Top"] = FromRGB(25, 34, 37),       -- Dark section header
+            ["Section Background"] = FromRGB(12, 17, 19),-- Deep black section background
+            ["Section Background 2"] = FromRGB(17, 23, 25),-- Alternate section, minimal difference
+            ["Accent"] = FromRGB(66, 173, 190),           -- Darker blue accent for consistency
+            ["Element"] = FromRGB(21, 28, 31)            -- Deep gray for UI elements
         }
     }
 
@@ -2287,7 +2287,7 @@ local Library do
                     Name = "\0",
                     BorderColor3 = FromRGB(0, 0, 0),
                     AnchorPoint = Vector2New(0.5, 0.5),
-                    BackgroundTransparency = 0.12,
+                    BackgroundTransparency = 0.02,
                     Position = UDim2New(0.5, 0, 0.5, 0),
                     Size = UDim2New(0, 677, 0, 644),
                     ZIndex = 2,
@@ -2313,7 +2313,7 @@ local Library do
                     Visible = true,
                     BorderColor3 = FromRGB(0, 0, 0),
                     AnchorPoint = Vector2New(1, 0),
-                    BackgroundTransparency = 0.15,
+                    BackgroundTransparency = 0.03,
                     Size = UDim2New(0, 225, 1, 0),
                     ZIndex = 2,
                     BorderSizePixel = 0,
@@ -2365,7 +2365,7 @@ local Library do
                         AnchorPoint = Vector2New(0.5, 0),
                         Visible = true,
                         BorderColor3 = FromRGB(0, 0, 0),
-                        Size = UDim2New(0, 50, 0, 50),
+                        Size = UDim2New(0, 48, 0, 48),
                         BorderSizePixel = 0,
                         BackgroundTransparency = 0.5,
                         ZIndex = 127,
@@ -2412,7 +2412,7 @@ local Library do
                         Parent = Items["FloatingButton"].Instance,
                         BorderColor3 = FromRGB(0, 0, 0),
                         Name = "\0",
-                        Image = "rbxassetid://" .. Window.Logo,
+                        Image = (Window.Logo:find("://", 1, true) and Window.Logo or "rbxassetid://" .. Window.Logo),
                         BackgroundTransparency = 1,
                         AnchorPoint = Vector2New(0.5, 0.5),
                         Position = UDim2New(0.5, 0, 0.5, 0),
@@ -2430,7 +2430,7 @@ local Library do
                     Instances:Create("UIGradient", {
                         Parent = Items["FloatingLogo"].Instance,
                         Name = "\0",
-                        Enabled = true,
+                        Enabled = false,
                         Rotation = -115,
                         Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
                     }):AddToTheme({Color = function()
@@ -2474,7 +2474,7 @@ local Library do
                     ScaleType = Enum.ScaleType.Fit,
                     BorderColor3 = FromRGB(0, 0, 0),
                     Size = UDim2New(0, 35, 0, 35),
-                    Image = "rbxassetid://"..Window.Logo,
+                    Image = (Window.Logo:find("://", 1, true) and Window.Logo or "rbxassetid://" .. Window.Logo),
                     BackgroundTransparency = 1,
                     Position = UDim2New(0, 12, 0, 12),
                     ZIndex = 2,
@@ -2485,7 +2485,7 @@ local Library do
                 Instances:Create("UIGradient", {
                     Parent = Items["Logo"].Instance,
                     Name = "\0",
-                    Enabled = true,
+                    Enabled = false,
                     Rotation = -115,
                     Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
                 }):AddToTheme({Color = function()

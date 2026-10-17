@@ -167,11 +167,11 @@ class NeverloseMobileR221(unittest.TestCase):
         import zipfile
         upload=Path('/mnt/data/Vortexion_R220_合并R219完整源码.zip')
         if not upload.exists():self.skipTest('source archive not mounted')
-        # R222 intentionally changes three BloxStrike gameplay modules;
+        # R222 changes BloxStrike and R223 changes AOTR resource flow;
         # all other game modules must remain byte-identical to R220.
         with zipfile.ZipFile(upload) as z:
             for file in (ROOT/'src').glob('*.*lua*'):
-                if file.name in ('NeverloseAdapter.luau','WindAdapter.luau','StarlightAdapter.luau','BloxStrikeCore.luau','BloxStrikeCombat.luau','BloxStrikeCommon.luau','BloxStrikeVisual.luau'):continue
+                if file.name in ('NeverloseAdapter.luau','WindAdapter.luau','StarlightAdapter.luau','BloxStrikeCore.luau','BloxStrikeCombat.luau','BloxStrikeCommon.luau','BloxStrikeVisual.luau','AOTRCommon.luau','AOTRFarm.luau','AOTRBattle.luau'):continue
                 original='wind-project/src/'+file.name
                 self.assertEqual(file.read_bytes(),z.read(original),file.name)
 

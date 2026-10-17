@@ -1,3 +1,13 @@
+# R223 · AOTR 自动换刃 / 自动补给修复（Neverlose）
+
+此版在 R222 的基础上修复 AOTR 战斗分支：刀刃装备与储备补给分离、补给站识别扩展、GET/POST 受控回退、HUD 修正、Heartbeat 独立调度与真实资源变化确认。R222 的 BloxStrike ESP/RageBot 与 R221 Neverlose UI 原有构建链保留。
+
+**执行：** 推荐统一入口 `dist/Vortexion_Neverlose.lua`；仅运行 AOTR 战斗可使用 `dist/Vortexion_AOTR_Battle.lua`。通过 `loader.lua` 加载时需完整上传 `dist` 下生成包及清单。**没有 Android 实机/当前服务器远程协议的运行结果，不能保证当前游戏服端接受补给。**
+
+修复说明、公开参考与测试结果见 [R223 说明](docs/R223_AOTR_REFILL_RELOAD_FIX.md)。R221/R220 及更早内容为历史版本记录。
+
+---
+
 # R221 · Neverlose UI（移动端兼容版）
 
 **当前最新构建已改为 Neverlose UI。** 首选入口 `dist/Vortexion_Neverlose.lua`；旧 `dist/Vortexion_Wind.lua` 仍为同内容兼容别名。移动端单列、自动视口布局、触控优先、关闭重开、动态选项桥接与 Neverlose UI 调试已加入。原 Forsaken / BloxStrike / AOTR / SCP 游戏业务模块未修改。
@@ -135,3 +145,10 @@ WindUI 原始发行库与 MIT 许可证保留在 `vendor/WindUI/`，未修改附
 - ESP 加入遮挡与无遮挡透明度滑块（0–100%）、相机射线遮挡判断、切换滞回和暂时失联宽限。
 - 发电机不再发送无参数 `Remotes.RE:FireServer()`；仅尝试已有 ProximityPrompt 交互。连线谜题尚未自动求解，**完整自动修理仍不可用**。
 - 以上均为 Roblox 客户端 Luau 修改，离线 Mock 不能证明真机或服务器接受操作。
+
+### R224（Neverlose 参考视觉 / SCP 启动修复）
+
+- 使用用户提供的银色 Vortexion PNG，直接嵌入生成脚本；兼容 `writefile` + `getcustomasset` 的安卓执行器。PNG 无法加载时显示调试原因并使用旧图标回退。
+- 参考 Neverlose 宣传图调整暗色主题、分区标题、窗口宽高及内容密度。移动竖屏保持单列与安全区缩放。
+- SCP 启动阶段不再自动安装全局 `__namecall` Hook，NPC 扫描改为分批、可停止的 BFS；RenderStep 绑定失败时降级。
+- 详见 [`docs/R224_NEVERLOSE_SCP_SAFEBOOT.md`](docs/R224_NEVERLOSE_SCP_SAFEBOOT.md)。

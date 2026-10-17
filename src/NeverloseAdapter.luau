@@ -154,9 +154,9 @@ return function(Neverlose, config)
         -- reflow to a single column. The reference window is intentionally fixed
         -- in logical pixels, with a single UIScale instance owned by this bridge.
         local aspect=width/height
-        local menuWidth=mobile and (aspect < 0.86 and 460 or 655) or 677
-        local menuHeight=mobile and (aspect < 0.86 and 630 or 560) or 644
-        local sidebar=mobile and (aspect<0.86 and 112 or 158) or 225
+        local menuWidth=mobile and (aspect < 0.86 and 460 or 690) or 790
+        local menuHeight=mobile and (aspect < 0.86 and 630 or 570) or 590
+        local sidebar=mobile and (aspect<0.86 and 112 or 172) or 192
         local baseW=menuWidth
         local baseH=menuHeight
         local fit=math.min((width-16)/baseW,(height-20)/baseH,1.15)
@@ -225,15 +225,31 @@ return function(Neverlose, config)
         if category and window.Native.Category then window.Native:Category(category) end
         local sourcePage=window.Native:Page({Name=pageName, Icon=icon or "122669828593160", Columns=mobile and 1 or 2})
         local tab={Native=sourcePage,Title=pageName,OptionCount=0,Sections={}}
+        -- Reference-like semantic grouping. Headings describe the page domain;
+        -- they are not invented feature switches. Alternating columns on PC,
+        -- stacked sections on touch portrait.
+        local headings
+        if pageName:find("视觉") or pageName:find("ESP") or pageName:find("感知") then
+            headings={"Main", "Players ESP", "World ESP", "Other"}
+        elseif pageName:find("世界") then
+            headings={"Main", "Ambient", "World ESP", "Other"}
+        elseif pageName:find("战斗") or pageName:find("自瞄") then
+            headings={"Main", "Targeting", "Advanced", "Other"}
+        else
+            headings={"Main", "Settings", "Advanced", "Other"}
+        end
+        local sectionLimit=mobile and 10 or 8
         local function newSection()
             local index=#tab.Sections+1
             local side=mobile and 1 or (index%2==0 and 2 or 1)
-            local section=sourcePage:Section({Name=index==1 and "功能" or ("功能 · "..index),Side=side})
+            local heading=headings[math.min(index,#headings)]
+            if index>#headings then heading="Other · "..(index-#headings+1) end
+            local section=sourcePage:Section({Name=heading,Side=side})
             table.insert(tab.Sections,section)
             return section
         end
         local function sectionFor()
-            if tab.OptionCount%14==0 then return newSection() end
+            if (tab.OptionCount-1)%sectionLimit==0 then return newSection() end
             return tab.Sections[#tab.Sections] or newSection()
         end
         local function addOption(kind,id,c)
@@ -387,7 +403,8 @@ return function(Neverlose, config)
         local diagnostics=createTab("UI 调试","122669828593160")
         local configuration=createTab("配置","122669828593160")
         bridge.SettingsTabs={['主题']=appearance,['界面']=appearance,['调试']=diagnostics,['配置']=configuration}
-        appearance:AddParagraph({Title="Neverlose · Mobile",Content="移动端采用单列布局、自动屏幕适配、触控优先、关闭全窗口拖动。"})
+        appearance:AddParagraph({Title="Neverlose · Vortexion",Content="宣传图风格的深色双列功能面板；窄屏自动转为单列。R224 图标使用用户提供的 PNG。"})
+        appearance:AddParagraph({Title="图标资源状态",Content=tostring(bridge.BrandMode or "尚未检测")})
         appearance:AddToggle("nl_auto_fit",{Title="根据屏幕尺寸自动适配",Default=true,Callback=function(v)
             bridge.AutoFit=v; lastViewport=""; bridge:FitViewport()
         end})
@@ -398,7 +415,7 @@ return function(Neverlose, config)
             uiScale=v/100; lastViewport=""; bridge:FitViewport()
         end})
         appearance:AddDropdown("nl_accent",{Title="强调色",Values={"Neverlose 蓝","翡翠绿","灰白","琥珀"},Default="Neverlose 蓝",Callback=function(v)
-            local colors={['Neverlose 蓝']={Color3.fromRGB(0,116,224),Color3.fromRGB(0,195,255)},['翡翠绿']={Color3.fromRGB(18,164,120),Color3.fromRGB(70,201,164)},['灰白']={Color3.fromRGB(170,178,192),Color3.fromRGB(212,217,225)},['琥珀']={Color3.fromRGB(214,142,32),Color3.fromRGB(244,192,83)}}
+            local colors={['Neverlose 蓝']={Color3.fromRGB(66,173,190),Color3.fromRGB(106,210,218)},['翡翠绿']={Color3.fromRGB(18,164,120),Color3.fromRGB(70,201,164)},['灰白']={Color3.fromRGB(170,178,192),Color3.fromRGB(212,217,225)},['琥珀']={Color3.fromRGB(214,142,32),Color3.fromRGB(244,192,83)}}
             local picked=colors[v]
             if picked then
                 Neverlose:ChangeTheme("Accent",picked[1]); Neverlose:ChangeTheme("AccentGradient",picked[2])
@@ -495,7 +512,15 @@ return function(Neverlose, config)
         local deadline=os.clock()+6
         while not Workspace.CurrentCamera and self.Active and os.clock()<deadline do task.wait(0.05) end
         assert(Workspace.CurrentCamera,"Neverlose requires an active camera")
-        local native=Neverlose:Window({Name=tostring(info.Title or config.Name or "Vortexion"),SubName="VORTEXION · NEVERLOSE",Logo="120959262762131"})
+        local brandAsset,brandReason
+        if type(VortexionLogoAssetFactory)=="function" then
+            brandAsset,brandReason = VortexionLogoAssetFactory()
+        else
+            brandReason = "logo factory unavailable"
+        end
+        bridge.BrandMode = brandReason
+        -- Actual second uploaded PNG is embedded; only unsupported executors use the legacy Roblox asset.
+        local native=Neverlose:Window({Name="VORTEXION",SubName="VORTEXION · NEVERLOSE",Logo=brandAsset or "120959262762131"})
         root=native.Items.MainFrame.Instance
         -- One UIScale. Neverlose's original mobile fixed 0.7 scale was removed.
         scale=Instance.new("UIScale");scale.Name="VortexionViewportScale";scale.Scale=1;scale.Parent=root

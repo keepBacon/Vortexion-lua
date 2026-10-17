@@ -187,11 +187,28 @@ return function(common)
 			Candidates.NPCs[inst] = nil
 			if inst:IsA("Humanoid") and inst.Parent then Candidates.NPCs[inst.Parent] = nil end
 		end)
-		-- One initial nested walk; subsequent discovery is event-driven.
-		for _, inst in ipairs(Workspace:GetDescendants()) do
-			if inst:IsA("Humanoid") and inst.Parent then consider(inst.Parent) end
-		end
+		-- R224: budgeted BFS avoids a blocking GetDescendants allocation on
+		-- enormous SCP maps. Pause every 160 nodes (including non-NPC props).
+		local stopped=false
+		task.spawn(function()
+			local queue={Workspace}
+			local front,last=1,1
+			while front<=last and not stopped do
+				local node=queue[front]
+				queue[front]=nil -- release processed scene references immediately
+				front+=1
+				if node then
+					if node:IsA("Humanoid") and node.Parent then consider(node.Parent) end
+					local ok,children=pcall(function()return node:GetChildren() end)
+					if ok and children then
+						for _,child in ipairs(children) do last+=1;queue[last]=child end
+					end
+				end
+				if front%160==0 then task.wait() end
+			end
+		end)
 		common.OnCleanup(function()
+			stopped=true
 			connAdded:Disconnect()
 			connRemoved:Disconnect()
 			Candidates.NPCs = nil

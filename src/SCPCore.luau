@@ -83,17 +83,42 @@ if not ok or not ui then
     warn("[Vortexion/SCP] WindUI initialization failed: " .. tostring(ui))
     return
 end
-local window = ui:CreateWindow({ Title = "VoidPath V3 | SCP", Size = UDim2.fromOffset(640, 460) })
+-- R224: a UI constructor or Page registration may fail on an unsupported
+-- Android executor. Fail closed with a readable bootstrap reason rather than
+-- allowing the entire SCP entrypoint to abort halfway through initialization.
+local windowOK, windowResult = pcall(function()
+    return ui:CreateWindow({ Title = "Vortexion | SCP", Size = UDim2.fromOffset(790, 590) })
+end)
+if not windowOK or type(windowResult) ~= "table" or type(windowResult.AddTab) ~= "function" then
+    local detail = windowOK and "invalid UI window" or tostring(windowResult)
+    global.VortexionBootError = "SCP UI Window: " .. detail
+    warn("[Vortexion/SCP] UI window unavailable: " .. detail)
+    pcall(function() ui:Destroy() end)
+    cleanup()
+    return
+end
+local window = windowResult
 ui:OnDestroy(cleanup)
-local tabs = {
-    Aim = window:AddTab({ Title = "自瞄", Icon = "lucide-crosshair" }),
-    Silent = window:AddTab({ Title = "静默", Icon = "lucide-target" }),
-    Hitbox = window:AddTab({ Title = "碰撞箱", Icon = "lucide-box" }),
-    Visual = window:AddTab({ Title = "视觉", Icon = "lucide-eye" }),
-    Move = window:AddTab({ Title = "移动", Icon = "lucide-activity" }),
-    World = window:AddTab({ Title = "世界", Icon = "lucide-globe" }),
-    Info = window:AddTab({ Title = "信息", Icon = "lucide-info" }),
-}
+local tabsOK, tabsResult = pcall(function()
+    return {
+        Aim = window:AddTab({ Title = "自瞄", Icon = "lucide-crosshair" }),
+        Silent = window:AddTab({ Title = "静默", Icon = "lucide-target" }),
+        Hitbox = window:AddTab({ Title = "碰撞箱", Icon = "lucide-box" }),
+        Visual = window:AddTab({ Title = "视觉", Icon = "lucide-eye" }),
+        Move = window:AddTab({ Title = "移动", Icon = "lucide-activity" }),
+        World = window:AddTab({ Title = "世界", Icon = "lucide-globe" }),
+        Info = window:AddTab({ Title = "信息", Icon = "lucide-info" }),
+    }
+end)
+if not tabsOK or type(tabsResult) ~= "table" then
+    local detail = tabsOK and "invalid page registry" or tostring(tabsResult)
+    global.VortexionBootError = "SCP UI Pages: " .. detail
+    warn("[Vortexion/SCP] UI pages unavailable: " .. detail)
+    pcall(function() ui:Destroy() end)
+    cleanup()
+    return
+end
+local tabs = tabsResult
 
 --=========================================================================
 -- common singleton: every subsystem reads capabilities and shared state from
@@ -148,11 +173,11 @@ setup("common", SCPCommonFactory)
 common.Log = common.Log or function() end
 common.Guard = common.Guard or function(_, fn, ...) local ok, err = pcall(fn, ...) if not ok then warn(tostring(err)) end return ok end
 common.Cloak = setup("cloak", SCPCloakFactory) or { Protect = function(object) return object end, Stop = function() end, Start = function() end }
--- Cloak is inert until its enumeration hook is installed; start it here so
--- every later module (ESP chams, aim highlight) is already protected.
-if type(common.Cloak.Start) == "function" then
-    common.Guard("Cloak", common.Cloak.Start)
-end
+-- R224: never install global __namecall interception during SCP bootstrap.
+-- Previous code hooked the entire game BEFORE UI/render setup; on some
+-- executors this is a process-level crash, not a catchable Luau exception.
+-- Runtime hooking is optional and is not a prerequisite for ESP/UI startup.
+common.CloakStatus = "disabled by default (safe bootstrap)"
 common.Candidates = setup("candidates", SCPCandidatesFactory) or { Update = function() end, Get = function() return {} end, NPCs = nil }
 common.Camera = setup("camera", SCPCameraFactory) or { Update = function() end, GetCurrentTarget = function() end, Config = { Enabled = false } }
 common.SilentAim = setup("silentaim", SCPSilentAimFactory) or { Update = function() end, Config = { Enabled = false } }
@@ -180,8 +205,12 @@ end
 -- NPC scan: SCP roleplay populates the map with humanoid NPCs; without the
 -- scanner they are invisible to every targeting feature.
 --=========================================================================
-common.Guard("Candidates", function()
-    if Candidates.StartNPCScan then Candidates:StartNPCScan() end
+task.defer(function()
+    if isCurrent() then
+        common.Guard("Candidates", function()
+            if Candidates.StartNPCScan then Candidates:StartNPCScan() end
+        end)
+    end
 end)
 
 --=========================================================================
@@ -309,7 +338,8 @@ local slowLoops = { Aim = 0, Hitbox = 0, ESP = 0 }
 local lastSnapshot = 0
 local lowFreqTimer = 0
 
-RunService:BindToRenderStep("VortexionSCPFrame", Enum.RenderPriority.Last.Value, function(dt)
+local renderName = "VortexionSCPFrame"
+local function renderFrame(dt)
     if not isCurrent() then return end
     common.Guard("Frame", function()
         -- Low-frequency world features (0.5 s cadence).
@@ -365,8 +395,16 @@ RunService:BindToRenderStep("VortexionSCPFrame", Enum.RenderPriority.Last.Value,
                     locked and tostring(locked.Player and locked.Player.Name or "NPC") or "-"))
         end
     end)
+end
+local renderOk,renderErr=pcall(function()
+    RunService:BindToRenderStep(renderName, Enum.RenderPriority.Last.Value, renderFrame)
 end)
-ownCleanup(function() RunService:UnbindFromRenderStep("VortexionSCPFrame") end)
+if not renderOk then
+    reportBootFailure("render", renderErr)
+    ownConnection(RunService.RenderStepped:Connect(renderFrame))
+else
+    ownCleanup(function() pcall(function() RunService:UnbindFromRenderStep(renderName) end) end)
+end
 ownCleanup(function() if trigger.firing then mouseUp() trigger.firing = false end end)
 
 --=========================================================================
@@ -470,6 +508,16 @@ tabs.Info:AddToggle("SCPDebug", { Title = "调试输出", Default = false, Callb
 tabs.Info:AddParagraph({ Title = "兼容性说明",
     Content = ("PlaceId %d / 构建 scp-v3。R15 与 R6 角色自适应；Drawing 缺失时线条停用、Chams 可独立工作；元表钩子缺失时静默瞄准自动停用；候选与绘制刷新率独立于帧率；触屏默认右侧按住。")
         :format(game.PlaceId) })
+tabs.Info:AddToggle("SCPAdvancedCloak", {Title="高级隐藏 Hook（兼容性风险，默认关闭）",Default=false,Callback=function(v)
+    if type(common.Cloak.Start)~="function" then return end
+    if v then
+        common.CloakStatus="user enabled"
+        common.Guard("Cloak",function() common.Cloak.Start() end)
+    else
+        common.CloakStatus="user disabled"
+        common.Guard("Cloak",function() common.Cloak.Stop() end)
+    end
+end})
 tabs.Info:AddButton({ Title = "子模块初始化诊断", Callback = function()
     pcall(function() ui:Notify({Title = "SCP 启动诊断",
         Content = #bootFailures > 0 and table.concat(bootFailures, " / ") or "模块工厂未报告失败；功能运行仍需实际测试", Duration = 6}) end)

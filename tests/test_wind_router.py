@@ -174,8 +174,8 @@ class BuildTests(unittest.TestCase):
         write_fixture(self.root)
         self.manifest = BUILD.build(self.root)
 
-    def test_six_outputs_manifest_and_determinism(self):
-        self.assertEqual(len(self.manifest["outputs"]), 6)
+    def test_outputs_manifest_and_determinism(self):
+        self.assertEqual(len(self.manifest["outputs"]), len(BUILD.GAMES)+2)
         self.assertFalse(self.manifest["roblox_android_tested"])
         self.assertEqual(self.manifest["publication"], "not_published_to_github")
         self.assertEqual(self.manifest["vendor_sha256"], BUILD.sha(self.root / BUILD.VENDOR))

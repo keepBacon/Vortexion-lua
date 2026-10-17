@@ -171,8 +171,12 @@ return function(scene, WindUI, Bridge)
             return lp and lp:FindFirstChild("PlayerGui")
         end)
         if not ok or not gui then HUD.blades=nil; HUD.spears=nil; HUD.gas=nil; return HUD end
-        HUD.blades=findLabel(gui,{"Interface","HUD","Main","Top","Blades","Sets"})
-        HUD.spears=findLabel(gui,{"Interface","HUD","Main","Top","Spears","Spears"})
+        HUD.blades=findExactLabel(gui,{"Interface","HUD","Main","Top","7","Blades","Sets"})
+            or findExactLabel(gui,{"Interface","HUD","Main","Top","Blades","Sets"})
+            or findLabel(gui,{"Interface","HUD","Main","Top","Blades","Sets"})
+        HUD.spears=findExactLabel(gui,{"Interface","HUD","Main","Top","7","Spears","Spears"})
+            or findExactLabel(gui,{"Interface","HUD","Main","Top","Spears","Spears"})
+            or findLabel(gui,{"Interface","HUD","Main","Top","Spears","Spears"})
         HUD.gas=findExactLabel(gui,{"Interface","HUD","Main","Top","7","Gas","Percentage"})
         return HUD
     end

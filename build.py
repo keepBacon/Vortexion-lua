@@ -138,7 +138,13 @@ def build(root=ROOT):
     if terminator and banner.startswith("--[["):
         clean_banner = "\n".join(line.rstrip(" \t") for line in banner.split("\n"))
         vendor_source = clean_banner + terminator + remainder
-    shared = HEADER + PRELOAD + embed("WindUI", vendor_source)
+    # Fixture-only builds may supply a minimal vendor/bridge without the brand
+    # module. Production builds always require the packaged local PNG factory.
+    brand_file = root / "src/VortexionLogoEmbedded.lua"
+    brand_source = read("src/VortexionLogoEmbedded.lua") if brand_file.is_file() else (
+        'local VortexionLogoAssetFactory = function() return nil,"asset unavailable" end\n'
+    )
+    shared = HEADER + PRELOAD + embed("WindUI", vendor_source) + brand_source + "\n"
     # Adapter closures must capture the already-declared server controller factory.
     for name, path in (("ServerSwitchFactory", SERVER_SWITCH), ("RuntimeMonitorFactory", MONITOR), ("WindBridgeFactory", BRIDGE)):
         source = read(path)
@@ -234,7 +240,7 @@ def build(root=ROOT):
         raise ValueError("AOTR universe mismatch")
     runtime_manifest = {
         "schema": 2,
-        "build_tag": "loader-v2-modular-r2.22-neverlose-mobile",
+        "build_tag": "loader-v2-modular-r224-neverlose-mobile",
         "core": modular_bundles["Vortexion_Core.lua"],
         "modules": {name: modular_bundles["Vortexion_Module_" + name + ".lua"] for name in GAMES},
         "routes": routes,
@@ -246,7 +252,7 @@ def build(root=ROOT):
 
     manifest = {
         "project_name": "Vortexion Neverlose",
-        "build_tag": "neverlose-mobile-r222",
+        "build_tag": "neverlose-mobile-r224",
         "status": "local_build_unpublished",
         "publication": "not_published_to_github",
         "repository": "keepBacon/Vortexion-lua",
