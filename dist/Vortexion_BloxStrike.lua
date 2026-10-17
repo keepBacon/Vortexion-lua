@@ -41080,7 +41080,25 @@ return function(WindUI, config)
             for key in pairs(WindUI:GetThemes()) do table.insert(keys, key) end
             table.sort(keys); return keys
         end
-        local themeOption = theme:AddDropdown("wind_theme", {Title = "原生主题", Values = themes(), Default = config.Theme or WindUI.Theme or "Dark", Callback = function(v) if v then WindUI:SetTheme(v) end end})
+        -- WindUI.Theme is a theme CONFIGURATION TABLE, not a theme identifier.
+        -- Passing it as a Dropdown default is fatal: vendor Dropdown.Display
+        -- assigns the table directly to TextLabel.Text (which requires string).
+        -- Always resolve a registered theme NAME before handing it to WindUI.
+        local function resolveThemeName(configuredName)
+            local available = WindUI:GetThemes()
+            if type(configuredName) == "string" and available[configuredName] then
+                return configuredName
+            end
+            local currentName = WindUI:GetCurrentTheme()
+            if type(currentName) == "string" and available[currentName] then
+                return currentName
+            end
+            if available.Dark then return "Dark" end
+            local names = themes()
+            assert(#names > 0, "WindUI did not register any themes")
+            return names[1]
+        end
+        local themeOption = theme:AddDropdown("wind_theme", {Title = "原生主题", Values = themes(), Default = resolveThemeName(config.Theme), Callback = function(v) if type(v) == "string" then WindUI:SetTheme(v) end end})
         bridge.RefreshThemes = function() themeOption:SetValues(themes()) end
         theme:AddButton({Title = "刷新主题列表", Callback = bridge.RefreshThemes})
         theme:AddToggle("wind_transparent", {Title = "透明窗口", Default = false, Callback = function(v) native:ToggleTransparency(v) end})
