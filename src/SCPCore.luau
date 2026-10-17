@@ -468,6 +468,18 @@ tabs.Visual:AddColorpicker("SCPESPColorEnemy", {Title="敌对阵营颜色",Defau
 tabs.Visual:AddColorpicker("SCPESPColorAlly", {Title="其他阵营颜色",Default=ESP.Config.ColorAlly,Callback=function(v)if typeof(v)=="Color3" then ESP.Config.ColorAlly=v end end})
 tabs.Visual:AddSlider("SCPESPDist", {Title="显示距离",Min=100,Max=2000,Default=850,Rounding=0,Callback=function(v)ESP.Config.MaxDistance=v end})
 tabs.Visual:AddSlider("SCPESPFPS", {Title="刷新率（Hz）",Min=8,Max=30,Default=20,Rounding=0,Callback=function(v)ESP.Config.TickRate=v end})
+-- R228: ESP appearance controls preserve existing IDs and add separate label/color settings.
+tabs.Visual:AddSlider("SCPESPAlpha3D", {Title="3D 盒子透明度 (%)",Min=0,Max=100,Default=30,Rounding=0,Callback=function(v)ESP.Config.Transparency3D=v/100 end})
+tabs.Visual:AddSlider("SCPESPAlpha2D", {Title="2D 方框透明度 (%)",Min=0,Max=100,Default=15,Rounding=0,Callback=function(v)ESP.Config.Transparency2D=v/100 end})
+tabs.Visual:AddToggle("SCPESPJobColor", {Title="职位跟随游戏队伍颜色",Default=true,Callback=function(v)ESP.Config.JobTeamColor=v end})
+tabs.Visual:AddToggle("SCPESPJobZH", {Title="职位中文翻译",Default=true,Callback=function(v)ESP.Config.JobTranslate=v end})
+tabs.Visual:AddSlider("SCPESPNameFont", {Title="名称文字大小",Min=10,Max=26,Default=14,Rounding=0,Callback=function(v)ESP.Config.NameSize=v end})
+tabs.Visual:AddSlider("SCPESPJobFont", {Title="职位文字大小",Min=10,Max=26,Default=13,Rounding=0,Callback=function(v)ESP.Config.JobSize=v end})
+tabs.Visual:AddSlider("SCPESPBoxWidth", {Title="2D 方框线宽",Min=1,Max=4,Default=2,Rounding=0,Callback=function(v)ESP.Config.BoxThickness=v end})
+tabs.Visual:AddSlider("SCPESPLabelOffset", {Title="文字显示高度",Min=0,Max=60,Default=24,Rounding=0,Callback=function(v)ESP.Config.LabelOffset=v/10 end})
+tabs.Visual:AddToggle("SCPESPDistance", {Title="显示目标距离",Default=false,Callback=function(v)ESP.Config.ShowDistance=v end})
+tabs.Visual:AddToggle("SCPESPHealth", {Title="显示目标生命值",Default=false,Callback=function(v)ESP.Config.ShowHealth=v end})
+tabs.Visual:AddSlider("SCPESPMaxTargets", {Title="ESP 最大目标数",Min=8,Max=64,Default=36,Rounding=0,Callback=function(v)ESP.Config.MaxEntries=v end})
 tabs.Visual:AddParagraph({Title="性能与模式",Content="3D原生渲染自动跟随碰撞部件；2D按刷新率投影实际头/躯干碰撞框，默认不依赖Drawing；关闭后清理全部对象。"})
 
 tabs.Move:AddToggle("SCPSpeed", { Title = "加速", Default = false, Callback = function(v) Movement.Config.SpeedEnabled = v end })

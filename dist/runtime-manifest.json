@@ -1,9 +1,9 @@
 {
   "build_tag": "loader-v2-modular-r224-neverlose-mobile",
   "core": {
-    "bytes": 449316,
+    "bytes": 452008,
     "path": "dist/Vortexion_Core.lua",
-    "sha256": "0d56cbc1ee643ab8022b92d497271024a1eaeeb86f95a5161f7b1a6bd8e18e31"
+    "sha256": "1febb9b60ab3dc95b2a88d82478b29fe528a6d43faa7aa59832017d12c18fc62"
   },
   "fallback": "standalone-bundle-manual-only",
   "modules": {
@@ -28,9 +28,9 @@
       "sha256": "989eb5d397f8afcf28208d183a5c25733ba358c11f231026580531f59dabba8c"
     },
     "SCP": {
-      "bytes": 123518,
+      "bytes": 131843,
       "path": "dist/Vortexion_Module_SCP.lua",
-      "sha256": "650c4d0f5693ed0f50c2cf88786f4b312c774a326e7a780ce8cdbe3c3eee45aa"
+      "sha256": "db0f4dad6184b00004f13db6fbbdce39d673446ed14cbd9f59be9a0e6aef6c42"
     }
   },
   "routes": {

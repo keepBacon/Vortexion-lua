@@ -38,11 +38,11 @@ local Neverlose_Main = {
     Targeted_Config = "",
     Theme = {
         Custom = {
-            Background = Color3.fromRGB(9, 9, 13),
-            Section = Color3.fromRGB(0, 20, 40),
-            Element = Color3.fromRGB(61, 133, 224),
+            Background = Color3.fromRGB(15, 19, 21),
+            Section = Color3.fromRGB(23, 29, 32),
+            Element = Color3.fromRGB(103, 181, 191),
             Text = Color3.fromRGB(255,255,255),
-            Glow = Color3.fromRGB(14, 191, 255)
+            Glow = Color3.fromRGB(99, 172, 183)
         }
     },
         TweenService = game:GetService("TweenService"),
@@ -112,8 +112,7 @@ local function MakeDraggable(topbarobject, object)
              StartPosition.Y.Scale,
              StartPosition.Y.Offset + Delta.Y
           )
-       local Tween = TweenService:Create(object, TweenInfo.new(0.2), {Position = pos})
-       Tween:Play()
+       object.Position = pos
     end
     
     topbarobject.InputBegan:Connect(
@@ -487,7 +486,7 @@ function Neverlose_Main:Window(config)
 
     KeyFrame.Name = "KeyFrame"
     KeyFrame.Parent = Neverlose
-    KeyFrame.BackgroundColor3 = Color3.fromRGB(9, 9, 13)
+    KeyFrame.BackgroundColor3 = Color3.fromRGB(15, 19, 21)
     KeyFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
     KeyFrame.BorderSizePixel = 0
     KeyFrame.Position = UDim2.new(0.294258386, 0, 0.233333334, 0)
@@ -508,7 +507,7 @@ function Neverlose_Main:Window(config)
     KeyTitle.Text = "KEY SYSTEM"
     KeyTitle.TextColor3 = Color3.fromRGB(239, 248, 246)
     KeyTitle.TextSize = 45.000
-    KeyTitle.TextStrokeColor3 = Color3.fromRGB(27, 141, 240)
+    KeyTitle.TextStrokeColor3 = Color3.fromRGB(103, 181, 191)
     KeyTitle.TextStrokeTransparency = 1
     
     KeyFrameCorner.CornerRadius = UDim.new(0, 4)
@@ -560,16 +559,17 @@ function Neverlose_Main:Window(config)
         SetupSystemToggleTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
         SetupSystemToggleTitle.BorderSizePixel = 0
         SetupSystemToggleTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-        SetupSystemToggleTitle.Size = UDim2.new(0, 49, 0, 15)
+        SetupSystemToggleTitle.Size = UDim2.new(0, 194, 0, 20)
         SetupSystemToggleTitle.Font = Enum.Font.Gotham
         SetupSystemToggleTitle.Text = title
+                    ToggleTitle.TextTruncate = Enum.TextTruncate.AtEnd
         SetupSystemToggleTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-        SetupSystemToggleTitle.TextSize = 13.000
+        SetupSystemToggleTitle.TextSize = 14.000
         SetupSystemToggleTitle.TextXAlignment = Enum.TextXAlignment.Left
         
         SetupSystemToggleFrame.Name = "SetupSystemToggleFrame"
         SetupSystemToggleFrame.Parent = SetupSystemToggle
-        SetupSystemToggleFrame.BackgroundColor3 = Color3.fromRGB(3, 5, 13)
+        SetupSystemToggleFrame.BackgroundColor3 = Color3.fromRGB(17, 24, 28)
         SetupSystemToggleFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
         SetupSystemToggleFrame.BorderSizePixel = 0
         SetupSystemToggleFrame.Position = UDim2.new(0.73627758, 0, 0.233333334, 0)
@@ -580,7 +580,7 @@ function Neverlose_Main:Window(config)
         
         SetupSystemToggleDot.Name = "SetupSystemToggleDot"
         SetupSystemToggleDot.Parent = SetupSystemToggleFrame
-        SetupSystemToggleDot.BackgroundColor3 = Color3.fromRGB(74, 87, 97)
+        SetupSystemToggleDot.BackgroundColor3 = Color3.fromRGB(81, 100, 106)
         SetupSystemToggleDot.BorderColor3 = Color3.fromRGB(0, 0, 0)
         SetupSystemToggleDot.BorderSizePixel = 0
         SetupSystemToggleDot.Position = UDim2.new(0, 0, -0.0588235296, 0)
@@ -599,24 +599,24 @@ function Neverlose_Main:Window(config)
             if SystemTogglefunc.Value then
                 TweenService:Create(
                     SetupSystemToggleDot,
-                    TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                    TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                     {Position = UDim2.new(0, 20, -0.0588235296, 0)}
                 ):Play()
                 TweenService:Create(
                     SetupSystemToggleDot,
-                    TweenInfo.new(.4, Enum.EasingStyle.Quad),
-                    {BackgroundColor3 = Color3.fromRGB(61, 133, 224)}
+                    TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                    {BackgroundColor3 = Color3.fromRGB(103, 181, 191)}
                 ):Play()
             else
                 TweenService:Create(
                     SetupSystemToggleDot,
-                    TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                    TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                     {Position = UDim2.new(0, 0, -0.0588235296, 0)}
                 ):Play()
                 TweenService:Create(
                     SetupSystemToggleDot,
-                    TweenInfo.new(.4, Enum.EasingStyle.Quad),
-                    {BackgroundColor3 = Color3.fromRGB(74, 87, 97)}
+                    TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                    {BackgroundColor3 = Color3.fromRGB(81, 100, 106)}
                 ):Play()
             end
             SToggled = SystemTogglefunc.Value
@@ -664,7 +664,7 @@ function Neverlose_Main:Window(config)
         
         KeyBox.Name = "KeyBox"
         KeyBox.Parent = KeyFrame
-        KeyBox.BackgroundColor3 = Color3.fromRGB(0, 28, 56)
+        KeyBox.BackgroundColor3 = Color3.fromRGB(22, 29, 33)
         KeyBox.BorderColor3 = Color3.fromRGB(0, 0, 0)
         KeyBox.BorderSizePixel = 0
         KeyBox.Position = UDim2.new(0.266263247, 0, 0.440835267, 0)
@@ -716,7 +716,7 @@ function Neverlose_Main:Window(config)
     
     LoadButton.Name = "LoadButton"
     LoadButton.Parent = LoadingFrameLine
-    LoadButton.BackgroundColor3 = Color3.fromRGB(0, 28, 56)
+    LoadButton.BackgroundColor3 = Color3.fromRGB(22, 29, 33)
     LoadButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
     LoadButton.BorderSizePixel = 0
     LoadButton.Position = UDim2.new(0.382036895, 0, -3.04399467, 0)
@@ -726,7 +726,7 @@ function Neverlose_Main:Window(config)
     LoadButton.Text = "LOAD"
     LoadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     LoadButton.TextSize = 35.000
-    LoadButton.TextStrokeColor3 = Color3.fromRGB(27, 141, 240)
+    LoadButton.TextStrokeColor3 = Color3.fromRGB(103, 181, 191)
     LoadButton.TextStrokeTransparency = 1
 
     LoadSettingsCFG("KeyNeverlose")
@@ -743,7 +743,7 @@ function Neverlose_Main:Window(config)
             TweenService:Create(
                 LoadButton,
                 TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                {BackgroundColor3 = Color3.fromRGB(0, 28, 56)}
+                {BackgroundColor3 = Color3.fromRGB(22, 29, 33)}
             ):Play()
         end
         if table.find(KeyAccess, KeyHolderText) then
@@ -764,12 +764,12 @@ function Neverlose_Main:Window(config)
             TweenService:Create(
                 LoadButton,
                 TweenInfo.new(3, Enum.EasingStyle.Quad),
-                {BackgroundColor3 = Color3.fromRGB(3, 81, 130)}
+                {BackgroundColor3 = Color3.fromRGB(43, 69, 75)}
             ):Play()
 
             LoadButton.Text = ""
         
-            repeat task.wait() until LoadButton.Size == UDim2.new(0, 5, 0, 26)
+            task.wait(.35) -- bounded completion feedback
             task.wait(.5)
             
             TweenService:Create(
@@ -778,7 +778,7 @@ function Neverlose_Main:Window(config)
                 {Size = UDim2.new(0, 568, 0, 26)}
             ):Play()
             
-            repeat task.wait() until LoadButton.Size == UDim2.new(0, 568, 0, 26)
+            task.wait(2.75) -- bounded completion feedback
             LoadButton.BackgroundTransparency = 1
             LoadButton.TextSize = 0
             LoadButton.TextTransparency = 1
@@ -789,21 +789,21 @@ function Neverlose_Main:Window(config)
                 TweenInfo.new(0, Enum.EasingStyle.Quad),
                 {Size = UDim2.new(0, 135, 0, 43)}
             ):Play()
-            repeat task.wait() until LoadButton.Size == UDim2.new(0, 135, 0, 43)
+            task.wait(.03) -- bounded completion feedback
             LoadingFrameLine.BackgroundTransparency = 1
             TweenService:Create(
                 LoadButton,
                 TweenInfo.new(0, Enum.EasingStyle.Quad),
                 {Position = UDim2.new(0.382, 0, -3.044, 0)}
             ):Play()
-            repeat task.wait() until LoadButton.Position == UDim2.new(0.382, 0, -3.044, 0)
+            task.wait(.03) -- bounded completion feedback
             LoadButton.TextTransparency = 0
             TweenService:Create(
                 LoadButton,
                 TweenInfo.new(.2, Enum.EasingStyle.Quad),
                 {TextSize = 15}
             ):Play()
-            repeat task.wait() until LoadButton.TextSize == 15
+            task.wait(.22) -- bounded completion feedback
             task.wait(.4)
             Allow_KeySystem = false
         end
@@ -944,8 +944,8 @@ function Neverlose_Main:Window(config)
 
     MainFrame.Name = "MainFrame"
     MainFrame.Parent = Neverlose
-    MainFrame.BackgroundColor3 = Color3.fromRGB(9, 9, 13)
-    MainFrame.BorderColor3 = Color3.fromRGB(9, 9, 13)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(15, 19, 21)
+    MainFrame.BorderColor3 = Color3.fromRGB(15, 19, 21)
     MainFrame.BorderSizePixel = 0
     MainFrame.Position = UDim2.new(0.346565127, 0, 0.107407406, 0)
     MainFrame.Size = UDim2.new(0, 643, 0, 682)
@@ -979,7 +979,7 @@ function Neverlose_Main:Window(config)
     
     PlayerTabLine.Name = "PlayerTabLine"
     PlayerTabLine.Parent = LeftFrame
-    PlayerTabLine.BackgroundColor3 = Color3.fromRGB(23, 50, 83)
+    PlayerTabLine.BackgroundColor3 = Color3.fromRGB(59, 82, 86)
     PlayerTabLine.BackgroundTransparency = 0.450
     PlayerTabLine.BorderColor3 = Color3.fromRGB(0, 0, 0)
     PlayerTabLine.BorderSizePixel = 0
@@ -1060,7 +1060,7 @@ function Neverlose_Main:Window(config)
     TitleMain.Text = title
     TitleMain.TextColor3 = Color3.fromRGB(239, 248, 246)
     TitleMain.TextSize = 33.000
-    TitleMain.TextStrokeColor3 = Color3.fromRGB(27, 141, 240)
+    TitleMain.TextStrokeColor3 = Color3.fromRGB(103, 181, 191)
     TitleMain.TextStrokeTransparency = 1
     
     TabHolder.Name = "TabHolder"
@@ -1126,7 +1126,7 @@ function Neverlose_Main:Window(config)
     ContainerLine.Position = UDim2.new(0.00441176491, 0, 0.112244897, 0)
     ContainerLine.Size = UDim2.new(0.991176486, 0, 0, 1)
     
-    ContainerLineGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(9, 9, 13)), ColorSequenceKeypoint.new(0.21, Color3.fromRGB(188, 188, 188)), ColorSequenceKeypoint.new(0.50, Color3.fromRGB(188, 188, 188)), ColorSequenceKeypoint.new(0.76, Color3.fromRGB(188, 188, 188)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(9, 9, 13))}
+    ContainerLineGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(15, 19, 21)), ColorSequenceKeypoint.new(0.21, Color3.fromRGB(188, 188, 188)), ColorSequenceKeypoint.new(0.50, Color3.fromRGB(188, 188, 188)), ColorSequenceKeypoint.new(0.76, Color3.fromRGB(188, 188, 188)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(15, 19, 21))}
     ContainerLineGradient.Name = "ContainerLineGradient"
     ContainerLineGradient.Parent = ContainerLine
     
@@ -1181,16 +1181,16 @@ function Neverlose_Main:Window(config)
             SearchBar.Visible = true
             TweenService:Create(
                 SaveCFGB,
-                TweenInfo.new(.6, Enum.EasingStyle.Quad),
+                TweenInfo.new(.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                 {Position = UDim2.new(0.711302638, 0, 0.0255102124, 0)}
             ):Play()
 
             TweenService:Create(
                 SearchBar,
-                TweenInfo.new(.6, Enum.EasingStyle.Quad),
+                TweenInfo.new(.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                 {Size = UDim2.new(0, 405, 0, 33)}
             ):Play()
-            repeat task.wait() until SearchBar.Size == UDim2.new(0, 405, 0, 33)
+            task.wait(.23) -- bounded completion feedback
             SearchIcon.Visible = true
             SearchBar.PlaceholderText = "Search"
         else
@@ -1198,16 +1198,16 @@ function Neverlose_Main:Window(config)
             SearchIcon.Visible = false
             TweenService:Create(
                 SaveCFGB,
-                TweenInfo.new(.6, Enum.EasingStyle.Quad),
+                TweenInfo.new(.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                 {Position = UDim2.new(0.0441176482, 0, 0.0255102124, 0)}
             ):Play()
 
             TweenService:Create(
                 SearchBar,
-                TweenInfo.new(.6, Enum.EasingStyle.Quad),
+                TweenInfo.new(.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                 {Size = UDim2.new(0, 0, 0, 33)}
             ):Play()
-            repeat task.wait() until SearchBar.Size == UDim2.new(0, 0, 0, 33)
+            task.wait(.23) -- bounded completion feedback
             SearchBar.Visible = false
         end
         SearchToggled = not SearchToggled
@@ -1217,7 +1217,7 @@ function Neverlose_Main:Window(config)
     SaveCFGB.Parent = MainFrame
     SaveCFGB.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     SaveCFGB.BackgroundTransparency = 1.000
-    SaveCFGB.BorderColor3 = Color3.fromRGB(48, 168, 254)
+    SaveCFGB.BorderColor3 = Color3.fromRGB(103, 181, 191)
     SaveCFGB.BorderSizePixel = 0
     SaveCFGB.Position = UDim2.new(0.0441176482, 0, 0.0255102124, 0)
     SaveCFGB.Size = UDim2.new(0, 104, 0, 36)
@@ -1227,7 +1227,7 @@ function Neverlose_Main:Window(config)
     SaveCFGB.TextColor3 = Color3.fromRGB(255, 255, 255)
     SaveCFGB.TextSize = 15.000
 
-    SaveCFGStroke.Color = Color3.fromRGB(23, 50, 83)
+    SaveCFGStroke.Color = Color3.fromRGB(59, 82, 86)
     SaveCFGStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     SaveCFGStroke.LineJoinMode = Enum.LineJoinMode.Round
     SaveCFGStroke.Thickness = 1
@@ -1264,7 +1264,7 @@ function Neverlose_Main:Window(config)
     
     ToggledFrame.Name = "ToggledFrame"
     ToggledFrame.Parent = Neverlose
-    ToggledFrame.BackgroundColor3 = Color3.fromRGB(0, 28, 56)
+    ToggledFrame.BackgroundColor3 = Color3.fromRGB(22, 29, 33)
     ToggledFrame.BackgroundTransparency = 0.6
     ToggledFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
     ToggledFrame.BorderSizePixel = 0
@@ -1361,12 +1361,12 @@ function Neverlose_Main:Window(config)
         Description.BorderColor3 = Color3.fromRGB(0, 0, 0)
         Description.BorderSizePixel = 0
         Description.Position = UDim2.new(0.231394991, 0, 0.591077864, 0)
-        Description.Size = UDim2.new(0, 139, 0, 22)
+        Description.Size = UDim2.new(1, -72, 0, 32)
         Description.Font = Enum.Font.Gotham
         Description.Text = text
         Description.TextColor3 = Color3.fromRGB(220, 220, 220)
         Description.TextSize = 13.000
-        Description.TextWrapped = false
+        Description.TextWrapped = true
         Description.TextXAlignment = Enum.TextXAlignment.Left
 
 
@@ -1399,7 +1399,7 @@ function Neverlose_Main:Window(config)
         
         NotifyLine.Name = "NotifyLine"
         NotifyLine.Parent = NotifyFrame
-        NotifyLine.BackgroundColor3 = Color3.fromRGB(3, 168, 245)
+        NotifyLine.BackgroundColor3 = Color3.fromRGB(103, 181, 191)
         NotifyLine.BorderColor3 = Color3.fromRGB(0, 0, 0)
         NotifyLine.BorderSizePixel = 0
         NotifyLine.Position = UDim2.new(0, 0, 0.925373137, 0)
@@ -1415,7 +1415,7 @@ function Neverlose_Main:Window(config)
         TitleNotify.BorderColor3 = Color3.fromRGB(0, 0, 0)
         TitleNotify.BorderSizePixel = 0
         TitleNotify.Position = UDim2.new(0.231394991, 0, 0.143316701, 0)
-        TitleNotify.Size = UDim2.new(0, 139, 0, 22)
+        TitleNotify.Size = UDim2.new(1, -72, 0, 22)
         TitleNotify.Font = Enum.Font.Gotham
         TitleNotify.Text = Title
         TitleNotify.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1431,7 +1431,7 @@ function Neverlose_Main:Window(config)
             TweenInfo.new(.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
             {Size = UDim2.new(0, Description.TextBounds.X + 200, 0, 67)} -- 262
         ):Play()
-        repeat task.wait() until NotifyFrame.Size == UDim2.new(0, Description.TextBounds.X + 200, 0, 67)
+        task.wait(.23) -- bounded completion feedback
         Description.Visible = true
         TitleNotify.Visible = true
         Notifyimgframe.Visible = true
@@ -1440,7 +1440,7 @@ function Neverlose_Main:Window(config)
             TweenInfo.new(Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
             {Size = UDim2.new(0, 0, 0, 5)}
         ):Play()
-        repeat task.wait() until NotifyLine.Size == UDim2.new(0, 0, 0, 5)
+        task.wait(.23) -- bounded completion feedback
         if AutoClose then
             Description.Visible = false
             TitleNotify.Visible = false
@@ -1450,7 +1450,7 @@ function Neverlose_Main:Window(config)
                 TweenInfo.new(.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
                 {Size = UDim2.new(0, 0, 0, 67)}
             ):Play()
-            repeat task.wait() until NotifyFrame.Size == UDim2.new(0, 0, 0, 67)
+            task.wait(.23) -- bounded completion feedback
             NotifyFrame:Destroy()
         end
     end)
@@ -1496,7 +1496,7 @@ function Neverlose_Main:Window(config)
     Title.Text = title
     Title.TextColor3 = Color3.fromRGB(239, 248, 246)
     Title.TextSize = 45.000
-    Title.TextStrokeColor3 = Color3.fromRGB(27, 141, 240)
+    Title.TextStrokeColor3 = Color3.fromRGB(103, 181, 191)
     Title.TextStrokeTransparency = 1
     
     SettingsLine.Name = "SettingsLine"
@@ -1903,7 +1903,7 @@ function Neverlose_Main:Window(config)
     CloseSettings.AutoButtonColor = false
     CloseSettings.Font = Enum.Font.GothamBold
     CloseSettings.Text = "x"
-    CloseSettings.TextColor3 = Color3.fromRGB(46, 125, 194)
+    CloseSettings.TextColor3 = Color3.fromRGB(99, 161, 174)
     CloseSettings.TextSize = 20.000
 
     CloseSettings.MouseButton1Click:Connect(function()
@@ -1920,7 +1920,7 @@ function Neverlose_Main:Window(config)
         
         LuaFrame.Name = "LuaFrame"
         LuaFrame.Parent = MainFrame
-        LuaFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+        LuaFrame.BackgroundColor3 = Color3.fromRGB(15, 19, 21)
         LuaFrame.BackgroundTransparency = 0.050
         LuaFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
         LuaFrame.BorderSizePixel = 0
@@ -1944,7 +1944,7 @@ function Neverlose_Main:Window(config)
         LuaTitle.Text = "LUA"
         LuaTitle.TextColor3 = Color3.fromRGB(239, 248, 246)
         LuaTitle.TextSize = 45.000
-        LuaTitle.TextStrokeColor3 = Color3.fromRGB(27, 141, 240)
+        LuaTitle.TextStrokeColor3 = Color3.fromRGB(103, 181, 191)
         LuaTitle.TextStrokeTransparency = 1
         
         LuaFrameLine.Name = "LuaFrameLine"
@@ -1976,7 +1976,7 @@ function Neverlose_Main:Window(config)
         CloseLuaFrame.AutoButtonColor = false
         CloseLuaFrame.Font = Enum.Font.GothamBold
         CloseLuaFrame.Text = "x"
-        CloseLuaFrame.TextColor3 = Color3.fromRGB(46, 125, 194)
+        CloseLuaFrame.TextColor3 = Color3.fromRGB(99, 161, 174)
         CloseLuaFrame.TextSize = 24
 
         CloseLuaFrame.MouseButton1Click:Connect(function()
@@ -1993,7 +1993,7 @@ function Neverlose_Main:Window(config)
         WriteScript.Position = UDim2.new(0.850000024, 0, 0.00999999978, 0)
         WriteScript.Size = UDim2.new(0, 20, 0, 20)
         WriteScript.Image = "http://www.roblox.com/asset/?id=6034328955"
-        WriteScript.ImageColor3 = Color3.fromRGB(46, 125, 194)
+        WriteScript.ImageColor3 = Color3.fromRGB(99, 161, 174)
 
         WriteScript.MouseButton1Click:Connect(function()
             
@@ -2086,7 +2086,7 @@ function Neverlose_Main:Window(config)
         CloseWriteFrame.AutoButtonColor = false
         CloseWriteFrame.Font = Enum.Font.GothamBold
         CloseWriteFrame.Text = "x"
-        CloseWriteFrame.TextColor3 = Color3.fromRGB(46, 125, 194)
+        CloseWriteFrame.TextColor3 = Color3.fromRGB(99, 161, 174)
         CloseWriteFrame.TextSize = 20.000
 
         CloseWriteFrame.MouseButton1Click:Connect(function()
@@ -2122,7 +2122,7 @@ function Neverlose_Main:Window(config)
         RefreshScripts.Position = UDim2.new(0.91, 0, 0.005, 0)
         RefreshScripts.Size = UDim2.new(0, 25, 0, 25)
         RefreshScripts.Image = "http://www.roblox.com/asset/?id=6031097226"
-        RefreshScripts.ImageColor3 = Color3.fromRGB(46, 125, 194)
+        RefreshScripts.ImageColor3 = Color3.fromRGB(99, 161, 174)
 
         local ListScripts = listfiles(Folder.."/Scripts")
 
@@ -2380,7 +2380,7 @@ function Neverlose_Main:Window(config)
                 EditScript.Position = UDim2.new(0.0216450226, 0, 0.103448279, 0)
                 EditScript.Size = UDim2.new(0, 20, 0, 20)
                 EditScript.Image = "http://www.roblox.com/asset/?id=6034328955"
-                EditScript.ImageColor3 = Color3.fromRGB(16, 76, 141)
+                EditScript.ImageColor3 = Color3.fromRGB(72, 133, 143)
         
                 EditScript.MouseButton1Click:Connect(function()
                     
@@ -2401,7 +2401,7 @@ function Neverlose_Main:Window(config)
                 ShareScript.Position = UDim2.new(0.0216450226, 0, 0.103448279, 0)
                 ShareScript.Size = UDim2.new(0, 20, 0, 20)
                 ShareScript.Image = "http://www.roblox.com/asset/?id=6034230648"
-                ShareScript.ImageColor3 = Color3.fromRGB(16, 76, 141)
+                ShareScript.ImageColor3 = Color3.fromRGB(72, 133, 143)
         
                 ShareScript.MouseButton1Click:Connect(function()
                     
@@ -2657,7 +2657,7 @@ function Neverlose_Main:Window(config)
             EditScript.Position = UDim2.new(0.0216450226, 0, 0.103448279, 0)
             EditScript.Size = UDim2.new(0, 20, 0, 20)
             EditScript.Image = "http://www.roblox.com/asset/?id=6034328955"
-            EditScript.ImageColor3 = Color3.fromRGB(16, 76, 141)
+            EditScript.ImageColor3 = Color3.fromRGB(72, 133, 143)
     
             EditScript.MouseButton1Click:Connect(function()
                 
@@ -2678,7 +2678,7 @@ function Neverlose_Main:Window(config)
             ShareScript.Position = UDim2.new(0.0216450226, 0, 0.103448279, 0)
             ShareScript.Size = UDim2.new(0, 20, 0, 20)
             ShareScript.Image = "http://www.roblox.com/asset/?id=6034230648"
-            ShareScript.ImageColor3 = Color3.fromRGB(16, 76, 141)
+            ShareScript.ImageColor3 = Color3.fromRGB(72, 133, 143)
     
             ShareScript.MouseButton1Click:Connect(function()
                 
@@ -2737,7 +2737,7 @@ function Neverlose_Main:Window(config)
         
         ChatFrame.Name = "ChatFrame"
         ChatFrame.Parent = MainFrame
-        ChatFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+        ChatFrame.BackgroundColor3 = Color3.fromRGB(15, 19, 21)
         ChatFrame.BackgroundTransparency = 0.050
         ChatFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
         ChatFrame.BorderSizePixel = 0
@@ -2762,7 +2762,7 @@ function Neverlose_Main:Window(config)
         ChatTitle.Text = "CHATTING"
         ChatTitle.TextColor3 = Color3.fromRGB(239, 248, 246)
         ChatTitle.TextSize = 45.000
-        ChatTitle.TextStrokeColor3 = Color3.fromRGB(27, 141, 240)
+        ChatTitle.TextStrokeColor3 = Color3.fromRGB(103, 181, 191)
         
         ChatFrameLine.Name = "ChatFrameLine"
         ChatFrameLine.Parent = ChatFrame
@@ -2793,7 +2793,7 @@ function Neverlose_Main:Window(config)
         CloseChatFrame.AutoButtonColor = false
         CloseChatFrame.Font = Enum.Font.GothamBold
         CloseChatFrame.Text = "x"
-        CloseChatFrame.TextColor3 = Color3.fromRGB(46, 125, 194)
+        CloseChatFrame.TextColor3 = Color3.fromRGB(99, 161, 174)
         CloseChatFrame.TextSize = 20.000
 
         CloseChatFrame.MouseButton1Click:Connect(function()
@@ -2852,7 +2852,7 @@ function Neverlose_Main:Window(config)
 
         --                 local ChatSocketFrameStroke = Instance.new("UIStroke")
         
-        --                 ChatSocketFrameStroke.Color = Color3.fromRGB(49, 100, 177)
+        --                 ChatSocketFrameStroke.Color = Color3.fromRGB(82, 147, 155)
         --                 ChatSocketFrameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         --                 ChatSocketFrameStroke.LineJoinMode = Enum.LineJoinMode.Round
         --                 ChatSocketFrameStroke.Thickness = 1
@@ -2900,7 +2900,7 @@ function Neverlose_Main:Window(config)
 
         --                 local NameTextStroke = Instance.new("UIStroke")
         
-        --                 NameTextStroke.Color = Color3.fromRGB(49, 100, 177)
+        --                 NameTextStroke.Color = Color3.fromRGB(82, 147, 155)
         --                 NameTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         --                 NameTextStroke.LineJoinMode = Enum.LineJoinMode.Round
         --                 NameTextStroke.Thickness = 1
@@ -2926,7 +2926,7 @@ function Neverlose_Main:Window(config)
         ClearChat.Position = UDim2.new(0.898000002, 0, 0.00499999989, 0)
         ClearChat.Size = UDim2.new(0, 25, 0, 25)
         ClearChat.Image = "http://www.roblox.com/asset/?id=6035181870"
-        ClearChat.ImageColor3 = Color3.fromRGB(46, 125, 194)
+        ClearChat.ImageColor3 = Color3.fromRGB(99, 161, 174)
 
         ClearChat.MouseButton1Click:Connect(function()
             
@@ -2986,7 +2986,7 @@ function Neverlose_Main:Window(config)
         SendChatButton.Position = UDim2.new(0.925999999, 0, 0.163000003, 0)
         SendChatButton.Size = UDim2.new(0, 25, 0, 25)
         SendChatButton.Image = "http://www.roblox.com/asset/?id=6035067832"
-        SendChatButton.ImageColor3 = Color3.fromRGB(46, 125, 194)
+        SendChatButton.ImageColor3 = Color3.fromRGB(99, 161, 174)
 
         SendChatButton.MouseButton1Click:Connect(function()
             
@@ -3047,7 +3047,7 @@ function Neverlose_Main:Window(config)
         TabSectionTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
         TabSectionTitle.BorderSizePixel = 0
         TabSectionTitle.Position = UDim2.new(-0.0404311828, 0, 0.229113445, 0)
-        TabSectionTitle.Size = UDim2.new(0, 37, 0, 15)
+        TabSectionTitle.Size = UDim2.new(0, 150, 0, 17)
         TabSectionTitle.Font = Enum.Font.Gotham
         TabSectionTitle.Text = title
         TabSectionTitle.TextColor3 = Color3.fromRGB(44, 62, 75)
@@ -3187,7 +3187,7 @@ function Neverlose_Main:Window(config)
         end)
 
         local Tabs = {}
-        function Tabs:Tab(title)
+        function Tabs:Tab(title, iconAsset)
             local Tab = Instance.new("TextButton")
             local TabCorner = Instance.new("UICorner")
             local TabTitle = Instance.new("TextLabel")
@@ -3200,7 +3200,7 @@ function Neverlose_Main:Window(config)
 
             Tab.Name = title
             Tab.Parent = TabsSection
-            Tab.BackgroundColor3 = Color3.fromRGB(13, 98, 144)
+            Tab.BackgroundColor3 = Color3.fromRGB(43, 69, 75)
             Tab.BorderColor3 = Color3.fromRGB(0, 0, 0)
             Tab.BorderSizePixel = 0
             Tab.Position = UDim2.new(0.0793650821, 0, 0, 0)
@@ -3226,6 +3226,19 @@ function Neverlose_Main:Window(config)
             TabTitle.Size = UDim2.new(0, 56, 0, 15)
             TabTitle.Font = Enum.Font.Gotham
             TabTitle.Text = title
+            TabTitle.Position = UDim2.fromOffset(35, 5)
+            TabTitle.Size = UDim2.fromOffset(120, 19)
+            TabTitle.TextTruncate = Enum.TextTruncate.AtEnd
+            TabTitle.TextSize = 14
+            -- R228: native icon assets from the original Neverlose library set.
+            local TabIcon = Instance.new("ImageLabel")
+            TabIcon.Name = "TabIcon"
+            TabIcon.BackgroundTransparency = 1
+            TabIcon.Size = UDim2.fromOffset(16, 16)
+            TabIcon.Position = UDim2.fromOffset(12, 5)
+            TabIcon.Image = iconAsset or "rbxassetid://6031280882"
+            TabIcon.ImageColor3 = Color3.fromRGB(146, 171, 178)
+            TabIcon.Parent = Tab
             TabTitle.TextColor3 = Color3.fromRGB(180,180,180)
             TabTitle.TextSize = 14.000
             TabTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -3241,7 +3254,7 @@ function Neverlose_Main:Window(config)
             Container.BorderSizePixel = 0
             Container.Position = UDim2.new(0.0104251858, 0, 0.0230326876, 0)
             Container.Size = UDim2.new(0, 630, 0, 580)
-            Container.ScrollBarThickness = 0
+            Container.ScrollBarThickness = 3
             Container.Visible = false
 
             SectionHolder1.Name = "SectionHolder1"
@@ -3256,7 +3269,7 @@ function Neverlose_Main:Window(config)
             SectionHolder1Layout.Name = "SectionHolder1Layout"
             SectionHolder1Layout.Parent = SectionHolder1
             SectionHolder1Layout.SortOrder = Enum.SortOrder.LayoutOrder
-            SectionHolder1Layout.Padding = UDim.new(0, 13)
+            SectionHolder1Layout.Padding = UDim.new(0, 9)
 
             
             SectionHolder2.Name = "SectionHolder2"
@@ -3271,11 +3284,23 @@ function Neverlose_Main:Window(config)
             SectionHolder2Layout.Name = "SectionHolder2Layout"
             SectionHolder2Layout.Parent = SectionHolder2
             SectionHolder2Layout.SortOrder = Enum.SortOrder.LayoutOrder
-            SectionHolder2Layout.Padding = UDim.new(0, 13)
+            SectionHolder2Layout.Padding = UDim.new(0, 9)
+
+            -- R228: the two native columns stay intact; expanded popovers get
+            -- their own scroll clearance rather than permanently bloating content.
+            local openPopupExtra = 0
+            local function syncNativeCanvas()
+                local height=math.max(SectionHolder1Layout.AbsoluteContentSize.Y,
+                    SectionHolder2Layout.AbsoluteContentSize.Y) + 28 + openPopupExtra
+                Container.CanvasSize=UDim2.fromOffset(0,math.max(580,math.ceil(height)))
+            end
+            SectionHolder1Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(syncNativeCanvas)
+            SectionHolder2Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(syncNativeCanvas)
 
             if FirstTab == false then
                 Tab.BackgroundTransparency = 0.500
-                TabTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+                TabTitle.TextColor3 = Color3.fromRGB(242, 248, 249)
+                TabIcon.ImageColor3 = Neverlose_Main.Theme.Custom.Element
                 Container.Visible = true
                 FirstTab = true
             end
@@ -3287,32 +3312,25 @@ function Neverlose_Main:Window(config)
                         v.Visible = false
                     end
                 end
-                for i,v in pairs(TabHolder:GetChildren()) do
-                    if v:IsA("Frame") then
-                            for i,v in pairs(v:GetChildren()) do
-                                if v:IsA("TextButton") then
-                                TweenService:Create(
-                                    v,
-                                    TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                    {BackgroundTransparency = 1}
-                                ):Play()
-                                if v:FindFirstChild("TabTitle") then
-                                    TweenService:Create(v.TabTitle,TweenInfo.new(.3, Enum.EasingStyle.Quad),{TextColor3 = Color3.fromRGB(180,180,180)}):Play()
-                                end
+                for _, group in ipairs(TabHolder:GetChildren()) do
+                    if group:IsA("Frame") then
+                        for _, other in ipairs(group:GetChildren()) do
+                            if other:IsA("TextButton") and other:FindFirstChild("TabTitle") then
+                                local active = other == Tab
+                                other.BackgroundTransparency = active and 0.5 or 1
+                                other.TabTitle.TextColor3 = active
+                                    and Color3.fromRGB(242,248,249) or Color3.fromRGB(163,176,180)
+                                local ico = other:FindFirstChild("TabIcon")
+                                if ico then ico.ImageColor3 = active
+                                    and Neverlose_Main.Theme.Custom.Element or Color3.fromRGB(133,155,161) end
                             end
                         end
                     end
                 end
-                TweenService:Create(
-                    Tab,
-                    TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                    {BackgroundTransparency = 0.5}
-                ):Play()
-                TweenService:Create(TabTitle,TweenInfo.new(.3, Enum.EasingStyle.Quad),{TextColor3 = Color3.fromRGB(255,255,255)}):Play()
                 Container.Visible = true
             end)
             
-            SearchBar.Changed:Connect(function(ep)
+            SearchBar:GetPropertyChangedSignal("Text"):Connect(function()
                 if not UserInputService:GetFocusedTextBox() then return end
                     for i,v in pairs(Container:GetChildren()) do
                         if v:IsA("Frame") then
@@ -3342,8 +3360,21 @@ function Neverlose_Main:Window(config)
                 for _, panel in ipairs(ContainerHolder:GetChildren()) do
                     if panel:IsA("ScrollingFrame") then panel.Visible = (panel == Container) end
                 end
-                Tab.BackgroundTransparency = 0.5
-                TabTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+                for _, group in ipairs(TabHolder:GetChildren()) do
+                    if group:IsA("Frame") then
+                        for _, other in ipairs(group:GetChildren()) do
+                            if other:IsA("TextButton") and other:FindFirstChild("TabTitle") then
+                                local active = other == Tab
+                                other.BackgroundTransparency = active and 0.5 or 1
+                                other.TabTitle.TextColor3 = active
+                                    and Color3.fromRGB(242,248,249) or Color3.fromRGB(163,176,180)
+                                local ico = other:FindFirstChild("TabIcon")
+                                if ico then ico.ImageColor3 = active
+                                    and Neverlose_Main.Theme.Custom.Element or Color3.fromRGB(133,155,161) end
+                            end
+                        end
+                    end
+                end
             end
 
             local UniNum = 38
@@ -3360,7 +3391,7 @@ function Neverlose_Main:Window(config)
                 
 
                 Section.Name = "Section"
-                Section.BackgroundColor3 = Color3.fromRGB(0, 20, 40)
+                Section.BackgroundColor3 = Color3.fromRGB(23, 29, 32)
                 Section.BorderColor3 = Color3.fromRGB(0, 0, 0)
                 Section.BorderSizePixel = 0
                 Section.Position = UDim2.new(0.262390673, 0, 0.0040485831, 0)
@@ -3383,16 +3414,16 @@ function Neverlose_Main:Window(config)
                 SectionTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                 SectionTitle.BorderSizePixel = 0
                 SectionTitle.Position = UDim2.new(0.0343750007, 0, 0.189999998, 0)
-                SectionTitle.Size = UDim2.new(0, 61, 0, 23)
+                SectionTitle.Size = UDim2.new(0, 250, 0, 23)
                 SectionTitle.Font = Enum.Font.SourceSansBold
                 SectionTitle.Text = title
                 SectionTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-                SectionTitle.TextSize = 16.000
+                SectionTitle.TextSize = 17.000
                 SectionTitle.TextXAlignment = Enum.TextXAlignment.Left
                 
                 SectionLine.Name = "SectionLine"
                 SectionLine.Parent = SecHolder
-                SectionLine.BackgroundColor3 = Color3.fromRGB(23, 50, 83)
+                SectionLine.BackgroundColor3 = Color3.fromRGB(59, 82, 86)
                 SectionLine.BackgroundTransparency = 0.450
                 SectionLine.BorderColor3 = Color3.fromRGB(0, 0, 0)
                 SectionLine.BorderSizePixel = 0
@@ -3403,7 +3434,7 @@ function Neverlose_Main:Window(config)
                 SectionLayout.Parent = Section
                 SectionLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
                 SectionLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                SectionLayout.Padding = UDim.new(0, 8)
+                SectionLayout.Padding = UDim.new(0, 5)
                 
                 SectionCorner.CornerRadius = UDim.new(0, 8)
                 SectionCorner.Name = "SectionCorner"
@@ -3422,7 +3453,7 @@ function Neverlose_Main:Window(config)
                 end)
 
                 Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)
-                Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset + 50)
+                syncNativeCanvas()
 
                 -- Keep native two-column section structure on touch and desktop.
                 -- Use deterministic insertion order: pairs/frame enumeration was
@@ -3430,6 +3461,20 @@ function Neverlose_Main:Window(config)
                 nativeSectionCount = nativeSectionCount + 1
                 Section.LayoutOrder = nativeSectionCount
                 Section.Parent = (nativeSectionCount % 2 == 1) and SectionHolder1 or SectionHolder2
+
+                -- The original fixed-background sizing ran before Roblox measured
+                -- its list children, leaving long Chinese labels outside section
+                -- backgrounds. Recompute only when content size changes.
+                local function syncSectionBounds()
+                    if not Section.Parent then return end
+                    local newHeight=math.max(52,math.ceil(SectionLayout.AbsoluteContentSize.Y)+12)
+                    if Section.Size.Y.Offset~=newHeight then
+                        Section.Size=UDim2.fromOffset(285,newHeight)
+                    end
+                    syncNativeCanvas()
+                end
+                SectionLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(syncSectionBounds)
+                task.defer(syncSectionBounds)
 
                 local Global_X_Size = 10
 
@@ -3445,12 +3490,12 @@ function Neverlose_Main:Window(config)
 
                     Button.Name = "Button"
                     Button.Parent = Section
-                    Button.BackgroundColor3 = Color3.fromRGB(43, 67, 118)
+                    Button.BackgroundColor3 = Color3.fromRGB(34, 49, 53)
                     Button.BackgroundTransparency = 1.000
                     Button.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     Button.BorderSizePixel = 0
                     Button.Position = UDim2.new(0.0381034054, 0, 0.327935219, 0)
-                    Button.Size = UDim2.new(0, 274, 0, 26)
+                    Button.Size = UDim2.new(0, 274, 0, 30)
                     Button.AutoButtonColor = false
                     Button.Font = Enum.Font.Gotham
                     Button.Text = ""
@@ -3468,13 +3513,14 @@ function Neverlose_Main:Window(config)
                     ButtonTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     ButtonTitle.BorderSizePixel = 0
                     ButtonTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-                    ButtonTitle.Size = UDim2.new(0, 49, 0, 15)
+                    ButtonTitle.Size = UDim2.new(0, 194, 0, 20)
                     ButtonTitle.Font = Enum.Font.Gotham
                     ButtonTitle.Text = title
+                    ButtonTitle.TextTruncate = Enum.TextTruncate.AtEnd
                     ButtonTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    ButtonTitle.TextSize = 13.000
+                    ButtonTitle.TextSize = 14.000
                     ButtonTitle.TextXAlignment = Enum.TextXAlignment.Left
-                    ButtonTitle.TextYAlignment = Enum.TextYAlignment.Top
+                    ButtonTitle.TextYAlignment = Enum.TextYAlignment.Center
 
                     spawn(function()
                         while false do -- R227: no per-frame theme polling
@@ -3485,7 +3531,7 @@ function Neverlose_Main:Window(config)
                         end
                     end)
 
-                    ButtonStroke.Color = Color3.fromRGB(20, 153, 255)
+                    ButtonStroke.Color = Color3.fromRGB(103, 181, 191)
                     ButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                     ButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
                     ButtonStroke.Thickness = 1
@@ -3511,13 +3557,13 @@ function Neverlose_Main:Window(config)
                         Neverlose_Main:PlaySound(Neverlose_Main.Lib_Sounds.ClickSound)
                         pcall(callback)
                     end)
-                    Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)
-                    Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset + UniNum)
+                    syncSectionBounds()
+                    syncNativeCanvas()
 
                     function Buttonfunc:visibility(state)
                         local Trans = nil
                         for i,v in pairs(Button:GetChildren()) do
-                            if not v:IsA("UICorner") and v.Name ~= "ButtonTitle" then
+                            if v:IsA("GuiObject") and v.Name ~= "ButtonTitle" then
                                 v.Visible = state
                             end
                         end
@@ -3535,8 +3581,8 @@ function Neverlose_Main:Window(config)
                         Button.Visible = state
                         TweenService:Create(
                             Section,
-                            TweenInfo.new(.5, Enum.EasingStyle.Quad),
-                            {Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)}
+                            TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                            {Size = UDim2.fromOffset(285, math.max(52, math.ceil(SectionLayout.AbsoluteContentSize.Y)+12))}
                         ):Play()
                     end
 
@@ -3577,7 +3623,7 @@ function Neverlose_Main:Window(config)
                     Toggle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     Toggle.BorderSizePixel = 0
                     Toggle.Position = UDim2.new(0.0171875004, 0, 0, 0)
-                    Toggle.Size = UDim2.new(0, 274, 0, 26)
+                    Toggle.Size = UDim2.new(0, 274, 0, 30)
                     Toggle.AutoButtonColor = false
                     Toggle.Font = Enum.Font.SourceSans
                     Toggle.Text = ""
@@ -3591,16 +3637,16 @@ function Neverlose_Main:Window(config)
                     ToggleTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     ToggleTitle.BorderSizePixel = 0
                     ToggleTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-                    ToggleTitle.Size = UDim2.new(0, 49, 0, 15)
+                    ToggleTitle.Size = UDim2.new(0, 194, 0, 20)
                     ToggleTitle.Font = Enum.Font.Gotham
                     ToggleTitle.Text = title
                     ToggleTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    ToggleTitle.TextSize = 13.000
+                    ToggleTitle.TextSize = 14.000
                     ToggleTitle.TextXAlignment = Enum.TextXAlignment.Left
                     
                     ToggleFrame.Name = "ToggleFrame"
                     ToggleFrame.Parent = Toggle
-                    ToggleFrame.BackgroundColor3 = Color3.fromRGB(3, 5, 13)
+                    ToggleFrame.BackgroundColor3 = Color3.fromRGB(17, 24, 28)
                     ToggleFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     ToggleFrame.BorderSizePixel = 0
                     ToggleFrame.Position = UDim2.new(0.870550156, 0, 0.233333334, 0)
@@ -3611,7 +3657,7 @@ function Neverlose_Main:Window(config)
                     
                     ToggleDot.Name = "ToggleDot"
                     ToggleDot.Parent = ToggleFrame
-                    ToggleDot.BackgroundColor3 = Color3.fromRGB(74, 87, 97)
+                    ToggleDot.BackgroundColor3 = Color3.fromRGB(81, 100, 106)
                     ToggleDot.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     ToggleDot.BorderSizePixel = 0
                     ToggleDot.Position = UDim2.new(0, 0, -0.0588235296, 0)
@@ -3621,8 +3667,8 @@ function Neverlose_Main:Window(config)
                     ToggleDotCorner.Name = "ToggleDotCorner"
                     ToggleDotCorner.Parent = ToggleDot
 
-                    Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)
-                    Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset + UniNum)
+                    syncSectionBounds()
+                    syncNativeCanvas()
 
                     spawn(function()
                         while false do -- R227: no per-frame theme polling
@@ -3635,9 +3681,10 @@ function Neverlose_Main:Window(config)
                     function Togglefunc:Set(val)
                         Togglefunc.Value = val
                         if Togglefunc.Value then
+                            ToggleDot.BackgroundColor3 = Neverlose_Main.Theme.Custom.Element
                             TweenService:Create(
                                 ToggleDot,
-                                TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Position = UDim2.new(0, 20, -0.0588235296, 0)}
                             ):Play()
 
@@ -3646,13 +3693,13 @@ function Neverlose_Main:Window(config)
                         else
                             TweenService:Create(
                                 ToggleDot,
-                                TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Position = UDim2.new(0, 0, -0.0588235296, 0)}
                             ):Play()
                             TweenService:Create(
                                 ToggleDot,
-                                TweenInfo.new(.4, Enum.EasingStyle.Quad),
-                                {BackgroundColor3 = Color3.fromRGB(74, 87, 97)}
+                                TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                                {BackgroundColor3 = Color3.fromRGB(81, 100, 106)}
                             ):Play()
                             ToggledText.Text = title.. " | <font color='rgb(255,50,50)'>OFF</font>"
                             ToggledText.Visible = false
@@ -3662,10 +3709,10 @@ function Neverlose_Main:Window(config)
                     end
 
                     function Togglefunc:visibility(t)
-                        local state = t or nil
+                        local state = t == true
                         local Trans = nil
                         for i,v in pairs(Toggle:GetChildren()) do
-                            if not v:IsA("UICorner") and v.Name ~= "ToggleTitle" then
+                            if v:IsA("GuiObject") and v.Name ~= "ToggleTitle" then
                                 v.Visible = state
                             end
                         end
@@ -3683,8 +3730,8 @@ function Neverlose_Main:Window(config)
                         Toggle.Visible = state
                         TweenService:Create(
                             Section,
-                            TweenInfo.new(.5, Enum.EasingStyle.Quad),
-                            {Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)}
+                            TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                            {Size = UDim2.fromOffset(285, math.max(52, math.ceil(SectionLayout.AbsoluteContentSize.Y)+12))}
                         ):Play()
                     end
 
@@ -3707,7 +3754,7 @@ function Neverlose_Main:Window(config)
                                 pcall(function()
                                     TweenService:Create(
                                         ToggleDot,
-                                        TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                        TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                         {BackgroundColor3 = Neverlose_Main.Theme.Custom.Element}
                                     ):Play()
                                 end)
@@ -3727,22 +3774,22 @@ function Neverlose_Main:Window(config)
                         SectionLine.Visible = state
                         TweenService:Create(
                             Section,
-                            TweenInfo.new(.5, Enum.EasingStyle.Quad),
-                            {Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)}
+                            TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                            {Size = UDim2.fromOffset(285, math.max(52, math.ceil(SectionLayout.AbsoluteContentSize.Y)+12))}
                         ):Play()
                     end
 
                     SectionLine.Name = "SectionLine"
                     SectionLine.Parent = Section
-                    SectionLine.BackgroundColor3 = Color3.fromRGB(33, 71, 118)
-                    SectionLine.BackgroundTransparency = 0.7
+                    SectionLine.BackgroundColor3 = Color3.fromRGB(59, 82, 86)
+                    SectionLine.BackgroundTransparency = 0.65
                     SectionLine.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     SectionLine.BorderSizePixel = 0
                     SectionLine.Position = UDim2.new(0.0249999575, 0, 0.73399204, 0)
                     SectionLine.Size = UDim2.new(0.948000014, 0, 0, 1)
 
-                    Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)
-                    Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset + UniNum)
+                    syncSectionBounds()
+                    syncNativeCanvas()
                     return linefunc
                 end
 
@@ -3763,7 +3810,7 @@ function Neverlose_Main:Window(config)
                     function Dropfunc:visibility(state)
                         local Trans = nil
                         for i,v in pairs(Dropdown:GetChildren()) do
-                            if not v:IsA("UICorner") and v.Name ~= "DropdownTitle" then
+                            if v:IsA("GuiObject") and v.Name ~= "DropdownTitle" then
                                 v.Visible = state
                             end
                         end
@@ -3774,15 +3821,15 @@ function Neverlose_Main:Window(config)
                         end
                         TweenService:Create(
                             DropdownTitle,
-                            TweenInfo.new(.3, Enum.EasingStyle.Quad),
+                            TweenInfo.new(.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                             {TextTransparency = Trans}
                         ):Play()
                         task.wait(.3)
                         Dropdown.Visible = state
                         TweenService:Create(
                             Section,
-                            TweenInfo.new(.5, Enum.EasingStyle.Quad),
-                            {Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)}
+                            TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                            {Size = UDim2.fromOffset(285, math.max(52, math.ceil(SectionLayout.AbsoluteContentSize.Y)+12))}
                         ):Play()
                     end
 
@@ -3793,7 +3840,7 @@ function Neverlose_Main:Window(config)
                     Dropdown.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     Dropdown.BorderSizePixel = 0
                     Dropdown.Position = UDim2.new(0.0171875004, 0, 0, 0)
-                    Dropdown.Size = UDim2.new(0, 274, 0, 26)
+                    Dropdown.Size = UDim2.new(0, 274, 0, 30)
                     Dropdown.AutoButtonColor = false
                     Dropdown.Font = Enum.Font.SourceSans
                     Dropdown.Text = ""
@@ -3807,16 +3854,17 @@ function Neverlose_Main:Window(config)
                     DropdownTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     DropdownTitle.BorderSizePixel = 0
                     DropdownTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-                    DropdownTitle.Size = UDim2.new(0, 49, 0, 15)
+                    DropdownTitle.Size = UDim2.new(0, 166, 0, 20)
                     DropdownTitle.Font = Enum.Font.Gotham
                     DropdownTitle.Text = title
+                    DropdownTitle.TextTruncate = Enum.TextTruncate.AtEnd
                     DropdownTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    DropdownTitle.TextSize = 13.000
+                    DropdownTitle.TextSize = 14.000
                     DropdownTitle.TextXAlignment = Enum.TextXAlignment.Left
                     
                     DropdownFrame.Name = "DropdownFrame"
                     DropdownFrame.Parent = Dropdown
-                    DropdownFrame.BackgroundColor3 = Color3.fromRGB(3, 5, 13)
+                    DropdownFrame.BackgroundColor3 = Color3.fromRGB(17, 24, 28)
                     DropdownFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     DropdownFrame.BorderSizePixel = 0
                     DropdownFrame.Position = UDim2.new(0.640705884, 0, 0.233333334, 0)
@@ -3843,7 +3891,8 @@ function Neverlose_Main:Window(config)
                     ItemSelected.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     ItemSelected.BorderSizePixel = 0
                     ItemSelected.Position = UDim2.new(0.0700000003, 0, 0.200000003, 0)
-                    ItemSelected.Size = UDim2.new(0, 31, 0, 9)
+                    ItemSelected.Size = UDim2.new(0, 73, 0, 16)
+                    ItemSelected.TextTruncate = Enum.TextTruncate.AtEnd
                     ItemSelected.Font = Enum.Font.Gotham
                     ItemSelected.Text = ""
                     ItemSelected.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -3851,15 +3900,15 @@ function Neverlose_Main:Window(config)
                     ItemSelected.TextXAlignment = Enum.TextXAlignment.Left
                     
                     DropdownFrameHold.Name = "DropdownFrameHold"
-                    DropdownFrameHold.Parent = Section
-                    DropdownFrameHold.BackgroundColor3 = Color3.fromRGB(0, 18, 35)
+                    DropdownFrameHold.Parent = Dropdown
+                    DropdownFrameHold.BackgroundColor3 = Color3.fromRGB(23, 31, 35)
                     DropdownFrameHold.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     DropdownFrameHold.BorderSizePixel = 0
-                    DropdownFrameHold.Position = UDim2.new(0, 0, 1.06666672, 0)
+                    DropdownFrameHold.Position = UDim2.fromOffset(8, 33)
                     DropdownFrameHold.Size = UDim2.new(0, 257, 0, 130)
                     DropdownFrameHold.ZIndex = 7
                     DropdownFrameHold.Visible = false
-                    DropdownFrameHold.BackgroundTransparency = 1
+                    DropdownFrameHold.BackgroundTransparency = 0.035
                     
                     DropdownFrameHoldCorner.CornerRadius = UDim.new(0, 3)
                     DropdownFrameHoldCorner.Name = "DropdownFrameHoldCorner"
@@ -3867,6 +3916,7 @@ function Neverlose_Main:Window(config)
                     
                     DropdownHolder.Name = "DropdownHolder"
                     DropdownHolder.Parent = DropdownFrameHold
+                    DropdownHolder.ZIndex = 8
                     DropdownHolder.Active = true
                     DropdownHolder.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                     DropdownHolder.BackgroundTransparency = 1.000
@@ -3881,8 +3931,8 @@ function Neverlose_Main:Window(config)
                     DropdownHolderLayout.SortOrder = Enum.SortOrder.LayoutOrder
                     DropdownHolderLayout.Padding = UDim.new(0, 3)
 
-                    Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)
-                    Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset + UniNum)
+                    syncSectionBounds()
+                    syncNativeCanvas()
 
                     spawn(function()
                         while false do -- R227: no per-frame theme polling
@@ -3895,40 +3945,21 @@ function Neverlose_Main:Window(config)
 
                     Dropdown.MouseButton1Click:Connect(function()
                         Neverlose_Main:PlaySound(Neverlose_Main.Lib_Sounds.ClickSound)
-                        if DropToggled == false then
-                            DropdownFrameHold.Visible = true
-                            TweenService:Create(
-                                DropdownFrameHold,
-                                TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {Size = UDim2.new(0, 257, 0, 130)}
-                            ):Play()
-
-                            TweenService:Create(
-                                Arrow,
-                                TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {Rotation = 180}
-                            ):Play()
-
-                            repeat task.wait() Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10) until DropdownFrameHold.Size == UDim2.new(0, 257, 0, 130)
-                            DropdownHolder.Visible = true
-                        else
-                            TweenService:Create(
-                                DropdownFrameHold,
-                                TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {Size = UDim2.new(0, 257, 0, 0)}
-                            ):Play()
-                            DropdownHolder.Visible = false
-
-                            TweenService:Create(
-                                Arrow,
-                                TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {Rotation = 0}
-                            ):Play()
-
-                            repeat task.wait() Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10) until DropdownFrameHold.Size == UDim2.new(0, 257, 0, 0)
-                            DropdownFrameHold.Visible = false
-                        end
+                        -- Set the state before tweening: rapid mobile taps stay consistent.
                         DropToggled = not DropToggled
+                        local open = DropToggled
+                        Dropdown.ZIndex = open and 8 or 1
+                        DropdownFrameHold.Visible = open
+                        DropdownHolder.Visible = open
+                        openPopupExtra = open and 170 or 0
+                        syncNativeCanvas()
+                        TweenService:Create(DropdownFrameHold,
+                            TweenInfo.new(.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                            {Size = UDim2.fromOffset(257, open and 130 or 0)}):Play()
+                        TweenService:Create(Arrow,
+                            TweenInfo.new(.14, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                            {Rotation = open and 180 or 0}):Play()
+                        syncSectionBounds()
                     end)
 
                     function Dropfunc:Set(val)
@@ -3944,13 +3975,15 @@ function Neverlose_Main:Window(config)
 
                         Item.Name = "Item"
                         Item.Parent = DropdownHolder
+                        Item.ZIndex = 9
                         Item.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                         Item.BackgroundTransparency = 1.000
                         Item.BorderColor3 = Color3.fromRGB(0, 0, 0)
                         Item.BorderSizePixel = 0
-                        Item.Size = UDim2.new(0, 230, 0, 28)
+                        Item.Size = UDim2.fromOffset(230, 30)
                         Item.Font = Enum.Font.Gotham
-                        Item.Text = "- "..v
+                        Item.Text = "- "..tostring(v)
+                        Item.TextTruncate = Enum.TextTruncate.AtEnd
                         Item.TextColor3 = Color3.fromRGB(255, 255, 255)
                         Item.TextSize = 14
                         Item.TextXAlignment = Enum.TextXAlignment.Left
@@ -3970,20 +4003,24 @@ function Neverlose_Main:Window(config)
                             Dropfunc:Set(v)
                             TweenService:Create(
                                 DropdownFrameHold,
-                                TweenInfo.new(.3, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Size = UDim2.new(0, 257, 0, 0)}
                             ):Play()
                             DropdownHolder.Visible = false
 
                             TweenService:Create(
                                 Arrow,
-                                TweenInfo.new(.3, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Rotation = 0}
                             ):Play()
 
-                            repeat task.wait() Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)  until DropdownFrameHold.Size == UDim2.new(0, 257, 0, 0)
+                            task.wait(0.21)
+                            syncSectionBounds()
                             DropdownFrameHold.Visible = false
                             DropToggled = false
+                            Dropdown.ZIndex=1
+                            openPopupExtra=0
+                            syncNativeCanvas()
                         end)
                     end
 
@@ -4000,13 +4037,15 @@ function Neverlose_Main:Window(config)
     
                             Item.Name = "Item"
                             Item.Parent = DropdownHolder
+                        Item.ZIndex = 9
                             Item.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                             Item.BackgroundTransparency = 1.000
                             Item.BorderColor3 = Color3.fromRGB(0, 0, 0)
                             Item.BorderSizePixel = 0
-                            Item.Size = UDim2.new(0, 91, 0, 15)
+                            Item.Size = UDim2.fromOffset(230, 30)
                             Item.Font = Enum.Font.Gotham
-                            Item.Text = "- "..v
+                            Item.Text = "- "..tostring(v)
+                        Item.TextTruncate = Enum.TextTruncate.AtEnd
                             Item.TextColor3 = Color3.fromRGB(255, 255, 255)
                             Item.TextSize = 14
                             Item.TextXAlignment = Enum.TextXAlignment.Left
@@ -4024,20 +4063,24 @@ function Neverlose_Main:Window(config)
                                 Dropfunc:Set(v)
                                 TweenService:Create(
                                     DropdownFrameHold,
-                                    TweenInfo.new(.3, Enum.EasingStyle.Quad),
+                                    TweenInfo.new(.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                     {Size = UDim2.new(0, 257, 0, 0)}
                                 ):Play()
                                 DropdownHolder.Visible = false
     
                                 TweenService:Create(
                                     Arrow,
-                                    TweenInfo.new(.3, Enum.EasingStyle.Quad),
+                                    TweenInfo.new(.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                     {Rotation = 0}
                                 ):Play()
     
-                                repeat task.wait() Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10) until DropdownFrameHold.Size == UDim2.new(0, 257, 0, 0)
+                                task.wait(0.21)
+                            syncSectionBounds()
                                 DropdownFrameHold.Visible = false
                                 DropToggled = false
+                            Dropdown.ZIndex=1
+                            openPopupExtra=0
+                            syncNativeCanvas()
                             end)
                         end
                     end
@@ -4060,7 +4103,7 @@ function Neverlose_Main:Window(config)
                     function Sliderfunc:visibility(state)
                         local Trans = nil
                         for i,v in pairs(Slider:GetChildren()) do
-                            if not v:IsA("UICorner") and v.Name ~= "SliderTitle" then
+                            if v:IsA("GuiObject") and v.Name ~= "SliderTitle" then
                                 v.Visible = state
                             end
                         end
@@ -4078,8 +4121,8 @@ function Neverlose_Main:Window(config)
                         Slider.Visible = state
                         TweenService:Create(
                             Section,
-                            TweenInfo.new(.5, Enum.EasingStyle.Quad),
-                            {Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)}
+                            TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                            {Size = UDim2.fromOffset(285, math.max(52, math.ceil(SectionLayout.AbsoluteContentSize.Y)+12))}
                         ):Play()
                     end
                     
@@ -4090,7 +4133,7 @@ function Neverlose_Main:Window(config)
                     Slider.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     Slider.BorderSizePixel = 0
                     Slider.Position = UDim2.new(0.0171875004, 0, 0, 0)
-                    Slider.Size = UDim2.new(0, 274, 0, 26)
+                    Slider.Size = UDim2.new(0, 274, 0, 30)
                     Slider.AutoButtonColor = false
                     Slider.Font = Enum.Font.SourceSans
                     Slider.Text = ""
@@ -4104,16 +4147,17 @@ function Neverlose_Main:Window(config)
                     SliderTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     SliderTitle.BorderSizePixel = 0
                     SliderTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-                    SliderTitle.Size = UDim2.new(0, 49, 0, 15)
+                    SliderTitle.Size = UDim2.new(0, 128, 0, 20)
                     SliderTitle.Font = Enum.Font.Gotham
                     SliderTitle.Text = title
+                    SliderTitle.TextTruncate = Enum.TextTruncate.AtEnd
                     SliderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    SliderTitle.TextSize = 13.000
+                    SliderTitle.TextSize = 14.000
                     SliderTitle.TextXAlignment = Enum.TextXAlignment.Left
                     
                     SliderFrame.Name = "SliderFrame"
                     SliderFrame.Parent = Slider
-                    SliderFrame.BackgroundColor3 = Color3.fromRGB(3, 30, 58)
+                    SliderFrame.BackgroundColor3 = Color3.fromRGB(38, 49, 53)
                     SliderFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     SliderFrame.BorderSizePixel = 0
                     SliderFrame.Position = UDim2.new(0.503129959, 0, 0.466666669, 0)
@@ -4121,7 +4165,7 @@ function Neverlose_Main:Window(config)
                     
                     SliderDot.Name = "SliderDot"
                     SliderDot.Parent = SliderFrame
-                    SliderDot.BackgroundColor3 = Color3.fromRGB(61, 133, 224)
+                    SliderDot.BackgroundColor3 = Color3.fromRGB(103, 181, 191)
                     SliderDot.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     SliderDot.BorderSizePixel = 0
                     SliderDot.Position = UDim2.new(0, 0, -8, 0)
@@ -4133,7 +4177,7 @@ function Neverlose_Main:Window(config)
                     
                     Value.Name = "Value"
                     Value.Parent = Slider
-                    Value.BackgroundColor3 = Color3.fromRGB(3, 5, 13)
+                    Value.BackgroundColor3 = Color3.fromRGB(17, 24, 28)
                     Value.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     Value.BorderSizePixel = 0
                     Value.Position = UDim2.new(0.909385085, 0, 0.266666681, 0)
@@ -4149,8 +4193,8 @@ function Neverlose_Main:Window(config)
                     ValueCorner.Name = "ValueCorner"
                     ValueCorner.Parent = Value
 
-                    Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)
-                    Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset + UniNum)
+                    syncSectionBounds()
+                    syncNativeCanvas()
 
                     spawn(function()
                         while false do -- R227: no per-frame theme polling
@@ -4260,7 +4304,7 @@ function Neverlose_Main:Window(config)
                     function Textbocfunc:visibility(state)
                         local Trans = nil
                         for i,v in pairs(TextBox:GetChildren()) do
-                            if not v:IsA("UICorner") and v.Name ~= "TextBoxTitle" then
+                            if v:IsA("GuiObject") and v.Name ~= "TextBoxTitle" then
                                 v.Visible = state
                             end
                         end
@@ -4278,19 +4322,19 @@ function Neverlose_Main:Window(config)
                         TextBox.Visible = state
                         TweenService:Create(
                             Section,
-                            TweenInfo.new(.5, Enum.EasingStyle.Quad),
-                            {Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)}
+                            TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                            {Size = UDim2.fromOffset(285, math.max(52, math.ceil(SectionLayout.AbsoluteContentSize.Y)+12))}
                         ):Play()
                     end
                     
                     TextBox.Name = "TextBox"
                     TextBox.Parent = Section
-                    TextBox.BackgroundColor3 = Color3.fromRGB(43, 67, 118)
+                    TextBox.BackgroundColor3 = Color3.fromRGB(34, 49, 53)
                     TextBox.BackgroundTransparency = 1.000
                     TextBox.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     TextBox.BorderSizePixel = 0
                     TextBox.Position = UDim2.new(0.0381034054, 0, 0.327935219, 0)
-                    TextBox.Size = UDim2.new(0, 274, 0, 26)
+                    TextBox.Size = UDim2.new(0, 274, 0, 30)
                     TextBox.AutoButtonColor = false
                     TextBox.Font = Enum.Font.Gotham
                     TextBox.Text = ""
@@ -4308,11 +4352,12 @@ function Neverlose_Main:Window(config)
                     TextBoxTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     TextBoxTitle.BorderSizePixel = 0
                     TextBoxTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-                    TextBoxTitle.Size = UDim2.new(0, 49, 0, 15)
+                    TextBoxTitle.Size = UDim2.new(0, 194, 0, 20)
                     TextBoxTitle.Font = Enum.Font.Gotham
                     TextBoxTitle.Text = title
+                    TextBoxTitle.TextTruncate = Enum.TextTruncate.AtEnd
                     TextBoxTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    TextBoxTitle.TextSize = 13.000
+                    TextBoxTitle.TextSize = 14.000
                     TextBoxTitle.TextXAlignment = Enum.TextXAlignment.Left
                     TextBoxTitle.TextYAlignment = Enum.TextYAlignment.Top
                     
@@ -4329,15 +4374,15 @@ function Neverlose_Main:Window(config)
                     Box.TextColor3 = Color3.fromRGB(255, 255, 255)
                     Box.TextSize = 14.000
 
-                    TextBoxStroke.Color = Color3.fromRGB(20, 153, 255)
+                    TextBoxStroke.Color = Color3.fromRGB(103, 181, 191)
                     TextBoxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                     TextBoxStroke.LineJoinMode = Enum.LineJoinMode.Round
                     TextBoxStroke.Thickness = 1
                     TextBoxStroke.Transparency = 0.8
                     TextBoxStroke.Parent = Box
 
-                    Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)
-                    Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset + UniNum)
+                    syncSectionBounds()
+                    syncNativeCanvas()
 
                     spawn(function()
                         while false do -- R227: no per-frame theme polling
@@ -4416,7 +4461,7 @@ function Neverlose_Main:Window(config)
                             local height=math.max(32,body.TextBounds.Y+6)
                             body.Size=UDim2.new(1,-8,0,height)
                             holder.Size=UDim2.fromOffset(274,19+height)
-                            Section.Size=UDim2.fromOffset(285,SectionLayout.AbsoluteContentSize.Y+10)
+                            syncSectionBounds()
                         end)
                     end
                     result:SetDesc(description)
@@ -4454,7 +4499,7 @@ function Neverlose_Main:Window(config)
                     function Colorpickerfunc:visibility(state)
                         local Trans = nil
                         for i,v in pairs(Colorpicker:GetChildren()) do
-                            if not v:IsA("UICorner") and v.Name ~= "ColorpickerTitle" then
+                            if v:IsA("GuiObject") and v.Name ~= "ColorpickerTitle" then
                                 v.Visible = state
                             end
                         end
@@ -4472,19 +4517,19 @@ function Neverlose_Main:Window(config)
                         Colorpicker.Visible = state
                         TweenService:Create(
                             Section,
-                            TweenInfo.new(.5, Enum.EasingStyle.Quad),
-                            {Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)}
+                            TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                            {Size = UDim2.fromOffset(285, math.max(52, math.ceil(SectionLayout.AbsoluteContentSize.Y)+12))}
                         ):Play()
                     end
                     
                     Colorpicker.Name = "Colorpicker"
                     Colorpicker.Parent = Section
-                    Colorpicker.BackgroundColor3 = Color3.fromRGB(43, 67, 118)
+                    Colorpicker.BackgroundColor3 = Color3.fromRGB(34, 49, 53)
                     Colorpicker.BackgroundTransparency = 1.000
                     Colorpicker.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     Colorpicker.BorderSizePixel = 0
                     Colorpicker.Position = UDim2.new(0.0381034054, 0, 0.327935219, 0)
-                    Colorpicker.Size = UDim2.new(0, 274, 0, 26)
+                    Colorpicker.Size = UDim2.new(0, 274, 0, 30)
                     Colorpicker.AutoButtonColor = false
                     Colorpicker.Font = Enum.Font.Gotham
                     Colorpicker.Text = ""
@@ -4502,11 +4547,12 @@ function Neverlose_Main:Window(config)
                     ColorpickerTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     ColorpickerTitle.BorderSizePixel = 0
                     ColorpickerTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-                    ColorpickerTitle.Size = UDim2.new(0, 49, 0, 15)
+                    ColorpickerTitle.Size = UDim2.new(0, 194, 0, 20)
                     ColorpickerTitle.Font = Enum.Font.Gotham
                     ColorpickerTitle.Text = title
+                    ColorpickerTitle.TextTruncate = Enum.TextTruncate.AtEnd
                     ColorpickerTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    ColorpickerTitle.TextSize = 13.000
+                    ColorpickerTitle.TextSize = 14.000
                     ColorpickerTitle.TextXAlignment = Enum.TextXAlignment.Left
                     ColorpickerTitle.TextYAlignment = Enum.TextYAlignment.Top
                     
@@ -4524,7 +4570,7 @@ function Neverlose_Main:Window(config)
                     Colorpreview.TextSize = 14.000
 
                     local ColorpreviewStroke = Instance.new("UIStroke")
-                    ColorpreviewStroke.Color = Color3.fromRGB(20, 153, 255)
+                    ColorpreviewStroke.Color = Color3.fromRGB(103, 181, 191)
                     ColorpreviewStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                     ColorpreviewStroke.LineJoinMode = Enum.LineJoinMode.Round
                     ColorpreviewStroke.Thickness = 2
@@ -4560,7 +4606,7 @@ function Neverlose_Main:Window(config)
                     ColorPFrameGlow.Position = UDim2.new(0.0120689655, 0, 0.366449565, 0)
                     ColorPFrameGlow.Size = UDim2.new(0, 286, 0, 0) -- UDim2.new(0, 286, 0, 178)
                     ColorPFrameGlow.Image = "rbxassetid://4996891970"
-                    ColorPFrameGlow.ImageColor3 = Color3.fromRGB(14, 191, 255)
+                    ColorPFrameGlow.ImageColor3 = Color3.fromRGB(99, 172, 183)
                     ColorPFrameGlow.Visible = false
                     -- ColorPFrameGlow.ImageTransparency = 1
 
@@ -4569,7 +4615,7 @@ function Neverlose_Main:Window(config)
                             pcall(function()
                                 TweenService:Create(
                                     ColorPFrameGlow,
-                                    TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                    TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                     {ImageColor3 = Neverlose_Main.Theme.Custom.Glow}
                                 ):Play()
                             end)
@@ -4578,7 +4624,7 @@ function Neverlose_Main:Window(config)
 
                     ColorPFrame.Name = "ColorPFrame"
                     ColorPFrame.Parent = ColorPFrameGlow
-                    ColorPFrame.BackgroundColor3 = Color3.fromRGB(0, 21, 40)
+                    ColorPFrame.BackgroundColor3 = Color3.fromRGB(22, 29, 33)
                     ColorPFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     ColorPFrame.BorderSizePixel = 0
                     ColorPFrame.Position = UDim2.new(0.0386760868, 0, 0.0423884057, 0)
@@ -4598,7 +4644,7 @@ function Neverlose_Main:Window(config)
                     ColorClose.Size = UDim2.new(0, 27, 0, 21)
                     ColorClose.Font = Enum.Font.GothamBold
                     ColorClose.Text = "X"
-                    ColorClose.TextColor3 = Color3.fromRGB(20, 120, 213)
+                    ColorClose.TextColor3 = Color3.fromRGB(103, 181, 191)
                     ColorClose.TextSize = 14.000
 
                     spawn(function()
@@ -4618,12 +4664,12 @@ function Neverlose_Main:Window(config)
                         if CToggled == true then
                             TweenService:Create(
                                 ColorPFrame,
-                                TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Size = UDim2.new(0, 263, 0, 0)}
                             ):Play()
                             TweenService:Create(
                                 ColorPFrameGlow,
-                                TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Size = UDim2.new(0, 286, 0, 0)}
                             ):Play()
                             TweenService:Create(
@@ -4632,15 +4678,13 @@ function Neverlose_Main:Window(config)
                                 {ImageTransparency = 1}
                             ):Play()
                             for i,v in pairs(ColorPFrame:GetChildren()) do
-                                if not v:IsA("UICorner") then
+                                if v:IsA("GuiObject") then
                                     v.Visible = false
                                     task.wait()
                                 end
                             end
-                            repeat task.wait()
-                                Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y)
-                                Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset)
-                            until ColorPFrame.Size == UDim2.new(0, 263, 0, 0)
+                            task.wait(0.2)
+                                syncSectionBounds()
                             ColorPFrame.Visible = false
                             ColorPFrameGlow.Visible = false
                             CToggled = false
@@ -4653,12 +4697,12 @@ function Neverlose_Main:Window(config)
                             ColorPFrameGlow.Visible = true
                             TweenService:Create(
                                 ColorPFrame,
-                                TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Size = UDim2.new(0, 263, 0, 163)}
                             ):Play()
                             TweenService:Create(
                                 ColorPFrameGlow,
-                                TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Size = UDim2.new(0, 286, 0, 178)}
                             ):Play()
                             TweenService:Create(
@@ -4668,28 +4712,26 @@ function Neverlose_Main:Window(config)
                             ):Play()
                             spawn(function()
                                 for i,v in pairs(ColorPFrame:GetChildren()) do
-                                    if not v:IsA("UICorner") then
+                                    if v:IsA("GuiObject") then
                                         v.Visible = true
                                         task.wait(.1)
                                     end
                                 end
                             end)
-                            repeat task.wait()
-                                Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y)
-                                Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset)
-                            until ColorPFrame.Size == UDim2.new(0, 263, 0, 163)
+                            task.wait(0.2)
+                                syncSectionBounds()
                             CToggled = true
 
                         else
                             if CToggled == true then
                                 TweenService:Create(
                                     ColorPFrame,
-                                    TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                    TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                     {Size = UDim2.new(0, 263, 0, 0)}
                                 ):Play()
                                 TweenService:Create(
                                     ColorPFrameGlow,
-                                    TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                    TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                     {Size = UDim2.new(0, 286, 0, 0)}
                                 ):Play()
                                 TweenService:Create(
@@ -4699,16 +4741,14 @@ function Neverlose_Main:Window(config)
                                 ):Play()
                                 spawn(function()
                                     for i,v in pairs(ColorPFrame:GetChildren()) do
-                                        if not v:IsA("UICorner") then
+                                        if v:IsA("GuiObject") then
                                             v.Visible = false
                                             task.wait()
                                         end
                                     end
                                 end)
-                                repeat task.wait()
-                                    Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y)
-                                    Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset)
-                                until ColorPFrame.Size == UDim2.new(0, 263, 0, 0)
+                                task.wait(0.2)
+                                syncSectionBounds()
                                 ColorPFrame.Visible = false
                                 ColorPFrameGlow.Visible = false
                                 CToggled = false
@@ -4798,7 +4838,7 @@ function Neverlose_Main:Window(config)
                     ColorValue.TextSize = 14.000
 
                     local ColorValueStroke = Instance.new("UIStroke")
-                    ColorValueStroke.Color = Color3.fromRGB(20, 153, 255)
+                    ColorValueStroke.Color = Color3.fromRGB(103, 181, 191)
                     ColorValueStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                     ColorValueStroke.LineJoinMode = Enum.LineJoinMode.Round
                     ColorValueStroke.Thickness = 1
@@ -4809,8 +4849,8 @@ function Neverlose_Main:Window(config)
                     ColorValueCorner.Name = "ColorValueCorner"
                     ColorValueCorner.Parent = ColorValue
                     
-                    Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)
-                    Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset + UniNum)
+                    syncSectionBounds()
+                    syncNativeCanvas()
 
                     function Colorpickerfunc:Set(val)
                         Colorpickerfunc.Value = val
@@ -5013,7 +5053,7 @@ function Neverlose_Main:Window(config)
                     function Bindfunc:visibility(state)
                         local Trans = nil
                         for i,v in pairs(Bind:GetChildren()) do
-                            if not v:IsA("UICorner") and v.Name ~= "BindTitle" then
+                            if v:IsA("GuiObject") and v.Name ~= "BindTitle" then
                                 v.Visible = state
                             end
                         end
@@ -5031,8 +5071,8 @@ function Neverlose_Main:Window(config)
                         Bind.Visible = state
                         TweenService:Create(
                             Section,
-                            TweenInfo.new(.5, Enum.EasingStyle.Quad),
-                            {Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)}
+                            TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                            {Size = UDim2.fromOffset(285, math.max(52, math.ceil(SectionLayout.AbsoluteContentSize.Y)+12))}
                         ):Play()
                     end
 
@@ -5057,16 +5097,17 @@ function Neverlose_Main:Window(config)
                     BindTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     BindTitle.BorderSizePixel = 0
                     BindTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-                    BindTitle.Size = UDim2.new(0, 49, 0, 15)
+                    BindTitle.Size = UDim2.new(0, 145, 0, 20)
                     BindTitle.Font = Enum.Font.Gotham
                     BindTitle.Text = title
+                    BindTitle.TextTruncate = Enum.TextTruncate.AtEnd
                     BindTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
                     BindTitle.TextSize = 13.000
                     BindTitle.TextXAlignment = Enum.TextXAlignment.Left
                     
                     BindFrame.Name = "BindFrame"
                     BindFrame.Parent = Bind
-                    BindFrame.BackgroundColor3 = Color3.fromRGB(3, 5, 13)
+                    BindFrame.BackgroundColor3 = Color3.fromRGB(17, 24, 28)
                     BindFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     BindFrame.BorderSizePixel = 0
                     BindFrame.Position = UDim2.new(0.80, 0, 0.200000003, 0)
@@ -5129,7 +5170,7 @@ function Neverlose_Main:Window(config)
                     BindFrameGlow.Position = UDim2.new(0.0120689655, 0, 0.366449565, 0)
                     BindFrameGlow.Size = UDim2.new(0, 286, 0, 0) -- UDim2.new(0, 286, 0, 178)
                     BindFrameGlow.Image = "rbxassetid://4996891970"
-                    BindFrameGlow.ImageColor3 = Color3.fromRGB(14, 191, 255)
+                    BindFrameGlow.ImageColor3 = Color3.fromRGB(99, 172, 183)
                     BindFrameGlow.Visible = false
 
                     spawn(function()
@@ -5137,7 +5178,7 @@ function Neverlose_Main:Window(config)
                             pcall(function()
                                 TweenService:Create(
                                     BindFrameGlow,
-                                    TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                    TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                     {ImageColor3 = Neverlose_Main.Theme.Custom.Glow}
                                 ):Play()
                                 ChangeTypeText(BindTitle)
@@ -5147,7 +5188,7 @@ function Neverlose_Main:Window(config)
                     
                     BindFrame.Name = "BindFrame"
                     BindFrame.Parent = BindFrameGlow
-                    BindFrame.BackgroundColor3 = Color3.fromRGB(0, 21, 40)
+                    BindFrame.BackgroundColor3 = Color3.fromRGB(22, 29, 33)
                     BindFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
                     BindFrame.BorderSizePixel = 0
                     BindFrame.Position = UDim2.new(0.0386760868, 0, 0.0423884057, 0)
@@ -5167,7 +5208,7 @@ function Neverlose_Main:Window(config)
                     BindFrameClose.Size = UDim2.new(0, 27, 0, 21)
                     BindFrameClose.Font = Enum.Font.GothamBold
                     BindFrameClose.Text = "X"
-                    BindFrameClose.TextColor3 = Color3.fromRGB(20, 120, 213)
+                    BindFrameClose.TextColor3 = Color3.fromRGB(103, 181, 191)
                     BindFrameClose.TextSize = 14.000
                     
                     BindsList.Name = "BindsList"
@@ -5289,7 +5330,7 @@ function Neverlose_Main:Window(config)
                                 TweenService:Create(
                                     v.BindSettingImage,
                                     TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                    {ImageColor3 = Color3.fromRGB(74, 87, 97)}
+                                    {ImageColor3 = Color3.fromRGB(81, 100, 106)}
                                 ):Play()
                             end
                         end
@@ -5356,7 +5397,7 @@ function Neverlose_Main:Window(config)
                         BindTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                         BindTitle.BorderSizePixel = 0
                         BindTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-                        BindTitle.Size = UDim2.new(0, 49, 0, 15)
+                        BindTitle.Size = UDim2.new(0, 145, 0, 20)
                         BindTitle.Font = Enum.Font.Gotham
                         BindTitle.Text = "Key"
                         BindTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -5365,7 +5406,7 @@ function Neverlose_Main:Window(config)
                         
                         BindKeyFrame.Name = "BindKeyFrame"
                         BindKeyFrame.Parent = BindKey
-                        BindKeyFrame.BackgroundColor3 = Color3.fromRGB(3, 13, 26)
+                        BindKeyFrame.BackgroundColor3 = Color3.fromRGB(16, 22, 26)
                         BindKeyFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
                         BindKeyFrame.BorderSizePixel = 0
                         BindKeyFrame.Position = UDim2.new(0.845000029, 0, 0.200000003, 0)
@@ -5417,7 +5458,7 @@ function Neverlose_Main:Window(config)
                         ModeTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                         ModeTitle.BorderSizePixel = 0
                         ModeTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-                        ModeTitle.Size = UDim2.new(0, 49, 0, 15)
+                        ModeTitle.Size = UDim2.new(0, 145, 0, 20)
                         ModeTitle.Font = Enum.Font.Gotham
                         ModeTitle.Text = "Mode"
                         ModeTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -5426,7 +5467,7 @@ function Neverlose_Main:Window(config)
                         
                         BModeHold.Name = "BModeHold"
                         BModeHold.Parent = BindMode
-                        BModeHold.BackgroundColor3 = Color3.fromRGB(3, 13, 26)
+                        BModeHold.BackgroundColor3 = Color3.fromRGB(16, 22, 26)
                         BModeHold.BorderColor3 = Color3.fromRGB(0, 0, 0)
                         BModeHold.BorderSizePixel = 0
                         BModeHold.Position = UDim2.new(0.845000029, 0, 0.200000003, 0)
@@ -5495,7 +5536,7 @@ function Neverlose_Main:Window(config)
                                     TweenService:Create(
                                         v.BindSettingImage,
                                         TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                        {ImageColor3 = Color3.fromRGB(74, 87, 97)}
+                                        {ImageColor3 = Color3.fromRGB(81, 100, 106)}
                                     ):Play()
                                 end
                             end
@@ -5528,7 +5569,7 @@ function Neverlose_Main:Window(config)
                         TweenService:Create(
                             BModeHold,
                             TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                            {BackgroundColor3 = Color3.fromRGB(3, 13, 26)}
+                            {BackgroundColor3 = Color3.fromRGB(16, 22, 26)}
                         ):Play()
                         
                         BModeToggle.MouseButton1Click:Connect(function()
@@ -5541,7 +5582,7 @@ function Neverlose_Main:Window(config)
                             TweenService:Create(
                                 BModeHold,
                                 TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {BackgroundColor3 = Color3.fromRGB(3, 13, 26)}
+                                {BackgroundColor3 = Color3.fromRGB(16, 22, 26)}
                             ):Play()
                             BindSetting.Text = 'Toggle "'..KeyCodeToText(key)..'"'
                             BModeStroke.Parent = BModeHold
@@ -5558,7 +5599,7 @@ function Neverlose_Main:Window(config)
                             TweenService:Create(
                                 BModeToggle,
                                 TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {BackgroundColor3 = Color3.fromRGB(3, 13, 26)}
+                                {BackgroundColor3 = Color3.fromRGB(16, 22, 26)}
                             ):Play()
                             BModeStroke.Parent = BModeToggle
                             BindSetting.Text = 'Hold "'..KeyCodeToText(key)..'"'
@@ -5615,7 +5656,7 @@ function Neverlose_Main:Window(config)
                         DeletionButton.Position = UDim2.new(0.1875, 0, 0, 0)
                         DeletionButton.Size = UDim2.new(0, 17, 0, 17)
                         DeletionButton.Image = "http://www.roblox.com/asset/?id=6022668885"
-                        DeletionButton.ImageColor3 = Color3.fromRGB(79, 111, 200)
+                        DeletionButton.ImageColor3 = Color3.fromRGB(94, 155, 167)
 
                         DeletionButton.MouseEnter:Connect(function()
                             TweenService:Create(
@@ -5629,7 +5670,7 @@ function Neverlose_Main:Window(config)
                             TweenService:Create(
                                 DeletionButton,
                                 TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {ImageColor3 = Color3.fromRGB(79, 111, 200)}
+                                {ImageColor3 = Color3.fromRGB(94, 155, 167)}
                             ):Play()
                         end)
                         local Completely_Stop = false
@@ -5738,7 +5779,7 @@ function Neverlose_Main:Window(config)
                                 TweenService:Create(
                                     v.BindSettingImage,
                                     TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                    {ImageColor3 = Color3.fromRGB(74, 87, 97)}
+                                    {ImageColor3 = Color3.fromRGB(81, 100, 106)}
                                 ):Play()
                             end
                         end
@@ -5805,7 +5846,7 @@ function Neverlose_Main:Window(config)
                         BindTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                         BindTitle.BorderSizePixel = 0
                         BindTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-                        BindTitle.Size = UDim2.new(0, 49, 0, 15)
+                        BindTitle.Size = UDim2.new(0, 145, 0, 20)
                         BindTitle.Font = Enum.Font.Gotham
                         BindTitle.Text = "Key"
                         BindTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -5814,7 +5855,7 @@ function Neverlose_Main:Window(config)
                         
                         BindKeyFrame.Name = "BindKeyFrame"
                         BindKeyFrame.Parent = BindKey
-                        BindKeyFrame.BackgroundColor3 = Color3.fromRGB(3, 13, 26)
+                        BindKeyFrame.BackgroundColor3 = Color3.fromRGB(16, 22, 26)
                         BindKeyFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
                         BindKeyFrame.BorderSizePixel = 0
                         BindKeyFrame.Position = UDim2.new(0.845000029, 0, 0.200000003, 0)
@@ -5866,7 +5907,7 @@ function Neverlose_Main:Window(config)
                         ModeTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
                         ModeTitle.BorderSizePixel = 0
                         ModeTitle.Position = UDim2.new(0.0355987065, 0, 0.233333334, 0)
-                        ModeTitle.Size = UDim2.new(0, 49, 0, 15)
+                        ModeTitle.Size = UDim2.new(0, 145, 0, 20)
                         ModeTitle.Font = Enum.Font.Gotham
                         ModeTitle.Text = "Mode"
                         ModeTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -5875,7 +5916,7 @@ function Neverlose_Main:Window(config)
                         
                         BModeHold.Name = "BModeHold"
                         BModeHold.Parent = BindMode
-                        BModeHold.BackgroundColor3 = Color3.fromRGB(3, 13, 26)
+                        BModeHold.BackgroundColor3 = Color3.fromRGB(16, 22, 26)
                         BModeHold.BorderColor3 = Color3.fromRGB(0, 0, 0)
                         BModeHold.BorderSizePixel = 0
                         BModeHold.Position = UDim2.new(0.845000029, 0, 0.200000003, 0)
@@ -5944,7 +5985,7 @@ function Neverlose_Main:Window(config)
                                     TweenService:Create(
                                         v.BindSettingImage,
                                         TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                        {ImageColor3 = Color3.fromRGB(74, 87, 97)}
+                                        {ImageColor3 = Color3.fromRGB(81, 100, 106)}
                                     ):Play()
                                 end
                             end
@@ -5976,7 +6017,7 @@ function Neverlose_Main:Window(config)
                             TweenService:Create(
                                 BModeToggle,
                                 TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {BackgroundColor3 = Color3.fromRGB(3, 13, 26)}
+                                {BackgroundColor3 = Color3.fromRGB(16, 22, 26)}
                             ):Play()
                             BModeStroke.Parent = BModeToggle
                             BindSetting.Text = 'Hold "'..KeyCodeToText(key)..'"'
@@ -5990,7 +6031,7 @@ function Neverlose_Main:Window(config)
                             TweenService:Create(
                                 BModeHold,
                                 TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {BackgroundColor3 = Color3.fromRGB(3, 13, 26)}
+                                {BackgroundColor3 = Color3.fromRGB(16, 22, 26)}
                             ):Play()
                             BindSetting.Text = 'Toggle "'..KeyCodeToText(key)..'"'
                             BModeStroke.Parent = BModeHold
@@ -6006,7 +6047,7 @@ function Neverlose_Main:Window(config)
                             TweenService:Create(
                                 BModeHold,
                                 TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {BackgroundColor3 = Color3.fromRGB(3, 13, 26)}
+                                {BackgroundColor3 = Color3.fromRGB(16, 22, 26)}
                             ):Play()
                             BindSetting.Text = 'Toggle "'..KeyCodeToText(key)..'"'
                             BModeStroke.Parent = BModeHold
@@ -6023,7 +6064,7 @@ function Neverlose_Main:Window(config)
                             TweenService:Create(
                                 BModeToggle,
                                 TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {BackgroundColor3 = Color3.fromRGB(3, 13, 26)}
+                                {BackgroundColor3 = Color3.fromRGB(16, 22, 26)}
                             ):Play()
                             BModeStroke.Parent = BModeToggle
                             BindSetting.Text = 'Hold "'..KeyCodeToText(key)..'"'
@@ -6080,7 +6121,7 @@ function Neverlose_Main:Window(config)
                         DeletionButton.Position = UDim2.new(0.1875, 0, 0, 0)
                         DeletionButton.Size = UDim2.new(0, 17, 0, 17)
                         DeletionButton.Image = "http://www.roblox.com/asset/?id=6022668885"
-                        DeletionButton.ImageColor3 = Color3.fromRGB(79, 111, 200)
+                        DeletionButton.ImageColor3 = Color3.fromRGB(94, 155, 167)
 
                         DeletionButton.MouseEnter:Connect(function()
                             TweenService:Create(
@@ -6094,7 +6135,7 @@ function Neverlose_Main:Window(config)
                             TweenService:Create(
                                 DeletionButton,
                                 TweenInfo.new(.3, Enum.EasingStyle.Quad),
-                                {ImageColor3 = Color3.fromRGB(79, 111, 200)}
+                                {ImageColor3 = Color3.fromRGB(94, 155, 167)}
                             ):Play()
                         end)
                         local Completely_Stop = false
@@ -6170,7 +6211,7 @@ function Neverlose_Main:Window(config)
                     
 
 
-                    Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y + 10)
+                    syncSectionBounds()
 
                     local BToggled = false
 
@@ -6178,12 +6219,12 @@ function Neverlose_Main:Window(config)
                         if BToggled == true then
                             TweenService:Create(
                                 BindFrame,
-                                TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Size = UDim2.new(0, 263, 0, 0)}
                             ):Play()
                             TweenService:Create(
                                 BindFrameGlow,
-                                TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Size = UDim2.new(0, 286, 0, 0)}
                             ):Play()
                             TweenService:Create(
@@ -6192,15 +6233,13 @@ function Neverlose_Main:Window(config)
                                 {ImageTransparency = 1}
                             ):Play()
                             for i,v in pairs(BindFrame:GetChildren()) do
-                                if not v:IsA("UICorner") then
+                                if v:IsA("GuiObject") then
                                     v.Visible = false
                                     task.wait()
                                 end
                             end
-                            repeat task.wait()
-                                Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y)
-                                Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset)
-                            until BindFrame.Size == UDim2.new(0, 263, 0, 0)
+                            task.wait(0.2)
+                                syncSectionBounds()
                             BindFrame.Visible = false
                             BindFrameGlow.Visible = false
                             BToggled = false
@@ -6213,12 +6252,12 @@ function Neverlose_Main:Window(config)
                             BindFrameGlow.Visible = true
                             TweenService:Create(
                                 BindFrame,
-                                TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Size = UDim2.new(0, 263, 0, 163)}
                             ):Play()
                             TweenService:Create(
                                 BindFrameGlow,
-                                TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {Size = UDim2.new(0, 286, 0, 178)}
                             ):Play()
                             TweenService:Create(
@@ -6228,27 +6267,25 @@ function Neverlose_Main:Window(config)
                             ):Play()
                             spawn(function()
                                 for i,v in pairs(BindFrame:GetChildren()) do
-                                    if not v:IsA("UICorner") then
+                                    if v:IsA("GuiObject") then
                                         v.Visible = true
                                         task.wait(.1)
                                     end
                                 end
                             end)
-                            repeat task.wait()
-                                Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y)
-                                Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset)
-                            until BindFrame.Size == UDim2.new(0, 263, 0, 163)
+                            task.wait(0.2)
+                                syncSectionBounds()
                             BToggled = true
                         else
                             if BToggled == true then
                                 TweenService:Create(
                                     BindFrame,
-                                    TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                    TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                     {Size = UDim2.new(0, 263, 0, 0)}
                                 ):Play()
                                 TweenService:Create(
                                     BindFrameGlow,
-                                    TweenInfo.new(.4, Enum.EasingStyle.Quad),
+                                    TweenInfo.new(.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                     {Size = UDim2.new(0, 286, 0, 0)}
                                 ):Play()
                                 TweenService:Create(
@@ -6258,16 +6295,14 @@ function Neverlose_Main:Window(config)
                                 ):Play()
                                 spawn(function()
                                     for i,v in pairs(BindFrame:GetChildren()) do
-                                        if not v:IsA("UICorner") then
+                                        if v:IsA("GuiObject") then
                                             v.Visible = false
                                             task.wait()
                                         end
                                     end
                                 end)
-                                repeat task.wait()
-                                    Section.Size = UDim2.new(0, 285, 0, SectionLayout.AbsoluteContentSize.Y)
-                                    Container.CanvasSize = UDim2.new(0, 0, 0, Container.CanvasSize.Y.Offset)
-                                until BindFrame.Size == UDim2.new(0, 263, 0, 0)
+                                task.wait(0.2)
+                                syncSectionBounds()
                                 BindFrame.Visible = false
                                 BindFrameGlow.Visible = false
                                 BToggled = false

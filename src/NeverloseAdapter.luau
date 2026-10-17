@@ -145,8 +145,8 @@ return function(Neverlose, config)
         local l,t,r,b=readInsets()
         local width=math.max(1,view.X-l-r)
         local height=math.max(1,view.Y-t-b)
-        local fit=math.min((width-20)/846,(height-20)/682,1.1)
-        local applied=clamp(fit*uiScale,0.2,1.4)
+        local fit=math.min((width-8)/846,(height-8)/682,1.18)
+        local applied=clamp(math.min(fit*1.08*uiScale,(width-8)/846,(height-8)/682),0.2,1.4)
         local key=('%d:%d:%d:%d:%.3f'):format(width,height,l,t,applied)
         if key==lastViewport then return end
         lastViewport=key
@@ -170,12 +170,29 @@ return function(Neverlose, config)
     end
 
     local tabGroup
+    -- Uses asset IDs shipped by this Neverlose UI library (not HTTP icon packs).
+    local navIcons = {
+        Aim='6031097226', Combat='6031097226', Visual='6035181869',
+        Setting='6031280882', Script='6026663699', Other='6034230648',
+        Reload='6031097226', Info='6035181869', Move='6035067832'
+    }
+    local function pageIcon(name)
+        local n=tostring(name):lower()
+        local key='Other'
+        if n:find('瞄') or n:find('rage') or n:find('战斗') or n:find('射') then key='Aim'
+        elseif n:find('esp') or n:find('视觉') or n:find('显示') or n:find('感知') then key='Visual'
+        elseif n:find('移动') or n:find('速度') or n:find('飞行') then key='Move'
+        elseif n:find('脚本') or n:find('代码') then key='Script'
+        elseif n:find('设置') or n:find('配置') or n:find('调试') or n:find('界面') then key='Setting'
+        elseif n:find('信息') then key='Info' end
+        return 'rbxassetid://'..navIcons[key]
+    end
     local function createTab(pageName,icon,category)
         -- Preserves native left navigation: TSection -> Tab -> alternating Section.
         if category or not tabGroup then
             tabGroup=window.Native:TSection(category or '游戏功能')
         end
-        local sourcePage=tabGroup:Tab(pageName)
+        local sourcePage=tabGroup:Tab(pageName,pageIcon(pageName))
         local tab={Native=sourcePage,Title=pageName,OptionCount=0,Sections={}}
         local headings
         if pageName:find('视觉') or pageName:find('ESP') or pageName:find('感知') then

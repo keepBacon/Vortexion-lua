@@ -1964,6 +1964,10 @@ return function(common)
         NameFormat = "用户名", ShowJob = false, OnlyHostile = false,
         TargetNPCs = true, TeamCheck = false, MaxDistance = 850,
         MaxEntries = 36, TickRate = 20,
+        Transparency3D = 0.30, Transparency2D = 0.15,
+        BoxThickness = 1.6, NameSize = 14, JobSize = 13,
+        LabelOffset = 2.4, ShowDistance = false, ShowHealth = false,
+        JobTeamColor = true, JobTranslate = true,
         ColorEnemy = Color3.fromRGB(245, 80, 80),
         ColorAlly = Color3.fromRGB(75, 175, 225),
         ColorSCP = Color3.fromRGB(0, 0, 0),
@@ -2010,51 +2014,121 @@ return function(common)
         screen = gui
         return screen
     end
+    -- SCP: Roleplay community team/rank vocabulary. Unmapped values remain original.
+    local ROLE_ZH = {
+        ["Class-D"]="D级人员", ["Class - D"]="D级人员", ["Class D"]="D级人员",
+        ["Chaos Insurgency"]="混沌分裂者", ["Scientific Department"]="科研部",
+        ["Security Department"]="安保部", ["Medical Department"]="医疗部",
+        ["Administrative Department"]="行政部", ["Intelligence Agency"]="情报局",
+        ["Internal Security Department"]="内部安全部",
+        ["Rapid Response Team"]="快速反应部队", ["Mobile Task Forces"]="机动特遣队",
+        ["Mobile Task Force"]="机动特遣队", ["O5 Council"]="O5议会",
+        ["Foundation"]="基金会", ["Neutral"]="中立", ["Hostile"]="敌对",
+        ["Recruit"]="新兵", ["Cadet"]="学员", ["Private"]="列兵",
+        ["Corporal"]="下士", ["Sergeant"]="中士", ["Staff Sergeant"]="上士",
+        ["Lieutenant"]="中尉", ["Captain"]="上尉", ["Commander"]="指挥官",
+        ["Director"]="主管", ["Deputy Director"]="副主管",
+        ["Supervisor"]="监督员", ["Special Agent"]="特工",
+        ["Entry Agent"]="初级特工", ["Internal Agent"]="内部特工",
+        ["Senior Supervisor"]="高级监督员", ["Lead Supervisor"]="首席监督员",
+        ["Researcher"]="研究员", ["Junior Researcher"]="初级研究员",
+        ["Senior Researcher"]="高级研究员", ["Intern"]="实习生",
+        ["Doctor"]="医生", ["Nurse"]="护士", ["Veteran Class - D"]="资深D级人员",
+        ["Conscript"]="征召兵", ["Trained Conscript"]="训练征召兵",
+        ["Senior Conscript"]="高级征召兵", ["Alpha"]="阿尔法",
+        ["Nu-7"]="Nu-7机动特遣队", ["Epsilon-11"]="Epsilon-11机动特遣队",
+        ["Beta-7"]="Beta-7机动特遣队", ["Alpha-1"]="Alpha-1机动特遣队",
+        ["Dedicated Class - D"]="资深D级人员", ["Adept Class - D"]="熟练D级人员",
+        ["Advanced Class - D"]="高级D级人员", ["Board Director"]="董事会主管",
+        ["Head Researcher"]="首席研究员", ["Trainee Researcher"]="见习研究员",
+        ["General"]="将军", ["Major"]="少校", ["Colonel"]="上校",
+        ["Task Force Leader"]="特遣队队长", ["Head Commander"]="总指挥官",
+        ["Insurgency Command"]="叛乱指挥官", ["The Engineer"]="工程师",
+        ["Intelligence Director"]="情报局局长", ["Internal Security Manager"]="内部安全经理",
+        ["Medical Director"]="医疗部主管", ["Site Manager"]="站点经理",
+        ["Junior Manager"]="初级经理", ["Senior Manager"]="高级经理",
+        ["Site Assistant Manager"]="站点助理经理", ["Site Senior Manager"]="站点高级经理",
+        ["Site Director"]="站点主管", ["Site Council"]="站点议会",
+        ["Administrative Council"]="行政议会", ["Administrative Regulator"]="行政监察员",
+    }
+    local function translatedRank(raw)
+        if not Config.JobTranslate then return raw end
+        if ROLE_ZH[raw] then return ROLE_ZH[raw] end
+        local normalized=tostring(raw):gsub("^%s+",""):gsub("%s+$","")
+        return ROLE_ZH[normalized] or normalized
+    end
+    local function roleColor(player)
+        if not player then return Config.ColorSCP end
+        if not Config.JobTeamColor then return Config.ColorAlly end
+        -- Prefer explicit live role color when a game version provides it.
+        for _,key in ipairs({"JobColor", "RoleColor", "RankColor", "TeamColor"}) do
+            local ok,value=pcall(function()return player:GetAttribute(key)end)
+            if ok and typeof(value)=="Color3" then return value end
+        end
+        local team=player.Team
+        if team then
+            local ok,color=pcall(function()return team.TeamColor.Color end)
+            if ok and typeof(color)=="Color3" then return color end
+        end
+        return Config.ColorAlly
+    end
     local function role(player, cand)
         if not player then return "SCP收容体" end
         if common.Candidates and common.Candidates.GetJob then
-            return common.Candidates:GetJob(cand)
+            return translatedRank(common.Candidates:GetJob(cand))
         end
-        return player.Team and player.Team.Name or "未知职位"
+        return translatedRank(player.Team and player.Team.Name or "未知职位")
     end
-    local function caption(player, cand)
-        local chunks = {}
-        if Config.ShowNames then
-            if not player then
-                chunks[#chunks+1] = "SCP收容体"
-            else
-                chunks[#chunks+1] = (Config.NameFormat=="实体名" and cand.Character.Name)
-                    or player.Name
-            end
+    local function displayName(player,cand)
+        if not Config.ShowNames then return "" end
+        if not player then return "SCP收容体" end
+        local name=(Config.NameFormat=="实体名" and cand.Character and cand.Character.Name) or player.Name
+        return tostring(name or "")
+    end
+    local function labelExtra(cand)
+        local info={}
+        if Config.ShowDistance then
+            info[#info+1] = tostring(math.floor(cand.WorldDistance or 0)) .. " studs"
         end
-        if Config.ShowJob and player then
-            local job=role(player,cand)
-            if job and job~="" then chunks[#chunks+1]=job end
+        if Config.ShowHealth and cand.Humanoid then
+            local hp=math.max(0,math.floor(cand.Humanoid.Health or 0))
+            local max=math.max(1,math.floor(cand.Humanoid.MaxHealth or 100))
+            info[#info+1] = ("%d/%d HP"):format(hp,max)
         end
-        return table.concat(chunks," | ")
+        return table.concat(info, " · ")
     end
     local function attachLabel(entry, head)
         if entry.label then return end
-        local gui = Instance.new("BillboardGui")
-        gui.Name = "SCPLabel"
-        gui.Size = UDim2.fromOffset(230, 42)
-        gui.StudsOffsetWorldSpace = Vector3.new(0, 2.4, 0)
-        gui.AlwaysOnTop = true
-        gui.ResetOnSpawn = false
-        gui.Adornee = head
-        local text = Instance.new("TextLabel")
-        text.Size = UDim2.fromScale(1,1)
-        text.BackgroundTransparency = 1
-        text.Font = Enum.Font.GothamBold
-        text.TextScaled = false
-        text.TextSize = 13
-        text.TextStrokeTransparency = 0.25
-        text.TextStrokeColor3 = Color3.fromRGB(235,235,235)
-        text.Parent = gui
-        local parent = mountScreen()
+        local gui=Instance.new("BillboardGui")
+        gui.Name="SCPLabel"
+        gui.Size=UDim2.fromOffset(260,72)
+        gui.StudsOffsetWorldSpace=Vector3.new(0,Config.LabelOffset,0)
+        gui.AlwaysOnTop=true
+        gui.ResetOnSpawn=false
+        gui.Adornee=head
+        local function addLine(name)
+            local text=Instance.new("TextLabel")
+            text.Name=name
+            text.Size=UDim2.new(1,0,0,21)
+            text.BackgroundTransparency=1
+            text.Font=Enum.Font.GothamBold
+            text.TextScaled=false
+            text.TextSize=14
+            text.TextStrokeTransparency=Config.LabelStroke == false and 1 or 0.2
+            text.TextStrokeColor3=Color3.fromRGB(10,15,18)
+            text.TextTruncate=Enum.TextTruncate.AtEnd
+            if Config.LabelFont and Enum.Font[Config.LabelFont] then text.Font=Enum.Font[Config.LabelFont] end
+            text.Parent=gui
+            return text
+        end
+        local nameText=addLine("ESPName")
+        local jobText=addLine("ESPJob")
+        local metaText=addLine("ESPMeta")
+        metaText.TextSize=12
+        local parent=mountScreen()
         if not parent then gui:Destroy() return end
-        gui.Parent = parent
-        entry.label,entry.text=gui,text
+        gui.Parent=parent
+        entry.label,entry.text,entry.roleText,entry.metaText=gui,nameText,jobText,metaText
     end
     local function discoverParts(cand)
         local model=cand.Character
@@ -2089,7 +2163,7 @@ return function(common)
         adorn.Size=part.Size
         adorn.AlwaysOnTop=true
         adorn.ZIndex=4
-        adorn.Transparency=0.12
+        adorn.Transparency=Config.Transparency3D
         adorn.Visible=false
         adorn.Parent=screen or mountScreen() or part
         component.adorn=adorn
@@ -2105,7 +2179,7 @@ return function(common)
         frame.BorderSizePixel=0
         frame.Visible=false
         local stroke=Instance.new("UIStroke")
-        stroke.Thickness=1.5
+        stroke.Thickness=Config.BoxThickness
         stroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
         stroke.Parent=frame
         frame.Parent=gui
@@ -2133,7 +2207,7 @@ return function(common)
     end
     function ESP:Update(dt)
         if stopped then return end
-        if not Config.Enabled or (not Config.Box and not Config.ShowNames and not Config.ShowJob) then
+        if not Config.Enabled or (not Config.Box and not Config.ShowNames and not Config.ShowJob and not Config.ShowDistance and not Config.ShowHealth) then
             if wasEnabled then
                 for _,entry in pairs(entries) do hide(entry) end
                 wasEnabled=false
@@ -2184,6 +2258,7 @@ return function(common)
                             adorn.Adornee=part
                             if adorn.Size~=part.Size then adorn.Size=part.Size end
                             adorn.Color3=color
+                            adorn.Transparency=Config.Transparency3D
                             adorn.Visible=Config.Box
                         end
                     else
@@ -2195,20 +2270,43 @@ return function(common)
                                 frame.Position=UDim2.fromOffset(x,y)
                                 frame.Size=UDim2.fromOffset(rx-x,by-y)
                                 component.stroke.Color=color
+                                component.stroke.Transparency=Config.Transparency2D
+                                component.stroke.Thickness=Config.BoxThickness
                                 frame.Visible=Config.Box
                             else frame.Visible=false end
                         end
                     end
                 end
             end
-            local labelText=caption(cand.Player,cand)
-            if labelText~="" and cand.Head then
+            local nameText=displayName(cand.Player,cand)
+            local jobText=(Config.ShowJob and cand.Player) and role(cand.Player,cand) or ""
+            local metaText=labelExtra(cand)
+            if (nameText~="" or jobText~="" or metaText~="") and cand.Head then
                 attachLabel(entry,cand.Head)
                 if entry.label then
                     entry.label.Adornee=cand.Head
                     entry.label.Enabled=true
-                    entry.text.Text=labelText
-                    entry.text.TextColor3=color
+                    entry.label.StudsOffsetWorldSpace=Vector3.new(0,Config.LabelOffset,0)
+                    local y=0
+                    for _,line in ipairs({
+                        {entry.text,nameText,Config.NameSize,color},
+                        {entry.roleText,jobText,Config.JobSize,roleColor(cand.Player)},
+                        {entry.metaText,metaText,math.max(10,Config.JobSize-2),color},
+                    }) do
+                        local label,text,size,tint=line[1],line[2],line[3],line[4]
+                        label.Visible=text~=""
+                        if label.Visible then
+                            label.Position=UDim2.fromOffset(0,y)
+                            label.Size=UDim2.new(1,0,0,size+4)
+                            label.TextSize=size
+                            label.TextStrokeTransparency=Config.LabelStroke == false and 1 or 0.2
+                            if Config.LabelFont and Enum.Font[Config.LabelFont] then label.Font=Enum.Font[Config.LabelFont] end
+                            label.Text=text
+                            label.TextColor3=tint
+                            y+=size+4
+                        end
+                    end
+                    entry.label.Size=UDim2.fromOffset(260,math.max(y,18))
                 end
             elseif entry.label then entry.label.Enabled=false end
         end
@@ -2747,6 +2845,18 @@ tabs.Visual:AddColorpicker("SCPESPColorEnemy", {Title="敌对阵营颜色",Defau
 tabs.Visual:AddColorpicker("SCPESPColorAlly", {Title="其他阵营颜色",Default=ESP.Config.ColorAlly,Callback=function(v)if typeof(v)=="Color3" then ESP.Config.ColorAlly=v end end})
 tabs.Visual:AddSlider("SCPESPDist", {Title="显示距离",Min=100,Max=2000,Default=850,Rounding=0,Callback=function(v)ESP.Config.MaxDistance=v end})
 tabs.Visual:AddSlider("SCPESPFPS", {Title="刷新率（Hz）",Min=8,Max=30,Default=20,Rounding=0,Callback=function(v)ESP.Config.TickRate=v end})
+-- R228: ESP appearance controls preserve existing IDs and add separate label/color settings.
+tabs.Visual:AddSlider("SCPESPAlpha3D", {Title="3D 盒子透明度 (%)",Min=0,Max=100,Default=30,Rounding=0,Callback=function(v)ESP.Config.Transparency3D=v/100 end})
+tabs.Visual:AddSlider("SCPESPAlpha2D", {Title="2D 方框透明度 (%)",Min=0,Max=100,Default=15,Rounding=0,Callback=function(v)ESP.Config.Transparency2D=v/100 end})
+tabs.Visual:AddToggle("SCPESPJobColor", {Title="职位跟随游戏队伍颜色",Default=true,Callback=function(v)ESP.Config.JobTeamColor=v end})
+tabs.Visual:AddToggle("SCPESPJobZH", {Title="职位中文翻译",Default=true,Callback=function(v)ESP.Config.JobTranslate=v end})
+tabs.Visual:AddSlider("SCPESPNameFont", {Title="名称文字大小",Min=10,Max=26,Default=14,Rounding=0,Callback=function(v)ESP.Config.NameSize=v end})
+tabs.Visual:AddSlider("SCPESPJobFont", {Title="职位文字大小",Min=10,Max=26,Default=13,Rounding=0,Callback=function(v)ESP.Config.JobSize=v end})
+tabs.Visual:AddSlider("SCPESPBoxWidth", {Title="2D 方框线宽",Min=1,Max=4,Default=2,Rounding=0,Callback=function(v)ESP.Config.BoxThickness=v end})
+tabs.Visual:AddSlider("SCPESPLabelOffset", {Title="文字显示高度",Min=0,Max=60,Default=24,Rounding=0,Callback=function(v)ESP.Config.LabelOffset=v/10 end})
+tabs.Visual:AddToggle("SCPESPDistance", {Title="显示目标距离",Default=false,Callback=function(v)ESP.Config.ShowDistance=v end})
+tabs.Visual:AddToggle("SCPESPHealth", {Title="显示目标生命值",Default=false,Callback=function(v)ESP.Config.ShowHealth=v end})
+tabs.Visual:AddSlider("SCPESPMaxTargets", {Title="ESP 最大目标数",Min=8,Max=64,Default=36,Rounding=0,Callback=function(v)ESP.Config.MaxEntries=v end})
 tabs.Visual:AddParagraph({Title="性能与模式",Content="3D原生渲染自动跟随碰撞部件；2D按刷新率投影实际头/躯干碰撞框，默认不依赖Drawing；关闭后清理全部对象。"})
 
 tabs.Move:AddToggle("SCPSpeed", { Title = "加速", Default = false, Callback = function(v) Movement.Config.SpeedEnabled = v end })

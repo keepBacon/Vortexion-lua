@@ -4,7 +4,7 @@ from pathlib import Path
 from test_wind_router import LuaRuntime
 R=Path(__file__).resolve().parents[1]
 def transpile(source):
- for pat,repl in [('accumulator += dt or 1/60','accumulator = accumulator + (dt or 1/60)'),('serial+=1','serial=serial+1'),('seen+=1','seen=seen+1'),('visible+=1','visible=visible+1')]:
+ for pat,repl in [('accumulator += dt or 1/60','accumulator = accumulator + (dt or 1/60)'),('serial+=1','serial=serial+1'),('seen+=1','seen=seen+1'),('visible+=1','visible=visible+1'),('y+=size+4','y=y+size+4')]:
   assert pat in source,pat
   source=source.replace(pat,repl)
  assert 'for _,cand in ipairs(roster) do' in source
@@ -38,8 +38,9 @@ end
 local color={new=function(r,g,b)return {R=r,G=g,B=b}end}
 function color.fromRGB(r,g,b)return color.new(r/255,g/255,b/255)end
 Color3=color
-UDim2={fromScale=function(x,y)return {x,y}end,fromOffset=function(x,y)return {x,y}end}
-Enum={Font={GothamBold='GothamBold'},ApplyStrokeMode={Border='Border'}}
+UDim2={new=function(...)return {...}end,fromScale=function(x,y)return {x,y}end,fromOffset=function(x,y)return {x,y}end}
+Enum={Font={GothamBold='GothamBold'},ApplyStrokeMode={Border='Border'},TextTruncate={AtEnd='AtEnd'}}
+typeof=function(v) if type(v)=='table' and v.R then return 'Color3' end return type(v) end
 local root={Name='root',Parent=true}
 local world={}
 local cam={ViewportSize={X=800,Y=600}}
@@ -63,7 +64,8 @@ function char:FindFirstChild(name)
  if name=='UpperTorso' then return torso end
  if name=='HumanoidRootPart' then return hrp end
 end
-local player={Name='Enemy',Team={Name='Chaos Insurgency'}}
+local player={Name='Enemy',Team={Name='Chaos Insurgency',TeamColor={Color=Color3.fromRGB(210,63,79)}}}
+function player:GetAttribute(k)return nil end
 local target={Character=char,Player=player,Humanoid={Health=100},Head=head,HRP=hrp,Anchor=head,WorldDistance=25}
 local candidates={}
 function candidates:Get()return {target}end
