@@ -1,3 +1,5 @@
+> **R2.7:** 修复按执行器名称整模块退出的问题；新增原生控件触控回调链路诊断；Loader 区分部分失败与整套启动失败。详见 [R2.7 诊断报告](docs/FEATURE_HEALTH_R27.md)。未宣称全部游戏功能已恢复。
+
 > **R2.5 当前状态（2026-10-17）**：Forsaken 已精简为 3 页，旧功能组和失效控件移出活动构建；AOTR 战斗关闭启动期全局方法 Hook 并减少空闲帧扫描。详细变更及未验证范围见 [R2.5 专项报告](docs/FORSAKEN_AOTR_STABILITY_R25.md)。以下 R1–R46 章节仅作历史记录，原有 Forsaken 功能描述不再适用。
 
 > **R1 更新（2026-10-17）**：`loader.lua` 已改为 V2.1 分阶段加载器。先获取 `dist/runtime-manifest.json`，再按当前游戏加载共享 UI 核心和单一游戏模块；新增共享性能 HUD、可选自适应视觉节拍以及 Forsaken 常驻连接清理。详细边界见 [REFACTOR_R1](docs/REFACTOR_R1.md)。本地自动测试不代表 Roblox 安卓实测，发布之前请将 loader / dist 清单和模块文件放在同一 Git 提交。

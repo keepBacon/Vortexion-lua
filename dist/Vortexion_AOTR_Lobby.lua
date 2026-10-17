@@ -40772,7 +40772,9 @@ return function(WindUI, config)
         self.LastError = tostring(result)
     end
     local callbackErrorRevision = 0
+    local callbackCalls, nativeEvents, nativeMismatch, lastNativeEvent = 0, 0, 0, "none"
     local function safeCallback(fn, ...)
+        if type(fn) == "function" then callbackCalls += 1 end
         if type(fn) ~= "function" then return end
         local wasActive = bridge.Active
         local ok, err = pcall(fn, ...)
@@ -40908,9 +40910,14 @@ return function(WindUI, config)
             local function changed(value)
                 if not bridge.Active or not ready then return end
                 value = normalize(value, false)
+                nativeEvents += 1
+                lastNativeEvent = tostring(id) .. "=" .. tostring(value)
                 -- Native asynchronous callbacks can arrive after another SetValue.
                 local current = nativeValue()
-                if not equal(value, current) then return end
+                if not equal(value, current) then
+                    nativeMismatch += 1
+                    return
+                end
                 if not equal(value, option.Value) then
                     revision += 1
                     option.Pending = nil
@@ -41225,9 +41232,29 @@ return function(WindUI, config)
             local optionCount = 0
             for _ in pairs(bridge.Options) do optionCount += 1 end
             return string.format("GameId: %s\nPlaceId: %s\nJobId: %s\n当前页: %s\n缩放: %s\n主题: %s\n选项: %s\n主题数: %s\n最近异常: %s\n视觉档位: %s\n视觉刷新: %s Hz (上限 %s)\nTopbarInset 监听: %s", tostring(game.GameId), tostring(game.PlaceId), tostring(game.JobId), tostring(native.CurrentTab), tostring(native:GetUIScale()), tostring(WindUI:GetCurrentTheme()), tostring(optionCount), tostring(#themes()), bridge.LastError or "无", tostring(bridge.Options.wind_perf_tier and bridge.Options.wind_perf_tier.Value or defaultPerfTier), tostring(clampHz(bridge.VisualHz)), tostring(VISUAL_HZ_MAX), tostring(topbarConnection and "是" or "否")) .. ("\n自适应视觉: %s / FPS %d / 上限 %s")
-                :format(tostring(adaptiveConnection ~= nil), adaptiveMeasured, tostring(bridge.AdaptiveVisualHz or "默认"))
+                :format(tostring(adaptiveConnection ~= nil), adaptiveMeasured, tostring(bridge.AdaptiveVisualHz or "默认")) .. ("\n原生控件事件: %d / 丢弃过期事件: %d / 业务回调调用: %d\n最后控件事件: %s\n执行器: %s")
+                :format(nativeEvents, nativeMismatch, callbackCalls, lastNativeEvent, tostring(env.VortexionExecutorName or "未上报"))
         end
         local function refreshDiagnostic() local value = bridge.GetDiagnostics(); diagnostic:SetDesc(value); return value end
+        local probeCount = 0
+        -- A native user-gesture probe, not a programmatic SetValue test.
+        -- Tap this toggle manually, then refresh diagnostics. If nativeEvents
+        -- does not increase, the failure is upstream of the business modules.
+        debugPage:AddToggle("wind_input_probe", {Title = "触控回调自检（手动切换）", Default = false,
+            Callback = function(value)
+                probeCount += 1
+                bridge.UiProbeCount = probeCount
+                bridge.UiProbeValue = value
+                if probeCount > 1 then
+                    warn("[Vortexion/UI-PROBE] toggle fired=" .. tostring(probeCount) .. " value=" .. tostring(value))
+                end
+            end})
+        debugPage:AddButton({Title = "显示触控回调自检", Callback = function()
+            local stateText = ("收到 %d 次自检回调；原生事件 %d 次；最近事件 %s")
+                :format(probeCount, nativeEvents, lastNativeEvent)
+            bridge:Notify({Title = "输入链路自检", Content = stateText, Duration = 8})
+            refreshDiagnostic()
+        end})
         debugPage:AddButton({Title = "刷新诊断", Callback = refreshDiagnostic})
         debugPage:AddButton({Title = "打印诊断", Callback = function() print(refreshDiagnostic()) end})
         debugPage:AddButton({Title = "复制诊断", Callback = function()
@@ -41808,22 +41835,16 @@ return function(scene, WindUI, Bridge)
         ReplicatedStorage=ReplicatedStorage,Lighting=Lighting,Input=UserInputService,
         UserInputService=UserInputService,Stats=Stats}
 
-    --=========================================================================
-    -- Executor floor: same policy as Forsaken/SCP/BloxStrike.
-    --=========================================================================
-    do
-        local executorName="unknown"
-        pcall(function()
-            if type(identifyexecutor)=="function" then executorName=tostring(identifyexecutor() or "unknown") end
-        end)
-        for _,bad in ipairs({"Xeno","Velocity","LX63"}) do
-            if string.find(executorName,bad,1,true) then
-                client.VortexionBootError = "AOTR executor unsupported: " .. executorName
-                warn("[Vortexion/AOTR] unsupported executor: "..executorName)
-                return
-            end
+    -- Executor name is diagnostic metadata only. Never abort the entire game
+    -- based on a vendor label: capabilities are checked individually below.
+    -- A missing hook API must disable only the dependent optional feature.
+    local executorName = "unknown"
+    pcall(function()
+        if type(identifyexecutor) == "function" then
+            executorName = tostring(identifyexecutor() or "unknown")
         end
-    end
+    end)
+    app.ExecutorName = executorName
 
     --=========================================================================
     -- Capability probe: every optional integration checks these, never guesses.

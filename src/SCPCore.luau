@@ -60,26 +60,17 @@ local function cleanup()
 end
 global.VortexionSCPCleanup = cleanup
 
---=========================================================================
--- Executor floor: blacklist the known-incompatible executors early, the same
--- policy Forsaken uses, so a broken environment fails loudly instead of
--- half-loading subsystems.
---=========================================================================
-do
-    local executorName = "unknown"
-    pcall(function()
-        if type(identifyexecutor) == "function" then
-            executorName = tostring(identifyexecutor() or "unknown")
-        end
-    end)
-    for _, bad in ipairs({ "Xeno", "Velocity", "LX63" }) do
-        if string.find(executorName, bad, 1, true) then
-            global.VortexionBootError = "SCP executor unsupported: " .. executorName
-            warn("[Vortexion/SCP] unsupported executor: " .. executorName)
-            return
-        end
+-- Executor identity is telemetry, not a compatibility oracle.
+-- Earlier builds blacklisted Xeno/Velocity/LX63 and returned before creating
+-- any UI, making all game features appear broken. Capability-dependent
+-- features must degrade individually, not terminate the complete script.
+local executorName = "unknown"
+pcall(function()
+    if type(identifyexecutor) == "function" then
+        executorName = tostring(identifyexecutor() or "unknown")
     end
-end
+end)
+global.VortexionExecutorName = executorName
 
 --=========================================================================
 -- UI: WindUI bridge (vendored, zero network). The original script loaded

@@ -24,22 +24,16 @@ return function(scene, WindUI, Bridge)
         ReplicatedStorage=ReplicatedStorage,Lighting=Lighting,Input=UserInputService,
         UserInputService=UserInputService,Stats=Stats}
 
-    --=========================================================================
-    -- Executor floor: same policy as Forsaken/SCP/BloxStrike.
-    --=========================================================================
-    do
-        local executorName="unknown"
-        pcall(function()
-            if type(identifyexecutor)=="function" then executorName=tostring(identifyexecutor() or "unknown") end
-        end)
-        for _,bad in ipairs({"Xeno","Velocity","LX63"}) do
-            if string.find(executorName,bad,1,true) then
-                client.VortexionBootError = "AOTR executor unsupported: " .. executorName
-                warn("[Vortexion/AOTR] unsupported executor: "..executorName)
-                return
-            end
+    -- Executor name is diagnostic metadata only. Never abort the entire game
+    -- based on a vendor label: capabilities are checked individually below.
+    -- A missing hook API must disable only the dependent optional feature.
+    local executorName = "unknown"
+    pcall(function()
+        if type(identifyexecutor) == "function" then
+            executorName = tostring(identifyexecutor() or "unknown")
         end
-    end
+    end)
+    app.ExecutorName = executorName
 
     --=========================================================================
     -- Capability probe: every optional integration checks these, never guesses.

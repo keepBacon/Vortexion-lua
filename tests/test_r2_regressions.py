@@ -62,8 +62,8 @@ assert(env.VortexionLoaderCache[coreKey], 'validated core cache was incorrectly 
 
     def test_aotr_cloak_factory_failure_isolated(self):
         source = (ROOT / 'src/AOTRBattle.luau').read_text(encoding='utf-8')
-        self.assertIn('pcall(AOTRCloakFactory, app)', source)
-        self.assertIn('reportBootFailure("cloak", value)', source)
+        self.assertNotIn('pcall(AOTRCloakFactory, app)', source)
+        self.assertIn('app.Cloak = { Protect = function(instance) return instance end }', source)
         self.assertIn('reportBootFailure(name, result)', source)
         self.assertIn('app.ui.BootStatus = "partial"', source)
 

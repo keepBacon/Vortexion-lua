@@ -1,6 +1,6 @@
 -- Vortexion Loader V2.1 / modular routing and diagnostic bootstrap.
 -- Keep V1 standalone fallback available for controlled compatibility tests.
-local VERSION = "2.6.0-blox-startup-guard"
+local VERSION = "2.7.0-feature-health"
 local DEFAULT_BASE = "https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/"
 local LEGACY_BUNDLE = "dist/Vortexion_Wind.lua"
 local MANIFEST_PATH = "dist/runtime-manifest.json"
@@ -79,13 +79,14 @@ local function refresh()
     if not ui.status then return end
     pcall(function()
         ui.status.Text = state.status == "failed" and "加载失败 / " .. state.stage
+            or state.status == "partial" and "部分功能初始化失败 / " .. state.stage
             or state.status == "success" and "初始化完成" or "正在加载 / " .. state.stage
         ui.detail.Text = state.error and (state.error:sub(1, 260))
             or (state.detail or "正在检查加载环境…")
         ui.detail.TextColor3 = state.error and Color3.fromRGB(248, 165, 161)
             or Color3.fromRGB(163, 170, 181)
-        ui.retry.Visible = state.status == "failed"
-        if ui.legacy then ui.legacy.Visible = state.status == "failed" end
+        ui.retry.Visible = state.status == "failed" or state.status == "partial"
+        if ui.legacy then ui.legacy.Visible = state.status == "failed" or state.status == "partial" end
         ui.copy.Visible = true
         ui.indicator.BackgroundColor3 = state.status == "failed" and Color3.fromRGB(229, 100, 94)
             or state.status == "success" and Color3.fromRGB(77, 185, 132)
@@ -476,13 +477,13 @@ local function run()
         if not validWindow then
             error("WindUI bridge is active but no window was created")
         end
-        if bridge.BootStatus == "partial" then
-            error("Game module initialization incomplete: " .. tostring(bridge.BootError or "unknown"))
-        end
-        state.stage, state.status = "complete", "success"
-        state.detail = state.route == nil and "已打开通用 UI；当前游戏未适配。" or "已创建 UI 窗口；真机画面仍需人工确认。"
-        state.error = nil
-        log("complete", "Module boot complete; UI bridge and window registered")
+        local partial = bridge.BootStatus == "partial"
+        state.stage, state.status = "complete", partial and "partial" or "success"
+        state.detail = partial and "界面可用，但部分子模块异常。请查看 UI 调试页和诊断。"
+            or (state.route == nil and "已打开通用 UI；当前游戏未适配。" or "已创建 UI 窗口；需实机验证功能。")
+        state.error = partial and tostring(bridge.BootError or "unknown submodule error"):sub(1, 1500) or nil
+        log("complete", partial and ("Partial module initialization: " .. tostring(state.error))
+            or "UI bridge and window registered; game functions not yet validated")
         refresh()
         -- Keep only one active source version cached after a successful load.
         local current = {}
