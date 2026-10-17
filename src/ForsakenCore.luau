@@ -4,6 +4,7 @@
 local WindBridgeFactory = nil
 local WindUI = nil
 local ForsakenEnhancementsFactory = nil
+local ForsakenPuzzlePlannerFactory = nil
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -20,7 +21,7 @@ end
 
 local bridge = WindBridgeFactory(WindUI, {Name = "Forsaken", Folder = "VortexionForsaken"})
 assert(bridge and bridge.Active, "Forsaken: WindUI bridge unavailable")
-local window = bridge:CreateWindow({Title = "Forsaken · R2.14"})
+local window = bridge:CreateWindow({Title = "Forsaken · R2.16"})
 assert(window, "Forsaken: window creation failed")
 local tabs = {
     vision = window:AddTab({Title = "感知", Icon = "lucide-eye"}),
@@ -31,7 +32,7 @@ local tabs = {
 }
 window:InstallSettings(tabs.system)
 
-local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Tabs=tabs})
+local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Tabs=tabs, PuzzlePlanner=type(ForsakenPuzzlePlannerFactory) == "function" and ForsakenPuzzlePlannerFactory() or nil})
 
 local state = {alive = true, killers = false, survivors = false,
     generators = false, alert = false, fovEnabled = false, fov = 80,

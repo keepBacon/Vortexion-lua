@@ -7,6 +7,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RuntimeMonitorTests(unittest.TestCase):
+    def test_menu_safe_compact_render_contract(self):
+        source = (ROOT / 'src/RuntimeMonitor.luau').read_text(encoding='utf-8')
+        self.assertIn('gui.DisplayOrder = -1000', source)
+        self.assertIn('content.Active = false', source)
+        self.assertIn('content.InputSink = Enum.InputSink.None', source)
+        self.assertIn('content.AutomaticSize', source)
+        self.assertIn('ScreenInsets.CoreUISafeInsets', source)
+        self.assertNotIn('Instance.new(\"Frame\")', source)
+        self.assertIn('紧急关闭性能 HUD', source)
+
     def test_off_by_default_and_destroy_cleans_listener_and_hud(self):
         source = (ROOT / "src/RuntimeMonitor.luau").read_text(encoding="utf-8")
         for before, after in (("frames += 1", "frames = frames + 1"),
@@ -56,7 +66,7 @@ local tab={
  AddSlider=function(self,id,info) controls[id]=info; return info end,
  AddButton=function(self,info) controls[info.Title]=info; return info end,
 }
-local bridge={Active=true,Notify=function() end,OnDestroy=function(self,fn) self.destroy=fn end}
+local bridge={Active=true,VisualHz=30,Notify=function() end,OnDestroy=function(self,fn) self.destroy=fn end}
 '''
         checks = r'''
 assert(#service.connections==0, 'inactive monitor must not attach to Heartbeat')
@@ -75,12 +85,15 @@ controls['复制性能诊断'].Callback()
 assert(lastCopy:find('PlaceId=456',1,true))
 assert(lastCopy:find('FrameAvgMs=',1,true) and lastCopy:find('Stutters',1,true))
 assert(controls['重置性能采样'])
+assert(playerGui ~= nil)
+assert(controls.VortexionPerfHUD.Default == false)
 controls['重置性能采样'].Callback()
 local reset = monitor.GetSnapshot()
 assert(reset.samples == 0 and reset.stutters == 0 and reset.peakFrameMs == 0)
 bridge.destroy()
 assert(not service.connections[1].connected and service.DisconnectCount==1)
 assert(pingCalls==1 and memoryCalls==1)
+assert(controls['紧急关闭性能 HUD（排查 Roblox 菜单）'])
 controls.VortexionPerfHUD.Callback(true)
 assert(#service.connections==1, 'no listener after bridge destroy')
 '''

@@ -95,7 +95,7 @@ assert(thirdPerson.saved==nil)
         self.assertIn('BloxAimPriority',COMBAT)
         dist=ROOT/'dist'
         manifest=json.loads((dist/'runtime-manifest.json').read_text())
-        self.assertIn('r2.15',manifest['build_tag'])
+        self.assertRegex(manifest['build_tag'], r'r2\.(?:1[5-9]|[2-9][0-9])')
         for item in [manifest['core'],*manifest['modules'].values()]:
             payload=(ROOT/item['path']).read_bytes()
             self.assertEqual(hashlib.sha256(payload).hexdigest(),item['sha256'])

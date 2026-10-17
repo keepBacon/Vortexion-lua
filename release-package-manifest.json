@@ -1,5 +1,5 @@
 {
-  "build_tag": "loader-v2-modular-r2.15-blox-target-compat-thirdperson",
+  "build_tag": "loader-v2-modular-r2.16-menu-safe-hud-puzzle-reader",
   "files": {
     "R1_SOURCE_HASHES.json": {
       "bytes": 5590,
@@ -34,28 +34,28 @@
       "sha256": "33c41dbce36ba0e4063611bdf952abb61e2d1e68a2b611d0c7474ca7a2999edf"
     },
     "build.py": {
-      "bytes": 12491,
-      "sha256": "21271f9dd96d8596991ab82934daeb61d310ee6981f9c8d703369939db5f03e4"
+      "bytes": 12552,
+      "sha256": "283ea1102fc3e3007ea337fb0804a98643b17a403bcf32bee15a87626ca36187"
     },
     "dist/Vortexion_AOTR_Battle.lua": {
-      "bytes": 1569236,
-      "sha256": "61360c0226b054e02c9bf58c6d2de63c2d1bcd494422cdcf1ea5bbe48d322585"
+      "bytes": 1570320,
+      "sha256": "53c1105c904bed53a26d923a5bd095687fa34adfa1202065c3c30b93da6b2df0"
     },
     "dist/Vortexion_AOTR_Lobby.lua": {
-      "bytes": 1500081,
-      "sha256": "ce70883a6f60e9235c1190ec637a016f1479aa319503fba39d4ea74a7cc49907"
+      "bytes": 1501165,
+      "sha256": "a12d997996c9bf3a3f52d2a7740c13ea93d58611f31625864e3963e0b982048b"
     },
     "dist/Vortexion_BloxStrike.lua": {
-      "bytes": 1645887,
-      "sha256": "ff2112e42116d426f0facdc4c24165e3d1788b79b1600a515b5969910999fa08"
+      "bytes": 1646971,
+      "sha256": "a718f8b57689ed4846e57276ee1065efdaec6fe076493ba782596eeac3ecf615"
     },
     "dist/Vortexion_Core.lua": {
-      "bytes": 1475352,
-      "sha256": "d0a4c32fb785b254ce31a054ff2e89a47a30de63a0931b0ccc0f8d20373268e4"
+      "bytes": 1476436,
+      "sha256": "a7099fd571f05f7ec909e1da0c1c2198291b47c39b7a1a56f6dd84d21747f41b"
     },
     "dist/Vortexion_Forsaken.lua": {
-      "bytes": 1541049,
-      "sha256": "d4ffeda197e8cb541261e4e14e366830264afde91e4b867979bb45b37c336904"
+      "bytes": 1552105,
+      "sha256": "264644e5b925f9257d2937ca35fe4f36d1c0160b1b5fcf33db0229e80cf4b09a"
     },
     "dist/Vortexion_Module_AOTR_Battle.lua": {
       "bytes": 94532,
@@ -70,28 +70,28 @@
       "sha256": "a53fe1256e9a48f7543110dd1fff04f3402f96efaa9b366570fb11db1127ac52"
     },
     "dist/Vortexion_Module_Forsaken.lua": {
-      "bytes": 66345,
-      "sha256": "c37c78c1d93d106327cc5a01e239806f5e9185143c015bd3cfc9d9c953570cae"
+      "bytes": 76317,
+      "sha256": "87fad3a0a2641e2a7c868ee43c67b9b2fb0fe7b33d7546a3c4cb2dfde66e63d1"
     },
     "dist/Vortexion_Module_SCP.lua": {
       "bytes": 127959,
       "sha256": "ef387b1c12ef1810a8ba82b181675447cfe9c6280e66c7ab1929793908748a9a"
     },
     "dist/Vortexion_SCP.lua": {
-      "bytes": 1602663,
-      "sha256": "80fdbc0836cb2bc76ea6d57b3c788c7ea4a7404ae649f3f2477990bb65143476"
+      "bytes": 1603747,
+      "sha256": "42481677da194e53c030a4d2e517df50355af6be86aff3ac08eacb418e550313"
     },
     "dist/Vortexion_Wind.lua": {
-      "bytes": 1957812,
-      "sha256": "d6b3963c1d4e6634fe157bbc31c92c55e273c7aec71f3d2661930f122fa64f9a"
+      "bytes": 1968868,
+      "sha256": "f35f9bd1e5d0952c3ccb208c903fa00a4211c74f43c62b8dd24f272f553c2efe"
     },
     "dist/build-manifest.json": {
-      "bytes": 6142,
-      "sha256": "8660cea38bbced63956261976749534ba9999ea35ce1462ede8ba1c21da8c713"
+      "bytes": 6248,
+      "sha256": "b8ffb0f22de9a592d7f27d4821b265ec4b1ed0929598f975866ee536b0e5d62c"
     },
     "dist/runtime-manifest.json": {
-      "bytes": 1763,
-      "sha256": "a94922774636c97d9da5f7347d8dee84103baefc9c645af9cf9899712b701574"
+      "bytes": 1760,
+      "sha256": "35f83cb302f985d777b1c3dce33b4db9817a2ac4e03bd0eb49a69557e71a07ca"
     },
     "dist/test-mobile-v6.json": {
       "bytes": 266,
@@ -237,6 +237,10 @@
       "bytes": 5730,
       "sha256": "9f58b9b62a422626220fc2eace1d429183a6aca51ac679c5a126d760c267ece9"
     },
+    "docs/R216_HUD_MENU_AND_PUZZLE.md": {
+      "bytes": 3077,
+      "sha256": "c456545e4b0b937e4382b808de93e760be0549bfe56a0a852f606ee8fb8c09a3"
+    },
     "docs/R29_FIELD_REPAIR.md": {
       "bytes": 2223,
       "sha256": "547f085b0a93bd5720ab898d49b00c7428683f250781c2c291f00348f58fca47"
@@ -326,8 +330,8 @@
       "sha256": "afc3a739da53b06bb854237b015e528773490482e7cbbdc59214aa83e873abbe"
     },
     "loader.lua": {
-      "bytes": 23717,
-      "sha256": "bd841dc54480cb988ba2ac5b5c78cd883e5f5b92920fb4e9898852f5fe9678fa"
+      "bytes": 23726,
+      "sha256": "01aa132f87962dd828515d6b7ae883454ad70d554cf60f7808cccb445cffcc33"
     },
     "package.json": {
       "bytes": 154,
@@ -402,20 +406,24 @@
       "sha256": "4afb8b6cd766259cdc5ddc6b8707ef9d0582b48ff348125bc42bccf227ac6973"
     },
     "src/ForsakenCore.luau": {
-      "bytes": 31902,
-      "sha256": "6d9a65d358dc563d8647528b84b0e96bd673b144f1327f54b2c04c26941d07d8"
+      "bytes": 32049,
+      "sha256": "37e6528fc2081b51510bbeeedd0e435ae434a15f1069096dbf1d31b0637add78"
     },
     "src/ForsakenEnhancements.luau": {
-      "bytes": 33827,
-      "sha256": "05b3b49dbd38c32e81954159d901c4e983b87a4287a99d23a755937bcd02f40e"
+      "bytes": 35030,
+      "sha256": "f98649338c60a7333687d8a054e4f9ee4367e30d6105eb2c3b84ac05e1c0f05c"
+    },
+    "src/ForsakenPuzzlePlanner.luau": {
+      "bytes": 8606,
+      "sha256": "f92e6323ada04bf408245d1e6f891db63f3635a2c21730dc66fbbed0b28ad2a2"
     },
     "src/GameRouter.luau": {
       "bytes": 5818,
       "sha256": "12cd8b7e44ca5396b0ddbea315b96f4e70b18a61dc265ab4514b74e036a50651"
     },
     "src/RuntimeMonitor.luau": {
-      "bytes": 7933,
-      "sha256": "2a42420421a3467b9a6395dfcba15f23933babc381851e4bb3103ab92b9df1b3"
+      "bytes": 9017,
+      "sha256": "669ef2d0b0063fec329b1cf64df24041c11eaae995ee5b9402f66c997c4683c1"
     },
     "src/SCPCamera.luau": {
       "bytes": 15420,
@@ -706,16 +714,20 @@
       "sha256": "33a156eae80b4ab5199b1225a36485c818f075ca0cf932fed98acdc13b08d082"
     },
     "tests/test_r215_blox_target_and_camera.py": {
-      "bytes": 5188,
-      "sha256": "1a31e45c20a36f4e712d37d4c697cfc2ed11c26fb11497e6a2e3029f07845a11"
+      "bytes": 5213,
+      "sha256": "b055f2d39be0f8f76531a410e67c66dfa78b9a9c04c56b9ad286e38c482eb753"
     },
     "tests/test_r215_blox_visual_runtime.py": {
       "bytes": 3604,
       "sha256": "f37d36a83ee14c2359da06a929caaaa7cec65844bc87ceb3ab341c9de4710c7e"
     },
+    "tests/test_r216_hud_puzzle.py": {
+      "bytes": 3179,
+      "sha256": "8f1562697f98ab4f37474b1086205bae30427ad9d785336ccf3cb97ebf106293"
+    },
     "tests/test_r25_stability.py": {
-      "bytes": 8719,
-      "sha256": "e343c91d82ac173e99457188786c0d704e3f7a2303fbc294d08e03ee03a84492"
+      "bytes": 8777,
+      "sha256": "b157c1a79598c19a07a9973a0143e4defa54d1dd9c0a5bc1ce9b4b28c584557f"
     },
     "tests/test_r26_blox_stability.py": {
       "bytes": 5939,
@@ -738,8 +750,8 @@
       "sha256": "bdfaf4b397f23feeddb23adb801ab837949273aa1a6cfacd614eff0097540f81"
     },
     "tests/test_runtime_monitor.py": {
-      "bytes": 4824,
-      "sha256": "a1c3c5b83dec3706f7e2f714649de894ea7a95faf5608d026c5b23a224003c3d"
+      "bytes": 5537,
+      "sha256": "1c5b12aa1751403e0ebced608b197f77daac80f9969686af0589090916967967"
     },
     "tests/test_scp_enrichment.luau": {
       "bytes": 53070,

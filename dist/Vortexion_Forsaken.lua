@@ -40413,8 +40413,8 @@ end
 
 end)()
 local RuntimeMonitorFactory = (function()
--- Vortexion / shared mobile runtime diagnostics (opt-in, no idle frame listener).
--- One owner per Wind bridge; subscriptions and HUD are removed on teardown.
+-- Vortexion R2.16: read-only, touch-transparent performance telemetry.
+-- No screen-sized frames, buttons, modal capture or CoreGui modifications.
 return function(tab, bridge)
     local RunService = game:GetService("RunService")
     local Players = game:GetService("Players")
@@ -40430,68 +40430,83 @@ return function(tab, bridge)
     local lastPing, lastMemory = nil, nil
     local startedAt = os.clock()
 
+    local function elapsedString(seconds)
+        local n = math.max(0, math.floor(seconds))
+        return string.format("%02d:%02d:%02d", math.floor(n / 3600), math.floor(n / 60) % 60, n % 60)
+    end
+    local function textReport()
+        return ("FPS %d [%d-%d] | %.1fms\nPING %s | RAM %s MB\nPEAK %.0fms | >50ms %d\nUP %s | UI %sHz"):format(
+            fps, samples > 0 and minimum or 0, maximum, lastAverageFrameMs,
+            lastPing and tostring(math.floor(lastPing + 0.5)) .. "ms" or "--",
+            lastMemory and tostring(math.floor(lastMemory + 0.5)) or "--",
+            peakFrameMs, stutterCount, elapsedString(os.clock() - startedAt),
+            tostring(math.floor(tonumber(bridge.VisualHz) or 0)))
+    end
     local function makeGui()
         if screenGui or not active then return end
-        local parent = nil
+        local parent
         pcall(function() parent = localPlayer:FindFirstChildOfClass("PlayerGui") end)
         if not parent then return end
+        -- A stale HUD from an earlier executor run must not remain as an input overlay.
+        pcall(function()
+            local stale = parent:FindFirstChild("VortexionPerformanceHUD")
+            if stale then stale:Destroy() end
+        end)
         local gui = Instance.new("ScreenGui")
         gui.Name = "VortexionPerformanceHUD"
         gui.ResetOnSpawn = false
         gui.IgnoreGuiInset = false
-        gui.DisplayOrder = 100
-        local frame = Instance.new("Frame")
-        frame.Name = "Telemetry"
-        frame.AnchorPoint = Vector2.new(1, 0)
-        frame.Position = UDim2.new(1, -12, 0, 48)
-        frame.Size = UDim2.fromOffset(206, 92)
-        frame.BackgroundColor3 = Color3.fromRGB(24, 27, 32)
-        frame.BackgroundTransparency = 0.12
-        frame.BorderSizePixel = 0
-        frame.Parent = gui
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 6)
-        corner.Parent = frame
+        gui.DisplayOrder = -1000  -- Never compete with game / Roblox menus.
+        pcall(function() gui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets end)
         local content = Instance.new("TextLabel")
         content.Name = "Metrics"
-        content.Size = UDim2.new(1, -16, 1, -10)
-        content.Position = UDim2.fromOffset(8, 5)
-        content.BackgroundTransparency = 1
-        content.TextColor3 = Color3.fromRGB(228, 232, 238)
+        content.AnchorPoint = Vector2.new(1, 0)
+        content.Position = UDim2.new(1, -6, 0, 5)
+        content.Size = UDim2.fromOffset(0, 0)
+        if Enum.AutomaticSize then content.AutomaticSize = Enum.AutomaticSize.XY end
+        content.BackgroundColor3 = Color3.fromRGB(12, 16, 21)
+        content.BackgroundTransparency = 0.45
+        content.BorderSizePixel = 0
+        content.TextColor3 = Color3.fromRGB(236, 241, 246)
+        content.TextStrokeTransparency = 0.7
         content.Font = Enum.Font.Code
         content.TextSize = 12
         content.TextXAlignment = Enum.TextXAlignment.Left
-        content.TextYAlignment = Enum.TextYAlignment.Center
-        content.Text = "FPS -- · Frame --\nStutters -- · Ping --\nMemory -- · Sampling"
-        content.Parent = frame
+        content.TextYAlignment = Enum.TextYAlignment.Top
+        content.TextWrapped = false
+        content.Text = textReport()
+        content.Active = false
+        content.Selectable = false
+        pcall(function() content.Interactable = false end)
+        pcall(function() content.InputSink = Enum.InputSink.None end)
+        -- Padding belongs to the text itself: no oversized backdrop frame.
+        local padding = Instance.new("UIPadding")
+        padding.PaddingLeft = UDim.new(0, 3)
+        padding.PaddingRight = UDim.new(0, 3)
+        padding.PaddingTop = UDim.new(0, 2)
+        padding.PaddingBottom = UDim.new(0, 2)
+        padding.Parent = content
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 3)
+        corner.Parent = content
+        content.Parent = gui
         local ok = pcall(function() gui.Parent = parent end)
         if not ok or not gui.Parent then gui:Destroy(); return end
         screenGui, label = gui, content
     end
-
     local function snapshot()
         return {
-            fps = fps,
-            minFps = samples > 0 and minimum or 0,
-            maxFps = maximum,
-            avgFrameMs = lastAverageFrameMs,
-            peakFrameMs = peakFrameMs,
-            stutters = stutterCount,
-            pingMs = lastPing,
-            memoryMb = lastMemory,
-            samples = samples,
-            uptimeSeconds = math.floor(os.clock() - startedAt),
-            gameId = game.GameId,
-            placeId = game.PlaceId,
+            fps = fps, minFps = samples > 0 and minimum or 0, maxFps = maximum,
+            avgFrameMs = lastAverageFrameMs, peakFrameMs = peakFrameMs,
+            stutters = stutterCount, pingMs = lastPing, memoryMb = lastMemory,
+            samples = samples, uptimeSeconds = math.floor(os.clock() - startedAt),
+            gameId = game.GameId, placeId = game.PlaceId,
         }
     end
-
     local function update(dt)
         if not active or not running then return end
-        -- O(1) accumulation; expensive service reads occur only on the sampling cadence.
         local delta = tonumber(dt)
         if not delta or delta ~= delta or delta < 0 or delta == math.huge then return end
-        -- Track actual frame gaps before capping the FPS integration delta.
         local ms = delta * 1000
         peakFrameMs = math.max(peakFrameMs, ms)
         if ms >= STUTTER_THRESHOLD_MS then stutterCount += 1 end
@@ -40509,30 +40524,21 @@ return function(tab, bridge)
         if okPing and type(ping) == "number" and ping >= 0 and ping < math.huge then lastPing = ping end
         local okMemory, mem = pcall(function() return Stats:GetTotalMemoryUsageMb() end)
         if okMemory and type(mem) == "number" and mem >= 0 and mem < math.huge then lastMemory = mem end
-        if label and label.Parent then
-            label.Text = ("FPS %d (Min %d)\nFrame %.1fms / Peak %.0fms\nStutters %d · Ping %s ms\nMemory %s MB"):format(
-                fps, minimum, lastAverageFrameMs, peakFrameMs, stutterCount,
-                lastPing and tostring(math.floor(lastPing + 0.5)) or "--",
-                lastMemory and tostring(math.floor(lastMemory + 0.5)) or "--")
-        end
+        if label and label.Parent then label.Text = textReport() end
     end
-
     local function stop()
         running = false
         if frameConnection then frameConnection:Disconnect(); frameConnection = nil end
         if screenGui then screenGui:Destroy(); screenGui = nil; label = nil end
         accumulator, frames = 0, 0
     end
-
     local function resetSamples()
         fps, minimum, maximum, samples = 0, math.huge, 0, 0
         peakFrameMs, stutterCount, lastAverageFrameMs = 0, 0, 0
         frames, accumulator, intervalFrameMs, intervalFrames = 0, 0, 0, 0
         lastPing, lastMemory = nil, nil
         startedAt = os.clock()
-        if label and label.Parent then
-            label.Text = "FPS -- · Frame --\nStutters -- · Ping --\nMemory -- · Sampling"
-        end
+        if label and label.Parent then label.Text = textReport() end
     end
     local function setEnabled(value)
         if not active then return end
@@ -40540,14 +40546,13 @@ return function(tab, bridge)
         if running then return end
         makeGui()
         if not screenGui then
-            bridge:Notify({Title = "性能监控", Content = "无法创建 PlayerGui HUD，监控未开启。", Duration = 5})
+            bridge:Notify({Title = "性能监控", Content = "PlayerGui HUD 创建失败", Duration = 4})
             return
         end
         running = true
         frameConnection = RunService.Heartbeat:Connect(update)
     end
-
-    tab:AddParagraph({Title = "运行时性能", Content = "按需采样 FPS / Ping / 内存；默认关闭，没有空闲帧循环。不改变游戏画质或帧率。"})
+    tab:AddParagraph({Title = "性能与触控", Content = "紧凑 HUD 只含文本及 2-3px 内边距；位于系统安全区，不接收触摸，不修改 Roblox 菜单。"})
     tab:AddToggle("VortexionPerfHUD", {Title = "显示性能 HUD", Default = false, Callback = setEnabled})
     tab:AddSlider("VortexionPerfSampleSeconds", {Title = "采样间隔（秒）", Min = 1, Max = 5, Default = 1, Rounding = 0,
         Callback = function(v)
@@ -40555,6 +40560,11 @@ return function(tab, bridge)
             if not n or n ~= n or n == math.huge or n == -math.huge then n = 1 end
             sampleInterval = math.max(1, math.min(5, n))
         end})
+    tab:AddButton({Title = "紧急关闭性能 HUD（排查 Roblox 菜单）", Callback = function()
+        stop()
+        local option = bridge.Options and bridge.Options.VortexionPerfHUD
+        if option and option.SetValue then option:SetValue(false) end
+    end})
     tab:AddButton({Title = "重置性能采样", Callback = resetSamples})
     tab:AddButton({Title = "复制性能诊断", Callback = function()
         local s = snapshot()
@@ -42743,6 +42753,28 @@ return function(options)
             print("[Vortexion/Forsaken] "..detail)
         end
     end})
+    tabs.generators:AddButton({Title="分析当前发电机谜题（端点/颜色/路径）", Callback=function()
+        local planner = options.PuzzlePlanner
+        local pg = player:FindFirstChildOfClass("PlayerGui")
+        local puzzle = pg and pg:FindFirstChild("PuzzleUI")
+        if not planner or not puzzle then
+            state.lastAction = "请先在游戏内打开 PuzzleUI，然后重新分析"
+            return
+        end
+        local ok, data, reason = pcall(planner.Read, puzzle)
+        if not ok or not data then
+            state.lastAction = "谜题解析失败：" .. tostring(ok and reason or data)
+            return
+        end
+        local output = planner.Summary(data)
+        local env = (getgenv and getgenv()) or _G
+        local clipboard = env.setclipboard or env.toclipboard or setclipboard or toclipboard
+        if type(clipboard) == "function" then safe("copy puzzle planner", function() clipboard(output) end)
+        else print(output) end
+        state.lastAction = ("题型=%s 识别格=%d 成对端点=%d（已复制分析）"):
+            format(data.phase, data.count, #data.pairs)
+        state.repairPhase = "puzzle-analyzed-not-actuated"
+    end})
     tabs.generators:AddButton({Title="复制当前连线谜题结构（供适配）", Callback=function()
         -- Diagnostic only. Puzzle layouts are not guaranteed across updates.
         -- Read bounded GUI geometry; never synthesize global touch/mouse events.
@@ -42783,8 +42815,187 @@ return function(options)
         end
         state.lastAction = string.format("已采集 %d 个谜题 GUI 节点；用于验证当前版本结构", count)
     end})
-    tabs.generators:AddParagraph({Title="修理限制", Content="旧版 RE 仅在兼容模式下限距尝试，并以真实 Progress 验证；原生 Prompt 会进入拼图，但完整 6×6 自动解谜尚未适配。请在打开谜题后复制结构供验证。"})
+    tabs.generators:AddParagraph({Title="修理限制", Content="旧版 RE 仅作兼容尝试并验证 Progress；谜题可能具有不同阶段或 7×7 格。已支持只读端点分析和路径规划，但缺少真实输入协议，不会伪造自动完成。"})
     return {Destroy = shutdown, State = state, EnumerateGenerators = enumerateGenerators}
+end
+
+end)()
+local ForsakenPuzzlePlannerFactory = (function()
+-- R2.16: read-only Forsaken puzzle inspection and bounded Flow-path planning.
+-- This module does not synthesize touches or claim remote/server completion.
+return function()
+    local planner = {}
+    local function rgb(value)
+        if not value then return "?" end
+        return string.format("%03d,%03d,%03d", math.floor(value.R * 255 + 0.5),
+            math.floor(value.G * 255 + 0.5), math.floor(value.B * 255 + 0.5))
+    end
+    local function sub(parent, name)
+        return parent and parent:FindFirstChild(name)
+    end
+    local function path(parent, names)
+        local item = parent
+        for _, name in ipairs(names) do item = sub(item, name) end
+        return item
+    end
+    function planner.Read(puzzle)
+        if not puzzle then return nil, "PuzzleUI missing" end
+        local container = sub(puzzle, "Container") or puzzle
+        local grid = path(container, {"GridHolder", "Grid"})
+        if not grid then return nil, "GridHolder.Grid missing (gear / transition phase?)" end
+        local source = sub(grid, "Blobs") or grid
+        local cells = {}
+        local detected = {}
+        for _, item in ipairs(source:GetChildren()) do
+            local n = tonumber(item.Name)
+            if n and n > 0 and n <= 100 and math.floor(n) == n and item:IsA("GuiObject") then
+                detected[n] = item
+            end
+        end
+        local count = 0
+        for i in pairs(detected) do if i > count then count = i end end
+        if count == 0 then return nil, "No numbered grid cells (gear / animation?)" end
+        if count > 81 then return nil, "Unsupported grid larger than 9x9" end
+        local distinct = 0
+        local groups = {}
+        for i = 1, count do
+            local item = detected[i]
+            if item then
+                distinct += 1
+                local circle = sub(item, "Circle")
+                local number = circle and sub(circle, "Number") or sub(item, "Number")
+                local markerText = ""
+                if number and number:IsA("TextLabel") then
+                    markerText = tostring(number.Text or ""):match("^%s*(.-)%s*$") or ""
+                end
+                local color = circle and rgb(circle.BackgroundColor3) or "-"
+                local button = sub(item, "Button")
+                local record = {
+                    index = i,
+                    mark = circle ~= nil,
+                    number = markerText,
+                    color = color,
+                    button = button ~= nil and button:IsA("GuiButton"),
+                    buttonActive = button and button.Active or false,
+                    visible = item.Visible,
+                }
+                cells[#cells + 1] = record
+                if circle then
+                    -- The text may be a unique cell index, not a pair identifier;
+                    -- only exactly two identical markers form a candidate pair.
+                    local key = markerText ~= "" and "text:" .. markerText or "color:" .. color
+                    if key ~= "color:-" and key ~= "color:?" then
+                        groups[key] = groups[key] or {}
+                        groups[key][#groups[key] + 1] = i
+                    end
+                end
+            end
+        end
+        local side = math.floor(math.sqrt(count) + 0.5)
+        local square = side * side == count and distinct == count
+        local pairedEndpoints, ambiguous = {}, 0
+        for key, indexes in pairs(groups) do
+            if #indexes == 2 then
+                pairedEndpoints[#pairedEndpoints + 1] = {id = key, a = indexes[1], b = indexes[2]}
+            else
+                ambiguous += 1
+            end
+        end
+        table.sort(pairedEndpoints, function(a, b) return a.id < b.id end)
+        return {
+            phase = source == grid and "grid" or "blobs", size = square and side or nil,
+            cells = cells, count = distinct, maxIndex = count, pairs = pairedEndpoints, ambiguous = ambiguous,
+            path = puzzle:GetFullName(),
+        }
+    end
+    local function dist(n, a, b)
+        return math.abs(math.floor((a - 1) / n) - math.floor((b - 1) / n))
+            + math.abs((a - 1) % n - (b - 1) % n)
+    end
+    function planner.Solve(n, pairsList, budget)
+        if type(n) ~= "number" or n < 2 or n > 9 or n % 1 ~= 0 then return nil, "invalid size" end
+        if type(pairsList) ~= "table" or #pairsList == 0 or #pairsList > 15 then return nil, "invalid pairs" end
+        local endpoint, routes, paths = {}, {}, {}
+        for k, pair in ipairs(pairsList) do
+            local a, b = tonumber(pair.a), tonumber(pair.b)
+            if not a or not b or a % 1 ~= 0 or b % 1 ~= 0 or a < 1 or b < 1 or a > n*n or b > n*n or a == b
+                or endpoint[a] or endpoint[b] then return nil, "ambiguous endpoints" end
+            endpoint[a], endpoint[b] = true, true
+            routes[k] = {id = pair.id, a = a, b = b}
+        end
+        table.sort(routes, function(a, b) return dist(n, a.a, a.b) < dist(n, b.a, b.b) end)
+        local occupied, visits, maximum = {}, 0, math.max(100, math.min(tonumber(budget) or 8000, 20000))
+        local timedOut = false
+        local function adjacent(index, goal)
+            local row, col = math.floor((index - 1) / n), (index - 1) % n
+            local out = {}
+            if row > 0 then out[#out + 1] = index - n end
+            if row < n - 1 then out[#out + 1] = index + n end
+            if col > 0 then out[#out + 1] = index - 1 end
+            if col < n - 1 then out[#out + 1] = index + 1 end
+            table.sort(out, function(a, b) return dist(n, a, goal) < dist(n, b, goal) end)
+            return out
+        end
+        local function solvePair(k)
+            if k > #routes then return true end
+            local pair = routes[k]
+            local visited, trace = {[pair.a] = true}, {pair.a}
+            local function visit(index)
+                visits += 1
+                if visits > maximum then timedOut = true; return false end
+                if index == pair.b then
+                    paths[pair.id] = table.clone(trace)
+                    if solvePair(k + 1) then return true end
+                    paths[pair.id] = nil
+                    return false
+                end
+                for _, nextIndex in ipairs(adjacent(index, pair.b)) do
+                    if not occupied[nextIndex] and not visited[nextIndex]
+                        and (not endpoint[nextIndex] or nextIndex == pair.b) then
+                        visited[nextIndex] = true
+                        occupied[nextIndex] = true
+                        trace[#trace + 1] = nextIndex
+                        if visit(nextIndex) then return true end
+                        trace[#trace] = nil
+                        occupied[nextIndex] = nil
+                        visited[nextIndex] = nil
+                        if timedOut then return false end
+                    end
+                end
+                return false
+            end
+            return visit(pair.a)
+        end
+        if solvePair(1) then return paths, "solved", visits end
+        return nil, timedOut and "budget exceeded" or "no compatible routes", visits
+    end
+    function planner.Summary(data)
+        if not data then return "没有可以读取的谜题结构" end
+        local lines = {
+            ("Puzzle phase=%s cells=%d maxIndex=%d side=%s pairs=%d ambiguous=%d"):
+                format(data.phase, data.count, data.maxIndex, tostring(data.size or "?"), #data.pairs, data.ambiguous),
+        }
+        for _, cell in ipairs(data.cells) do
+            if cell.mark then
+                lines[#lines + 1] = string.format("cell=%d number=%s color=%s button=%s active=%s",
+                    cell.index, cell.number, cell.color, tostring(cell.button), tostring(cell.buttonActive))
+            end
+        end
+        if data.phase == "grid" and data.size and #data.pairs > 0 and data.ambiguous == 0 then
+            local paths, status, visits = planner.Solve(data.size, data.pairs, 8000)
+            lines[#lines + 1] = "planner=" .. tostring(status) .. " nodes=" .. tostring(visits)
+            if paths then
+                for _, pair in ipairs(data.pairs) do
+                    lines[#lines + 1] = pair.id .. "=" .. table.concat(paths[pair.id], "->")
+                end
+            end
+        else
+            lines[#lines + 1] = "planner=waiting-for-complete-paired-endpoint-data"
+        end
+        lines[#lines + 1] = "Input operation / server acknowledgment not captured; automatic actuation disabled."
+        return table.concat(lines, "\n")
+    end
+    return planner
 end
 
 end)()
@@ -42807,7 +43018,7 @@ end
 
 local bridge = WindBridgeFactory(WindUI, {Name = "Forsaken", Folder = "VortexionForsaken"})
 assert(bridge and bridge.Active, "Forsaken: WindUI bridge unavailable")
-local window = bridge:CreateWindow({Title = "Forsaken · R2.14"})
+local window = bridge:CreateWindow({Title = "Forsaken · R2.16"})
 assert(window, "Forsaken: window creation failed")
 local tabs = {
     vision = window:AddTab({Title = "感知", Icon = "lucide-eye"}),
@@ -42818,7 +43029,7 @@ local tabs = {
 }
 window:InstallSettings(tabs.system)
 
-local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Tabs=tabs})
+local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Tabs=tabs, PuzzlePlanner=type(ForsakenPuzzlePlannerFactory) == "function" and ForsakenPuzzlePlannerFactory() or nil})
 
 local state = {alive = true, killers = false, survivors = false,
     generators = false, alert = false, fovEnabled = false, fov = 80,

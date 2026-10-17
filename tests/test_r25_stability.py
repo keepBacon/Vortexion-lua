@@ -159,7 +159,8 @@ assert(a==1 and b==1, 'killer marker not destroyed')
         LuaRuntime().run(to_lua54(script))
 
     def test_legacy_is_removed_from_active_bundle(self):
-        self.assertIn('"Forsaken": ("ForsakenCore.luau", [("ForsakenEnhancementsFactory", "ForsakenEnhancements.luau")])', BUILD)
+        self.assertIn('("ForsakenEnhancementsFactory", "ForsakenEnhancements.luau")', BUILD)
+        self.assertIn('("ForsakenPuzzlePlannerFactory", "ForsakenPuzzlePlanner.luau")', BUILD)
         self.assertNotIn('loadstring(game:HttpGet', FS)
         self.assertNotIn('getconnections(', FS)
         self.assertNotIn('hookmetamethod', FS)

@@ -672,6 +672,28 @@ return function(options)
             print("[Vortexion/Forsaken] "..detail)
         end
     end})
+    tabs.generators:AddButton({Title="分析当前发电机谜题（端点/颜色/路径）", Callback=function()
+        local planner = options.PuzzlePlanner
+        local pg = player:FindFirstChildOfClass("PlayerGui")
+        local puzzle = pg and pg:FindFirstChild("PuzzleUI")
+        if not planner or not puzzle then
+            state.lastAction = "请先在游戏内打开 PuzzleUI，然后重新分析"
+            return
+        end
+        local ok, data, reason = pcall(planner.Read, puzzle)
+        if not ok or not data then
+            state.lastAction = "谜题解析失败：" .. tostring(ok and reason or data)
+            return
+        end
+        local output = planner.Summary(data)
+        local env = (getgenv and getgenv()) or _G
+        local clipboard = env.setclipboard or env.toclipboard or setclipboard or toclipboard
+        if type(clipboard) == "function" then safe("copy puzzle planner", function() clipboard(output) end)
+        else print(output) end
+        state.lastAction = ("题型=%s 识别格=%d 成对端点=%d（已复制分析）"):
+            format(data.phase, data.count, #data.pairs)
+        state.repairPhase = "puzzle-analyzed-not-actuated"
+    end})
     tabs.generators:AddButton({Title="复制当前连线谜题结构（供适配）", Callback=function()
         -- Diagnostic only. Puzzle layouts are not guaranteed across updates.
         -- Read bounded GUI geometry; never synthesize global touch/mouse events.
@@ -712,6 +734,6 @@ return function(options)
         end
         state.lastAction = string.format("已采集 %d 个谜题 GUI 节点；用于验证当前版本结构", count)
     end})
-    tabs.generators:AddParagraph({Title="修理限制", Content="旧版 RE 仅在兼容模式下限距尝试，并以真实 Progress 验证；原生 Prompt 会进入拼图，但完整 6×6 自动解谜尚未适配。请在打开谜题后复制结构供验证。"})
+    tabs.generators:AddParagraph({Title="修理限制", Content="旧版 RE 仅作兼容尝试并验证 Progress；谜题可能具有不同阶段或 7×7 格。已支持只读端点分析和路径规划，但缺少真实输入协议，不会伪造自动完成。"})
     return {Destroy = shutdown, State = state, EnumerateGenerators = enumerateGenerators}
 end

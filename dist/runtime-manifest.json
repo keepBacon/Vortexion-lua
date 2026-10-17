@@ -1,9 +1,9 @@
 {
-  "build_tag": "loader-v2-modular-r2.15-blox-target-compat-thirdperson",
+  "build_tag": "loader-v2-modular-r2.16-menu-safe-hud-puzzle-reader",
   "core": {
-    "bytes": 1475352,
+    "bytes": 1476436,
     "path": "dist/Vortexion_Core.lua",
-    "sha256": "d0a4c32fb785b254ce31a054ff2e89a47a30de63a0931b0ccc0f8d20373268e4"
+    "sha256": "a7099fd571f05f7ec909e1da0c1c2198291b47c39b7a1a56f6dd84d21747f41b"
   },
   "fallback": "standalone-bundle-manual-only",
   "modules": {
@@ -23,9 +23,9 @@
       "sha256": "a53fe1256e9a48f7543110dd1fff04f3402f96efaa9b366570fb11db1127ac52"
     },
     "Forsaken": {
-      "bytes": 66345,
+      "bytes": 76317,
       "path": "dist/Vortexion_Module_Forsaken.lua",
-      "sha256": "c37c78c1d93d106327cc5a01e239806f5e9185143c015bd3cfc9d9c953570cae"
+      "sha256": "87fad3a0a2641e2a7c868ee43c67b9b2fb0fe7b33d7546a3c4cb2dfde66e63d1"
     },
     "SCP": {
       "bytes": 127959,
