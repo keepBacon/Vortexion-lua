@@ -7,6 +7,7 @@ local AOTRMovementFactory = nil
 local AOTRESPFactory = nil
 local AOTRFarmFactory = nil
 local app=AOTRCommon("battle",WindUI,WindBridgeFactory)
+if not app then return end
 local window=app:Open()
 if not window then return end
 
@@ -15,10 +16,27 @@ if not window then return end
 --=========================================================================
 app:ProbeRemotes()
 app.ProbeHUD(true)
-local Cloak=AOTRCloakFactory(app)
-app.Cloak=Cloak
-if type(Cloak)=="table" and type(Cloak.Start)=="function" then
-    app.Guard("Cloak",Cloak.Start)
+local bootFailures = {}
+local function reportBootFailure(name, message)
+    local detail = tostring(name) .. ": " .. tostring(message):sub(1, 160)
+    table.insert(bootFailures, detail)
+    if app.ui then
+        app.ui.BootStatus = "partial"
+        app.ui.BootError = table.concat(bootFailures, "; ")
+    end
+    warn("[Vortexion/AOTR] " .. detail)
+end
+local Cloak
+if type(AOTRCloakFactory) == "function" then
+    local ok, value = pcall(AOTRCloakFactory, app)
+    if ok then Cloak = value else reportBootFailure("cloak", value) end
+else
+    reportBootFailure("cloak", "factory missing")
+end
+app.Cloak = Cloak
+if type(Cloak) == "table" and type(Cloak.Start) == "function" then
+    local ok, err = app.Guard("Cloak", Cloak.Start)
+    if not ok then reportBootFailure("cloak start", err) end
 end
 
 local tabs={
@@ -32,12 +50,12 @@ window:InstallSettings(tabs.settings)
 
 local function setup(name,factory,key)
     if type(factory)~="function" then
-        warn("[Vortexion/AOTR] missing factory: "..name)
+        reportBootFailure(name, "factory missing")
         return nil
     end
     local ok,result=pcall(factory,app)
     if not ok then
-        warn("[Vortexion/AOTR] "..name.." failed: "..tostring(result))
+        reportBootFailure(name, result)
         app:Notify(name.." 模块失败: "..tostring(result))
         return nil
     end
@@ -313,6 +331,9 @@ tabs.settings:AddToggle("AOTRDebug",{Title="调试日志",Default=false,Callback
 end})
 tabs.settings:AddParagraph({Title="场景识别",
     Content="仅在已核实的任务 PlaceId 中启动；未识别地图不会误加载战斗脚本。"})
+tabs.settings:AddButton({Title="子模块初始化诊断",Callback=function()
+    app:Notify(#bootFailures > 0 and table.concat(bootFailures, " / ") or "已调用全部子模块工厂；玩法有效性仍需实机测试")
+end})
 tabs.settings:AddButton({Title="运行状态",Callback=function()
     local Titans,Combat,Farm=app.Titans,app.Combat,app.Farm
     local remotes=app.Remotes

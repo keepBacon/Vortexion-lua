@@ -129,14 +129,21 @@ local common = {
     GameVersion = "scp-v3",
 }
 
+local bootFailures = {}
+local function reportBootFailure(component, message)
+    local detail = tostring(component) .. ": " .. tostring(message):sub(1, 160)
+    table.insert(bootFailures, detail)
+    ui.BootStatus, ui.BootError = "partial", table.concat(bootFailures, "; ")
+    warn("[Vortexion/SCP] " .. detail)
+end
 local function setup(name, factory)
     if type(factory) ~= "function" then
-        warn("[Vortexion/SCP] " .. name .. " factory missing")
+        reportBootFailure(name, "factory missing")
         return nil
     end
     local passed, result = pcall(factory, common)
     if not passed then
-        warn("[Vortexion/SCP] " .. name .. " failed: " .. tostring(result))
+        reportBootFailure(name, result)
         return nil
     end
     return result
@@ -147,7 +154,7 @@ end
 setup("common", SCPCommonFactory)
 common.Log = common.Log or function() end
 common.Guard = common.Guard or function(_, fn, ...) local ok, err = pcall(fn, ...) if not ok then warn(tostring(err)) end return ok end
-common.Cloak = setup("cloak", SCPCloakFactory) or { Protect = function() end, Stop = function() end, Start = function() end }
+common.Cloak = setup("cloak", SCPCloakFactory) or { Protect = function(object) return object end, Stop = function() end, Start = function() end }
 -- Cloak is inert until its enumeration hook is installed; start it here so
 -- every later module (ESP chams, aim highlight) is already protected.
 if type(common.Cloak.Start) == "function" then
@@ -461,6 +468,10 @@ tabs.Info:AddToggle("SCPDebug", { Title = "调试输出", Default = false, Callb
 tabs.Info:AddParagraph({ Title = "兼容性说明",
     Content = ("PlaceId %d / 构建 scp-v3。R15 与 R6 角色自适应；Drawing 缺失时线条停用、Chams 可独立工作；元表钩子缺失时静默瞄准自动停用；候选与绘制刷新率独立于帧率；触屏默认右侧按住。")
         :format(game.PlaceId) })
+tabs.Info:AddButton({ Title = "子模块初始化诊断", Callback = function()
+    pcall(function() ui:Notify({Title = "SCP 启动诊断",
+        Content = #bootFailures > 0 and table.concat(bootFailures, " / ") or "模块工厂未报告失败；功能运行仍需实际测试", Duration = 6}) end)
+end })
 tabs.Info:AddButton({ Title = "检查运行状态", Callback = function()
     local caps = common.Caps or {}
     pcall(function()

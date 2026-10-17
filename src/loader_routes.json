@@ -1,0 +1,21 @@
+{
+  "aotr_universe": 4658598196,
+  "universes": {
+    "6331902150": "Forsaken",
+    "7633926880": "BloxStrike",
+    "1742264997": "SCP"
+  },
+  "places": {
+    "18687417158": "Forsaken",
+    "114234929420007": "BloxStrike",
+    "5041144419": "SCP"
+  },
+  "aotr_places": {
+    "13379208636": "AOTR_Lobby",
+    "14916516914": "AOTR_Lobby",
+    "13379349730": "AOTR_Battle",
+    "14638336319": "AOTR_Battle",
+    "14012874501": "AOTR_Battle",
+    "13904207646": "AOTR_Battle"
+  }
+}

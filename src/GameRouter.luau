@@ -77,6 +77,9 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
                 pcall(function() bridge:Notify({Title = "游戏初始化失败", Content = summary, Duration = 6}) end)
             end
         end
+        local existingPartial = bridge.BootStatus == "partial"
+        bridge.BootStatus = (summary or existingPartial) and "partial" or "ready"
+        bridge.BootError = summary or (existingPartial and bridge.BootError or nil)
         return ok and result or bridge
     end
     if entry then
@@ -88,7 +91,11 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
         pcall(function() bridge:Destroy() end)
     end
     local fallbackOk, fallback = pcall(Router.ShowUnsupported, WindUI, WindBridgeFactory, universe, place, reason, summary)
-    if fallbackOk then return fallback end
+    if fallbackOk and type(fallback) == "table" then
+        fallback.BootStatus = entry and "partial" or "unsupported"
+        fallback.BootError = summary
+        return fallback
+    end
     warn("[Vortexion/Wind] Generic UI initialization: " .. tostring(fallback))
     return nil
 end

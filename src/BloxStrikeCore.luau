@@ -97,6 +97,13 @@ ownCleanup(function()
     end
     pcall(function() ui:Destroy() end)
 end)
+local bootFailures = {}
+local function reportBootFailure(component, message)
+    local detail = tostring(component) .. ": " .. tostring(message):sub(1, 160)
+    table.insert(bootFailures, detail)
+    ui.BootStatus, ui.BootError = "partial", table.concat(bootFailures, "; ")
+    warn("[Vortexion/BloxStrike] " .. detail)
+end
 local tabs={
     Combat=window:AddTab({Title="战斗",Icon="lucide-crosshair"}),
     Weapon=window:AddTab({Title="武器",Icon="lucide-target"}),
@@ -196,12 +203,13 @@ end
 
 local function setup(name, factory, key)
     if type(factory) ~= "function" then
+        reportBootFailure(name, "factory missing")
         if key then ctx[key] = emptyModule() end
         return
     end
     local passed, result = pcall(factory, ctx)
     if not passed then
-        warn("[Vortexion/BloxStrike] "..name.." failed: "..tostring(result))
+        reportBootFailure(name, result)
         notify(name.." 模块失败", tostring(result))
         if key then ctx[key] = emptyModule() end
     elseif type(result) == "table" and key then
@@ -218,11 +226,14 @@ ownCleanup(function()
         common.Disposers[i] = nil
     end
 end)
-local passedCloak, cloak = pcall(BloxCloakFactory, common)
+local passedCloak, cloak = false, "cloak factory missing"
+if type(BloxCloakFactory) == "function" then
+    passedCloak, cloak = pcall(BloxCloakFactory, common)
+end
 if passedCloak and type(cloak) == "table" then
     common.Cloak = cloak
 else
-    warn("[Vortexion/BloxStrike] cloak failed: "..tostring(cloak))
+    reportBootFailure("Cloak", cloak)
     common.Cloak = nil
 end
 
@@ -291,6 +302,10 @@ tabs.Settings:AddToggle("BloxDebug",{Title="调试日志",Default=false,Callback
 end})
 tabs.Settings:AddParagraph({Title="BloxStrike 兼容说明",
     Content="独立模块；角色优先识别 Workspace.Characters。自瞄带预测与锁定重验；子弹追踪四条路径（预测/武器射线/远程参数/投射物）自动选择；皮肤仅本地预览。"})
+tabs.Settings:AddButton({Title="子模块初始化诊断",Callback=function()
+    notify("BloxStrike 启动诊断",#bootFailures > 0 and table.concat(bootFailures, " / ")
+        or "模块工厂未报告失败；功能运行仍需实际测试")
+end})
 tabs.Settings:AddButton({Title="检查运行状态",Callback=function()
     local assets=ReplicatedStorage:FindFirstChild("Assets")
     local skins=assets and assets:FindFirstChild("Skins")

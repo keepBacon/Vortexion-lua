@@ -146,6 +146,8 @@ CASES = [
 def write_fixture(root):
     for path, source in ((BUILD.VENDOR, MOCK_VENDOR), (BUILD.BRIDGE, MOCK_BRIDGE),
                          (BUILD.SERVER_SWITCH, "return function(tab, notify) return {} end\n"),
+                         (BUILD.MONITOR, "return function(tab, bridge) return {} end\n"),
+                         (BUILD.ROUTE_CONFIG, (ROOT / BUILD.ROUTE_CONFIG).read_text(encoding="utf-8")),
                          (BUILD.ROUTER, (ROOT / BUILD.ROUTER).read_text(encoding="utf-8"))):
         target = root / path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -301,56 +303,146 @@ assert(route == nil and reason == 'unsupported-aotr-scene')
 """)
 
 
-class LoaderTests(unittest.TestCase):
-    """V2 P0 loader contracts; do not expect the pre-publication warning."""
+class ModularTests(unittest.TestCase):
+    """V2 modular packaging contract and mock executor-loader tests."""
 
-    def run_loader(self, base, code="getgenv().VortexionWindBridge = {Active=true}", transport_error=False):
-        loader = (ROOT / "loader.lua").read_text(encoding="utf-8")
-        encoded_base = "nil" if base is None else json.dumps(base)
-        source = code + "\n" + "-- padding for HTTP payload\n" * 10
-        setup = (
-            "local env = {VortexionSourceBase = " + encoded_base + "}\n"
-            "getgenv = function() return env end\n"
-            "loadstring = load\n"
-            "Instance = nil\n"
-            "task = {spawn = function(f) f() end, wait = function() end}\n"
-            "__requests, __warnings = {}, {}\n"
-            "warn = function(message) table.insert(__warnings, message) end\n"
-            "game = {GameId=6331902150, PlaceId=18687417158, IsLoaded=function() return true end,"
-            "HttpGet = function(_, url) table.insert(__requests, url)\n"
-        )
-        setup += "error('transport failed')\n" if transport_error else "return " + json.dumps(source) + "\n"
-        return setup + "end}\n(function()\n" + loader + "\nend)()\n"
+    def test_modular_build_and_manifest_integrity(self):
+        with tempfile.TemporaryDirectory(prefix="wind-modules-", dir=ROOT / "tests") as directory:
+            root = Path(directory)
+            write_fixture(root)
+            result = BUILD.build(root)
+            manifest = json.loads((root / "dist/runtime-manifest.json").read_text())
+            self.assertEqual(manifest["schema"], 2)
+            self.assertEqual(len(manifest["modules"]), 5)
+            self.assertEqual(set(manifest["modules"]), set(BUILD.GAMES))
+            self.assertEqual(manifest["core"]["path"], "dist/Vortexion_Core.lua")
+            self.assertEqual(set(result["modular_bundles"]), {
+                "Vortexion_Core.lua", *["Vortexion_Module_" + k + ".lua" for k in BUILD.GAMES]})
+            for name, item in result["modular_bundles"].items():
+                file = root / "dist" / name
+                self.assertEqual(BUILD.sha(file), item["sha256"])
+                self.assertEqual(len(file.read_bytes()), item["bytes"])
+            core = (root / "dist/Vortexion_Core.lua").read_text()
+            self.assertEqual(core.count("local WindUI = (function()"), 1)
+            self.assertEqual(core.count("local RuntimeMonitorFactory = (function()"), 1)
+            for name in BUILD.GAMES:
+                source = (root / "dist" / ("Vortexion_Module_" + name + ".lua")).read_text()
+                self.assertNotIn("local WindUI = (function()", source)
+                self.assertIn("return function(kernel)", source)
+                self.assertIn("GameRouter.Run(", source)
+            old = {x.name: x.read_bytes() for x in (root / "dist").iterdir()}
+            self.assertEqual(BUILD.build(root), result)
+            self.assertEqual(old, {x.name: x.read_bytes() for x in (root / "dist").iterdir()})
 
-    def test_base_override_and_only_unified_download(self):
-        LuaRuntime().run(self.run_loader("https://example.test/wind///") + """
-assert(#__requests == 1 and __requests[1] == 'https://example.test/wind/dist/Vortexion_Wind.lua')
-assert(env.VortexionLoaderV2.status == 'success' and env.VortexionLoaderV2.stage == 'complete')
-""")
+    @staticmethod
+    def loader_script(base="https://example.test/wind///", case="success", scene="Forsaken"):
+        raw = (ROOT / "loader.lua").read_text(encoding="utf-8")
+        # Loader uses Luau compound assignment; translate only for the Lua 5.4 mock VM.
+        raw = raw.replace("state.cacheHits += 1", "state.cacheHits = state.cacheHits + 1")
+        raw = raw.replace("state.downloadedBytes += #source", "state.downloadedBytes = state.downloadedBytes + #source")
+        raw = raw.replace("state.downloadedBytes += #raw", "state.downloadedBytes = state.downloadedBytes + #raw")
+        route = "Forsaken" if scene == "Forsaken" else "nil"
+        setup = r'''
+local env = {VortexionSourceBase = __BASE__}
+getgenv = function() return env end
+Instance = nil
+loadstring = load
+warn = function(message) end
+task = {spawn = function(f) f() end, wait = function() end}
+local manifest = {
+ schema = 2, build_tag = 'test', routes = {
+  aotr_universe=4658598196, universes = {['6331902150']='Forsaken'}, places={}, aotr_places={}
+ },
+ core = {path='dist/Vortexion_Core.lua',bytes=__CORE_LEN__,sha256=string.rep('1',64)},
+ modules = {Forsaken={path='dist/Vortexion_Module_Forsaken.lua',bytes=__MODULE_LEN__,sha256=string.rep('2',64)}}
+}
+local coreCode=__CORE_CODE__
+local moduleCode=__MODULE_CODE__
+local legacyCode=__LEGACY_CODE__
+__requests = {}
+game = {
+ GameId=__UNIVERSE__, PlaceId=18687417158,
+ IsLoaded=function() return true end,
+ GetService=function(self,name)
+  if name == 'HttpService' then return {JSONDecode=function() return manifest end} end
+ end,
+ HttpGet=function(self,url)
+  table.insert(__requests,url)
+  if url:find('runtime-manifest.json',1,true) then
+    if __CASE__ == 'manifest-network' then error('manifest offline') end
+    return string.rep('x', 120)
+  end
+  if url:find('Vortexion_Core.lua',1,true) then
+    if __CASE__ == 'core-network' then error('core offline') end
+    return coreCode
+  end
+  if url:find('Vortexion_Module_Forsaken.lua',1,true) then
+    if __CASE__ == 'module-truncated' then return 'short' end
+    return moduleCode
+  end
+  if url:find('Vortexion_Wind.lua',1,true) then return legacyCode end
+  error('unexpected URL: '..url)
+ end
+}
+'''
+        core_code = "return { GameRouter = {Run = function() getgenv().VortexionWindBridge = {Active=true,Window=function() return {} end,BootStatus='unsupported'} end}, WindUI={}, WindBridgeFactory=function() end }" + "\n--pad"*10
+        module_code = "return function(kernel) getgenv().VortexionWindBridge = {Active=true,Window=function() return {} end,BootStatus='ready'} end" + "\n--pad"*10
+        legacy_code = "getgenv().VortexionWindBridge = {Active=true,Window=function() return {} end}" + "\n--pad"*10
+        setup = (setup.replace("__BASE__", json.dumps(base))
+            .replace("__CORE_LEN__", str(len(core_code)))
+            .replace("__MODULE_LEN__", str(len(module_code)))
+            .replace("__CORE_CODE__", json.dumps(core_code))
+            .replace("__MODULE_CODE__", json.dumps(module_code))
+            .replace("__LEGACY_CODE__", json.dumps(legacy_code))
+            .replace("__UNIVERSE__", "6331902150" if scene == "Forsaken" else "999999")
+            .replace("__CASE__", json.dumps(case)))
+        return setup + "\n(function()\n" + raw + "\nend)()\n"
 
-    def test_default_uses_published_repository_url(self):
-        LuaRuntime().run(self.run_loader(None) + """
-assert(#__requests == 1 and __requests[1] == 'https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/dist/Vortexion_Wind.lua')
+    def test_loader_selected_route(self):
+        LuaRuntime().run(self.loader_script() + r'''
 assert(env.VortexionLoaderV2.status == 'success')
+assert(env.VortexionLoaderV2.route == 'Forsaken')
+assert(#__requests == 3)
+assert(__requests[1] == 'https://example.test/wind/dist/runtime-manifest.json')
+assert(__requests[2] == 'https://example.test/wind/dist/Vortexion_Core.lua')
+assert(__requests[3] == 'https://example.test/wind/dist/Vortexion_Module_Forsaken.lua')
+assert(env.VortexionLoaderV2.downloadedBytes > 100)
+''')
+
+    def test_unknown_game_has_generic_ui_without_foreign_module(self):
+        LuaRuntime().run(self.loader_script(scene="unknown") + r'''
+assert(env.VortexionLoaderV2.status == 'success')
+assert(env.VortexionLoaderV2.route == nil)
+assert(#__requests == 2)
+assert(env.VortexionWindBridge.BootStatus == 'unsupported')
+''')
+
+    def test_loader_retries_core_or_module_failure(self):
+        for kind, stage, count in (("manifest-network", "manifest", 1),
+                                   ("core-network", "download-core", 4),
+                                   ("module-truncated", "download-module", 5)):
+            with self.subTest(kind=kind):
+                LuaRuntime().run(self.loader_script(case=kind) + f"""
+assert(env.VortexionLoaderV2.status == 'failed')
+assert(env.VortexionLoaderV2.stage == {json.dumps(stage)})
+assert(#__requests == {count})
 """)
 
-    def test_invalid_base_does_not_download(self):
-        lua = LuaRuntime()
-        for base in ("", "file:///tmp", "ftp://example.test", 123, False):
-            with self.subTest(base=base):
-                lua.run(self.run_loader(base) + """
-assert(#__requests == 0 and env.VortexionLoaderV2.status == 'failed')
-assert(env.VortexionLoaderV2.stage == 'source')
-""")
+    def test_loader_manual_legacy_retry(self):
+        LuaRuntime().run(self.loader_script(case="core-network") + r'''
+local loader = env.VortexionLoaderV2
+assert(loader.status == 'failed')
+loader.legacyOnce = true
+loader.Retry()
+assert(loader.status == 'success' and loader.manifestTag == 'legacy-single-bundle')
+assert(__requests[#__requests] == 'https://example.test/wind/dist/Vortexion_Wind.lua')
+''')
 
-    def test_transport_compile_and_runtime_errors_are_separate(self):
-        lua = LuaRuntime()
-        for code, transport, expected in (("", True, "download"), ("this is not lua", False, "compile"),
-                                          ("error('entry failed')", False, "runtime")):
-            with self.subTest(code=code, transport=transport):
-                lua.run(self.run_loader("https://example.test", code, transport) +
-                        "assert(#__requests == 1 and env.VortexionLoaderV2.status == 'failed' "
-                        "and env.VortexionLoaderV2.stage == '" + expected + "')\n")
+    def test_loader_bad_base_is_caught(self):
+        LuaRuntime().run(self.loader_script(base="ftp://server") + r'''
+assert(env.VortexionLoaderV2.status == 'failed')
+assert(#__requests == 0)
+''')
 
 
 if __name__ == "__main__":

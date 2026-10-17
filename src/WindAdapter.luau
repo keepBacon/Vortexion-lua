@@ -48,6 +48,51 @@ return function(WindUI, config)
     local PERF_TIER_HZ = {["原速"] = 60, ["均衡"] = 15, ["省电"] = 5}
     local defaultPerfTier = input.TouchEnabled and "均衡" or "原速"
     bridge.VisualHz = PERF_TIER_HZ[defaultPerfTier]
+    -- Optional budget only affects non-critical visual refresh loops. Disabled by default.
+    bridge.AdaptiveVisualHz = nil
+    local adaptiveConnection, adaptiveAccum, adaptiveFrames = nil, 0, 0
+    local adaptiveLow, adaptiveHigh, adaptiveMeasured = 0, 0, 0
+    local adaptiveFloor, adaptiveTarget = 10, 38
+    local function resetAdaptive()
+        if adaptiveConnection then adaptiveConnection:Disconnect(); adaptiveConnection = nil end
+        bridge.AdaptiveVisualHz = nil
+        adaptiveAccum, adaptiveFrames, adaptiveLow, adaptiveHigh = 0, 0, 0, 0
+    end
+    local function setAdaptive(enabled)
+        resetAdaptive()
+        if not enabled or not bridge.Active then return end
+        -- The instantaneous UI pacing target does not change until enough low-FPS samples persist.
+        local service = game:GetService("RunService")
+        adaptiveConnection = service.Heartbeat:Connect(function(dt)
+            if not bridge.Active then return end
+            local frameTime = tonumber(dt)
+            if not frameTime or frameTime <= 0 or frameTime > 0.5 then return end
+            adaptiveAccum += frameTime
+            adaptiveFrames += 1
+            if adaptiveAccum < 1 then return end
+            adaptiveMeasured = math.floor(adaptiveFrames / adaptiveAccum + 0.5)
+            adaptiveAccum, adaptiveFrames = 0, 0
+            local target = math.max(adaptiveFloor, math.min(60, adaptiveTarget))
+            if adaptiveMeasured < target then
+                adaptiveLow += 1
+                adaptiveHigh = 0
+            elseif adaptiveMeasured > target + 8 then
+                adaptiveHigh += 1
+                adaptiveLow = 0
+            else
+                adaptiveLow, adaptiveHigh = 0, 0
+            end
+            -- Only reduce optional visual work after 3 consecutive poor samples;
+            -- recover after 6 good samples to prevent oscillation.
+            if adaptiveLow >= 3 then
+                bridge.AdaptiveVisualHz = math.max(adaptiveFloor, math.floor(adaptiveMeasured * 0.65))
+                adaptiveLow = 0
+            elseif adaptiveHigh >= 6 then
+                bridge.AdaptiveVisualHz = nil
+                adaptiveHigh = 0
+            end
+        end)
+    end
     local function clampHz(value)
         local hz = tonumber(value)
         if not hz or hz ~= hz or hz == math.huge or hz == -math.huge then return VISUAL_HZ_MAX end
@@ -62,7 +107,9 @@ return function(WindUI, config)
     end
     function bridge:GetVisualInterval(baseSeconds)
         -- Caps non-critical visual refresh at VisualHz without ever accelerating the caller's own cadence.
-        return math.max(sanitizeBase(baseSeconds), 1 / clampHz(self.VisualHz))
+        local visualHz = clampHz(self.VisualHz)
+        if self.AdaptiveVisualHz then visualHz = math.min(visualHz, clampHz(self.AdaptiveVisualHz)) end
+        return math.max(sanitizeBase(baseSeconds), 1 / visualHz)
     end
     local function flushSliders()
         if not bridge.Active or sliderFlushQueued then return end
@@ -177,6 +224,7 @@ return function(WindUI, config)
         table.clear(connections)
         topbarConnection = nil
         cancelOwnedCenter()
+        resetAdaptive()
         if originalToggleAcrylic and WindUI.ToggleAcrylic == acrylicWrapper then
             WindUI.ToggleAcrylic = originalToggleAcrylic
         end
@@ -478,6 +526,11 @@ return function(WindUI, config)
         view:AddSlider("wind_visual_hz", {Title = "自定义刷新率 (Hz)", Min = VISUAL_HZ_MIN, Max = VISUAL_HZ_MAX, Default = clampHz(input.TouchEnabled and 15 or 60), Rounding = 0, Callback = function() computeVisualHz() end})
         view:AddParagraph({Title = "视觉刷新", Content = "仅限制非关键视觉刷新（ESP/轨迹/高亮等），不改变移动、输入、回收或战斗/冷却频率。档位越高刷新越勤、耗电越高；\"原速\" 只把刷新限制到不高于 60Hz，不会把旧有节拍加速。"})
         computeVisualHz()
+        view:AddToggle("wind_adaptive_visual", {Title = "自适应视觉调度（实验）", Default = false,
+            Callback = function(v) setAdaptive(v) end})
+        view:AddSlider("wind_adaptive_target", {Title = "自适应目标帧率", Min = 20, Max = 60, Default = 38, Rounding = 0,
+            Callback = function(v) adaptiveTarget = tonumber(v) or 38 end})
+        view:AddParagraph({Title = "自适应说明", Content = "持续 3 秒低于目标帧率时，降低非关键视觉刷新上限；连续 6 秒恢复后取消限制。不开启时无额外帧监听。该选项不改变输入、物理或关键战斗更新。"})
         view:AddToggle("wind_notification_lower", {Title = "通知显示在底部", Default = false, Callback = function(v) WindUI:SetNotificationLower(v) end})
         view:AddButton({Title = "窗口居中", Callback = function() cancelOwnedCenter(); native:SetToTheCenter() end})
         view:AddButton({Title = "收起窗口", Callback = function() native:Toggle() end})
@@ -564,7 +617,8 @@ return function(WindUI, config)
         bridge.GetDiagnostics = function()
             local optionCount = 0
             for _ in pairs(bridge.Options) do optionCount += 1 end
-            return string.format("GameId: %s\nPlaceId: %s\nJobId: %s\n当前页: %s\n缩放: %s\n主题: %s\n选项: %s\n主题数: %s\n最近异常: %s\n视觉档位: %s\n视觉刷新: %s Hz (上限 %s)\nTopbarInset 监听: %s", tostring(game.GameId), tostring(game.PlaceId), tostring(game.JobId), tostring(native.CurrentTab), tostring(native:GetUIScale()), tostring(WindUI:GetCurrentTheme()), tostring(optionCount), tostring(#themes()), bridge.LastError or "无", tostring(bridge.Options.wind_perf_tier and bridge.Options.wind_perf_tier.Value or defaultPerfTier), tostring(clampHz(bridge.VisualHz)), tostring(VISUAL_HZ_MAX), tostring(topbarConnection and "是" or "否"))
+            return string.format("GameId: %s\nPlaceId: %s\nJobId: %s\n当前页: %s\n缩放: %s\n主题: %s\n选项: %s\n主题数: %s\n最近异常: %s\n视觉档位: %s\n视觉刷新: %s Hz (上限 %s)\nTopbarInset 监听: %s", tostring(game.GameId), tostring(game.PlaceId), tostring(game.JobId), tostring(native.CurrentTab), tostring(native:GetUIScale()), tostring(WindUI:GetCurrentTheme()), tostring(optionCount), tostring(#themes()), bridge.LastError or "无", tostring(bridge.Options.wind_perf_tier and bridge.Options.wind_perf_tier.Value or defaultPerfTier), tostring(clampHz(bridge.VisualHz)), tostring(VISUAL_HZ_MAX), tostring(topbarConnection and "是" or "否")) .. ("\n自适应视觉: %s / FPS %d / 上限 %s")
+                :format(tostring(adaptiveConnection ~= nil), adaptiveMeasured, tostring(bridge.AdaptiveVisualHz or "默认"))
         end
         local function refreshDiagnostic() local value = bridge.GetDiagnostics(); diagnostic:SetDesc(value); return value end
         debugPage:AddButton({Title = "刷新诊断", Callback = refreshDiagnostic})
@@ -882,6 +936,17 @@ return function(WindUI, config)
                 end
                 bridge.ServerSwitch = serverSwitch
             else common:AddParagraph({Title = "切服模块未加载", Content = "请检查构建是否包含 ServerSwitch。"}) end
+            -- Shared optional runtime telemetry. Constructor failures never abort the game window.
+            if type(RuntimeMonitorFactory) == "function" then
+                local diagnosticsTab = wrapTab(groups.Common:Tab({Title = "性能诊断", Icon = "lucide-gauge"}))
+                local okMonitor, monitor = pcall(RuntimeMonitorFactory, diagnosticsTab, bridge)
+                if okMonitor and self.Active then
+                    bridge.RuntimeMonitor = monitor
+                elseif not okMonitor then
+                    bridge.LastError = "RuntimeMonitor: " .. tostring(monitor)
+                    warn("[Vortexion/Wind] " .. bridge.LastError)
+                end
+            end
             installSettings(groups)
             if not self.Active then cancelled = true; return nil end
             local cameraConnection

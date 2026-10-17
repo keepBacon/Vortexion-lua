@@ -10,6 +10,8 @@ VENDOR = "vendor/WindUI/Source.lua"
 BRIDGE = "src/WindAdapter.luau"
 SERVER_SWITCH = "src/ServerSwitch.luau"
 ROUTER = "src/GameRouter.luau"
+MONITOR = "src/RuntimeMonitor.luau"
+ROUTE_CONFIG = "src/loader_routes.json"
 
 FORSAKEN_MODULES = [
     ("ForsakenCombatFactory", "ForsakenCombat.luau"),
@@ -52,7 +54,7 @@ GAMES = {
 }
 
 HEADER = (
-    "-- Vortexion WindUI - generated offline; not published to GitHub.\n"
+    "-- Vortexion WindUI - generated offline; publishing must be performed separately.\n"
     "-- WindUI attribution and license are retained in vendor/WindUI/.\n"
     "-- Forsaken retains runtime model rbxassetid://132866968194043.\n"
     "-- Modify src/*.luau and run python3 build.py; do not edit this output.\n"
@@ -103,9 +105,17 @@ def build(root=ROOT):
             sources[relative] = source
         return sources[relative]
 
-    shared = HEADER + PRELOAD + embed("WindUI", read(VENDOR))
+    # The vendored WindUI banner contains trailing spaces inside its ASCII-art
+    # block comment. Normalize only that embedded comment for Git whitespace
+    # checks, without modifying the vendor file or its audited SHA-256.
+    vendor_source = read(VENDOR)
+    banner, terminator, remainder = vendor_source.partition("]]")
+    if terminator and banner.startswith("--[["):
+        clean_banner = "\n".join(line.rstrip(" \t") for line in banner.split("\n"))
+        vendor_source = clean_banner + terminator + remainder
+    shared = HEADER + PRELOAD + embed("WindUI", vendor_source)
     # Adapter closures must capture the already-declared server controller factory.
-    for name, path in (("ServerSwitchFactory", SERVER_SWITCH), ("WindBridgeFactory", BRIDGE)):
+    for name, path in (("ServerSwitchFactory", SERVER_SWITCH), ("RuntimeMonitorFactory", MONITOR), ("WindBridgeFactory", BRIDGE)):
         source = read(path)
         if "return function(" not in source:
             raise ValueError("Missing factory return: " + path)
@@ -146,6 +156,26 @@ def build(root=ROOT):
     )
     outputs["Vortexion_Wind.lua"] = unified
 
+    # V2 runtime bundles: isolate UI / common services from game code.
+    # Loader retrieves the shared core and only the current game's module.
+    # Standalone V1 outputs remain for backwards compatibility and diagnostics.
+    core_source = shared + embed("GameRouter", router) + (
+        "return {WindUI=WindUI, WindBridgeFactory=WindBridgeFactory, "
+        "ServerSwitchFactory=ServerSwitchFactory, GameRouter=GameRouter}\n"
+    )
+    modular_outputs = {"Vortexion_Core.lua": core_source}
+    for name, body in game_bodies.items():
+        modular_outputs["Vortexion_Module_" + name + ".lua"] = (
+            HEADER
+            + "return function(kernel)\n"
+            + "assert(type(kernel) == 'table' and type(kernel.WindBridgeFactory) == 'function', 'Invalid Vortexion core')\n"
+            + "local WindUI, WindBridgeFactory, GameRouter = kernel.WindUI, kernel.WindBridgeFactory, kernel.GameRouter\n"
+            + "local entry = function()\n" + body + "end\n"
+            + "return GameRouter.Run(WindUI, WindBridgeFactory, entry, game.GameId, game.PlaceId, "
+            + json.dumps(name) + ")\n"
+            + "end\n"
+        )
+
     # Validate all inputs before replacing any distributable.
     dist = root / "dist"
     dist.mkdir(exist_ok=True)
@@ -154,6 +184,40 @@ def build(root=ROOT):
         out = dist / filename
         out.write_text(source, encoding="utf-8")
         bundles[filename] = {"sha256": sha(out), "bytes": out.stat().st_size}
+    modular_bundles = {}
+    for filename, source in modular_outputs.items():
+        target = dist / filename
+        target.write_text(source, encoding="utf-8")
+        modular_bundles[filename] = {"path": "dist/" + filename, "bytes": target.stat().st_size, "sha256": sha(target)}
+
+    # Route manifest is generated from one checked-in data source. Assert parity
+    # with the embedded legacy router, so old and new entrypoints do not diverge.
+    routes = json.loads(read(ROUTE_CONFIG))
+    for field in ("universes", "places", "aotr_places"):
+        if not isinstance(routes.get(field), dict):
+            raise ValueError("Invalid routes field: " + field)
+    for field in ("universes", "places", "aotr_places"):
+        for key, name in routes[field].items():
+            if name not in GAMES:
+                raise ValueError("Unknown route: " + field + ":" + key)
+            # Legacy GameRouter uses bracketed numeric literal maps.
+            token = "[" + str(int(key)) + "] = " + json.dumps(name)
+            if token not in router:
+                raise ValueError("Router drift: " + token)
+    if "local AOTR_UNIVERSE = " + str(routes["aotr_universe"]) not in router:
+        raise ValueError("AOTR universe mismatch")
+    runtime_manifest = {
+        "schema": 2,
+        "build_tag": "loader-v2-modular-r1",
+        "core": modular_bundles["Vortexion_Core.lua"],
+        "modules": {name: modular_bundles["Vortexion_Module_" + name + ".lua"] for name in GAMES},
+        "routes": routes,
+        "fallback": "standalone-bundle-manual-only",
+    }
+    (dist / "runtime-manifest.json").write_text(
+        json.dumps(runtime_manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
     manifest = {
         "project_name": "Vortexion WindUI",
         "build_tag": "wind-unified-v1",
@@ -170,6 +234,8 @@ def build(root=ROOT):
         "roblox_android_tested": False,
         "luau_compiler_tested": False,
         "old_repo_touched": False,
+        "modular_bundles": modular_bundles,
+        "runtime_manifest": "dist/runtime-manifest.json",
         "notice": "Offline build only; no upload or Roblox Android runtime verification.",
     }
     (dist / "build-manifest.json").write_text(

@@ -1,4 +1,4 @@
--- Vortexion WindUI - generated offline; not published to GitHub.
+-- Vortexion WindUI - generated offline; publishing must be performed separately.
 -- WindUI attribution and license are retained in vendor/WindUI/.
 -- Forsaken retains runtime model rbxassetid://132866968194043.
 -- Modify src/*.luau and run python3 build.py; do not edit this output.
@@ -14,13 +14,13 @@ local WindUI = (function()
 --[[
      _      ___         ____  ______
     | | /| / (_)__  ___/ / / / /  _/
-    | |/ |/ / / _ \/ _  / /_/ // /  
+    | |/ |/ / / _ \/ _  / /_/ // /
     |__/|__/_/_//_/\_,_/\____/___/
-    
+
     v1.6.66  |  2026-10-07  |  Roblox UI Library for scripts
-    
+
     To view the source code, see the `src/` folder on the official GitHub repository.
-    
+
     Author: Footagesus (Footages, .ftgs, oftgs)
     Github: https://github.com/Footagesus/WindUI
     Discord: https://discord.gg/ftgs-development-hub-1300692552005189632
@@ -40399,6 +40399,170 @@ return function(tab, notify)
 end
 
 end)()
+local RuntimeMonitorFactory = (function()
+-- Vortexion / shared mobile runtime diagnostics (opt-in, no idle frame listener).
+-- One owner per Wind bridge; subscriptions and HUD are removed on teardown.
+return function(tab, bridge)
+    local RunService = game:GetService("RunService")
+    local Players = game:GetService("Players")
+    local Stats = game:GetService("Stats")
+    local localPlayer = Players.LocalPlayer
+    local running, active, accumulator, frames = false, true, 0, 0
+    local sampleInterval = 1
+    local frameConnection, screenGui, label = nil, nil, nil
+    local fps, minimum, maximum, samples = 0, math.huge, 0, 0
+    local peakFrameMs, stutterCount, lastAverageFrameMs = 0, 0, 0
+    local intervalFrameMs, intervalFrames = 0, 0
+    local STUTTER_THRESHOLD_MS = 50
+    local lastPing, lastMemory = nil, nil
+    local startedAt = os.clock()
+
+    local function makeGui()
+        if screenGui or not active then return end
+        local parent = nil
+        pcall(function() parent = localPlayer:FindFirstChildOfClass("PlayerGui") end)
+        if not parent then return end
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "VortexionPerformanceHUD"
+        gui.ResetOnSpawn = false
+        gui.IgnoreGuiInset = false
+        gui.DisplayOrder = 100
+        local frame = Instance.new("Frame")
+        frame.Name = "Telemetry"
+        frame.AnchorPoint = Vector2.new(1, 0)
+        frame.Position = UDim2.new(1, -12, 0, 48)
+        frame.Size = UDim2.fromOffset(206, 92)
+        frame.BackgroundColor3 = Color3.fromRGB(24, 27, 32)
+        frame.BackgroundTransparency = 0.12
+        frame.BorderSizePixel = 0
+        frame.Parent = gui
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 6)
+        corner.Parent = frame
+        local content = Instance.new("TextLabel")
+        content.Name = "Metrics"
+        content.Size = UDim2.new(1, -16, 1, -10)
+        content.Position = UDim2.fromOffset(8, 5)
+        content.BackgroundTransparency = 1
+        content.TextColor3 = Color3.fromRGB(228, 232, 238)
+        content.Font = Enum.Font.Code
+        content.TextSize = 12
+        content.TextXAlignment = Enum.TextXAlignment.Left
+        content.TextYAlignment = Enum.TextYAlignment.Center
+        content.Text = "FPS -- · Frame --\nStutters -- · Ping --\nMemory -- · Sampling"
+        content.Parent = frame
+        local ok = pcall(function() gui.Parent = parent end)
+        if not ok or not gui.Parent then gui:Destroy(); return end
+        screenGui, label = gui, content
+    end
+
+    local function snapshot()
+        return {
+            fps = fps,
+            minFps = samples > 0 and minimum or 0,
+            maxFps = maximum,
+            avgFrameMs = lastAverageFrameMs,
+            peakFrameMs = peakFrameMs,
+            stutters = stutterCount,
+            pingMs = lastPing,
+            memoryMb = lastMemory,
+            samples = samples,
+            uptimeSeconds = math.floor(os.clock() - startedAt),
+            gameId = game.GameId,
+            placeId = game.PlaceId,
+        }
+    end
+
+    local function update(dt)
+        if not active or not running then return end
+        -- O(1) accumulation; expensive service reads occur only on the sampling cadence.
+        local delta = tonumber(dt)
+        if not delta or delta ~= delta or delta < 0 or delta == math.huge then return end
+        -- Track actual frame gaps before capping the FPS integration delta.
+        local ms = delta * 1000
+        peakFrameMs = math.max(peakFrameMs, ms)
+        if ms >= STUTTER_THRESHOLD_MS then stutterCount += 1 end
+        intervalFrameMs += ms
+        intervalFrames += 1
+        frames += 1
+        accumulator += math.min(delta, 0.5)
+        if accumulator < sampleInterval then return end
+        fps = accumulator > 0 and math.floor(frames / accumulator + 0.5) or 0
+        minimum, maximum = math.min(minimum, fps), math.max(maximum, fps)
+        samples += 1
+        lastAverageFrameMs = intervalFrames > 0 and intervalFrameMs / intervalFrames or 0
+        frames, accumulator, intervalFrameMs, intervalFrames = 0, 0, 0, 0
+        local okPing, ping = pcall(function() return localPlayer:GetNetworkPing() * 1000 end)
+        if okPing and type(ping) == "number" and ping >= 0 and ping < math.huge then lastPing = ping end
+        local okMemory, mem = pcall(function() return Stats:GetTotalMemoryUsageMb() end)
+        if okMemory and type(mem) == "number" and mem >= 0 and mem < math.huge then lastMemory = mem end
+        if label and label.Parent then
+            label.Text = ("FPS %d (Min %d)\nFrame %.1fms / Peak %.0fms\nStutters %d · Ping %s ms\nMemory %s MB"):format(
+                fps, minimum, lastAverageFrameMs, peakFrameMs, stutterCount,
+                lastPing and tostring(math.floor(lastPing + 0.5)) or "--",
+                lastMemory and tostring(math.floor(lastMemory + 0.5)) or "--")
+        end
+    end
+
+    local function stop()
+        running = false
+        if frameConnection then frameConnection:Disconnect(); frameConnection = nil end
+        if screenGui then screenGui:Destroy(); screenGui = nil; label = nil end
+        accumulator, frames = 0, 0
+    end
+
+    local function resetSamples()
+        fps, minimum, maximum, samples = 0, math.huge, 0, 0
+        peakFrameMs, stutterCount, lastAverageFrameMs = 0, 0, 0
+        frames, accumulator, intervalFrameMs, intervalFrames = 0, 0, 0, 0
+        lastPing, lastMemory = nil, nil
+        startedAt = os.clock()
+        if label and label.Parent then
+            label.Text = "FPS -- · Frame --\nStutters -- · Ping --\nMemory -- · Sampling"
+        end
+    end
+    local function setEnabled(value)
+        if not active then return end
+        if not value then stop(); return end
+        if running then return end
+        makeGui()
+        if not screenGui then
+            bridge:Notify({Title = "性能监控", Content = "无法创建 PlayerGui HUD，监控未开启。", Duration = 5})
+            return
+        end
+        running = true
+        frameConnection = RunService.Heartbeat:Connect(update)
+    end
+
+    tab:AddParagraph({Title = "运行时性能", Content = "按需采样 FPS / Ping / 内存；默认关闭，没有空闲帧循环。不改变游戏画质或帧率。"})
+    tab:AddToggle("VortexionPerfHUD", {Title = "显示性能 HUD", Default = false, Callback = setEnabled})
+    tab:AddSlider("VortexionPerfSampleSeconds", {Title = "采样间隔（秒）", Min = 1, Max = 5, Default = 1, Rounding = 0,
+        Callback = function(v)
+            local n = tonumber(v)
+            if not n or n ~= n or n == math.huge or n == -math.huge then n = 1 end
+            sampleInterval = math.max(1, math.min(5, n))
+        end})
+    tab:AddButton({Title = "重置性能采样", Callback = resetSamples})
+    tab:AddButton({Title = "复制性能诊断", Callback = function()
+        local s = snapshot()
+        local info = ("Vortexion Runtime\nGameId=%s PlaceId=%s\nFPS=%d min=%d max=%d\nFrameAvgMs=%.2f FramePeakMs=%.2f Stutters(>=50ms)=%d\nPing=%s Memory=%s Samples=%d Uptime=%ds")
+            :format(tostring(s.gameId), tostring(s.placeId), s.fps, s.minFps, s.maxFps,
+                s.avgFrameMs, s.peakFrameMs, s.stutters,
+                tostring(s.pingMs or "unavailable"), tostring(s.memoryMb or "unavailable"), s.samples, s.uptimeSeconds)
+        local copy = type(setclipboard) == "function" and setclipboard or type(toclipboard) == "function" and toclipboard
+        if copy then
+            local ok = pcall(copy, info)
+            bridge:Notify({Title = "性能诊断", Content = ok and "已复制" or "复制失败，详见控制台", Duration = 4})
+        else
+            warn(info)
+            bridge:Notify({Title = "性能诊断", Content = "无剪贴板接口，已输出到控制台", Duration = 4})
+        end
+    end})
+    bridge:OnDestroy(function() active = false; stop() end)
+    return {GetSnapshot = snapshot, Stop = stop, Reset = resetSamples}
+end
+
+end)()
 local WindBridgeFactory = (function()
 -- Native WindUI navigation and compatibility for the preserved game option IDs.
 return function(WindUI, config)
@@ -40450,6 +40614,51 @@ return function(WindUI, config)
     local PERF_TIER_HZ = {["原速"] = 60, ["均衡"] = 15, ["省电"] = 5}
     local defaultPerfTier = input.TouchEnabled and "均衡" or "原速"
     bridge.VisualHz = PERF_TIER_HZ[defaultPerfTier]
+    -- Optional budget only affects non-critical visual refresh loops. Disabled by default.
+    bridge.AdaptiveVisualHz = nil
+    local adaptiveConnection, adaptiveAccum, adaptiveFrames = nil, 0, 0
+    local adaptiveLow, adaptiveHigh, adaptiveMeasured = 0, 0, 0
+    local adaptiveFloor, adaptiveTarget = 10, 38
+    local function resetAdaptive()
+        if adaptiveConnection then adaptiveConnection:Disconnect(); adaptiveConnection = nil end
+        bridge.AdaptiveVisualHz = nil
+        adaptiveAccum, adaptiveFrames, adaptiveLow, adaptiveHigh = 0, 0, 0, 0
+    end
+    local function setAdaptive(enabled)
+        resetAdaptive()
+        if not enabled or not bridge.Active then return end
+        -- The instantaneous UI pacing target does not change until enough low-FPS samples persist.
+        local service = game:GetService("RunService")
+        adaptiveConnection = service.Heartbeat:Connect(function(dt)
+            if not bridge.Active then return end
+            local frameTime = tonumber(dt)
+            if not frameTime or frameTime <= 0 or frameTime > 0.5 then return end
+            adaptiveAccum += frameTime
+            adaptiveFrames += 1
+            if adaptiveAccum < 1 then return end
+            adaptiveMeasured = math.floor(adaptiveFrames / adaptiveAccum + 0.5)
+            adaptiveAccum, adaptiveFrames = 0, 0
+            local target = math.max(adaptiveFloor, math.min(60, adaptiveTarget))
+            if adaptiveMeasured < target then
+                adaptiveLow += 1
+                adaptiveHigh = 0
+            elseif adaptiveMeasured > target + 8 then
+                adaptiveHigh += 1
+                adaptiveLow = 0
+            else
+                adaptiveLow, adaptiveHigh = 0, 0
+            end
+            -- Only reduce optional visual work after 3 consecutive poor samples;
+            -- recover after 6 good samples to prevent oscillation.
+            if adaptiveLow >= 3 then
+                bridge.AdaptiveVisualHz = math.max(adaptiveFloor, math.floor(adaptiveMeasured * 0.65))
+                adaptiveLow = 0
+            elseif adaptiveHigh >= 6 then
+                bridge.AdaptiveVisualHz = nil
+                adaptiveHigh = 0
+            end
+        end)
+    end
     local function clampHz(value)
         local hz = tonumber(value)
         if not hz or hz ~= hz or hz == math.huge or hz == -math.huge then return VISUAL_HZ_MAX end
@@ -40464,7 +40673,9 @@ return function(WindUI, config)
     end
     function bridge:GetVisualInterval(baseSeconds)
         -- Caps non-critical visual refresh at VisualHz without ever accelerating the caller's own cadence.
-        return math.max(sanitizeBase(baseSeconds), 1 / clampHz(self.VisualHz))
+        local visualHz = clampHz(self.VisualHz)
+        if self.AdaptiveVisualHz then visualHz = math.min(visualHz, clampHz(self.AdaptiveVisualHz)) end
+        return math.max(sanitizeBase(baseSeconds), 1 / visualHz)
     end
     local function flushSliders()
         if not bridge.Active or sliderFlushQueued then return end
@@ -40579,6 +40790,7 @@ return function(WindUI, config)
         table.clear(connections)
         topbarConnection = nil
         cancelOwnedCenter()
+        resetAdaptive()
         if originalToggleAcrylic and WindUI.ToggleAcrylic == acrylicWrapper then
             WindUI.ToggleAcrylic = originalToggleAcrylic
         end
@@ -40880,6 +41092,11 @@ return function(WindUI, config)
         view:AddSlider("wind_visual_hz", {Title = "自定义刷新率 (Hz)", Min = VISUAL_HZ_MIN, Max = VISUAL_HZ_MAX, Default = clampHz(input.TouchEnabled and 15 or 60), Rounding = 0, Callback = function() computeVisualHz() end})
         view:AddParagraph({Title = "视觉刷新", Content = "仅限制非关键视觉刷新（ESP/轨迹/高亮等），不改变移动、输入、回收或战斗/冷却频率。档位越高刷新越勤、耗电越高；\"原速\" 只把刷新限制到不高于 60Hz，不会把旧有节拍加速。"})
         computeVisualHz()
+        view:AddToggle("wind_adaptive_visual", {Title = "自适应视觉调度（实验）", Default = false,
+            Callback = function(v) setAdaptive(v) end})
+        view:AddSlider("wind_adaptive_target", {Title = "自适应目标帧率", Min = 20, Max = 60, Default = 38, Rounding = 0,
+            Callback = function(v) adaptiveTarget = tonumber(v) or 38 end})
+        view:AddParagraph({Title = "自适应说明", Content = "持续 3 秒低于目标帧率时，降低非关键视觉刷新上限；连续 6 秒恢复后取消限制。不开启时无额外帧监听。该选项不改变输入、物理或关键战斗更新。"})
         view:AddToggle("wind_notification_lower", {Title = "通知显示在底部", Default = false, Callback = function(v) WindUI:SetNotificationLower(v) end})
         view:AddButton({Title = "窗口居中", Callback = function() cancelOwnedCenter(); native:SetToTheCenter() end})
         view:AddButton({Title = "收起窗口", Callback = function() native:Toggle() end})
@@ -40966,7 +41183,8 @@ return function(WindUI, config)
         bridge.GetDiagnostics = function()
             local optionCount = 0
             for _ in pairs(bridge.Options) do optionCount += 1 end
-            return string.format("GameId: %s\nPlaceId: %s\nJobId: %s\n当前页: %s\n缩放: %s\n主题: %s\n选项: %s\n主题数: %s\n最近异常: %s\n视觉档位: %s\n视觉刷新: %s Hz (上限 %s)\nTopbarInset 监听: %s", tostring(game.GameId), tostring(game.PlaceId), tostring(game.JobId), tostring(native.CurrentTab), tostring(native:GetUIScale()), tostring(WindUI:GetCurrentTheme()), tostring(optionCount), tostring(#themes()), bridge.LastError or "无", tostring(bridge.Options.wind_perf_tier and bridge.Options.wind_perf_tier.Value or defaultPerfTier), tostring(clampHz(bridge.VisualHz)), tostring(VISUAL_HZ_MAX), tostring(topbarConnection and "是" or "否"))
+            return string.format("GameId: %s\nPlaceId: %s\nJobId: %s\n当前页: %s\n缩放: %s\n主题: %s\n选项: %s\n主题数: %s\n最近异常: %s\n视觉档位: %s\n视觉刷新: %s Hz (上限 %s)\nTopbarInset 监听: %s", tostring(game.GameId), tostring(game.PlaceId), tostring(game.JobId), tostring(native.CurrentTab), tostring(native:GetUIScale()), tostring(WindUI:GetCurrentTheme()), tostring(optionCount), tostring(#themes()), bridge.LastError or "无", tostring(bridge.Options.wind_perf_tier and bridge.Options.wind_perf_tier.Value or defaultPerfTier), tostring(clampHz(bridge.VisualHz)), tostring(VISUAL_HZ_MAX), tostring(topbarConnection and "是" or "否")) .. ("\n自适应视觉: %s / FPS %d / 上限 %s")
+                :format(tostring(adaptiveConnection ~= nil), adaptiveMeasured, tostring(bridge.AdaptiveVisualHz or "默认"))
         end
         local function refreshDiagnostic() local value = bridge.GetDiagnostics(); diagnostic:SetDesc(value); return value end
         debugPage:AddButton({Title = "刷新诊断", Callback = refreshDiagnostic})
@@ -41284,6 +41502,17 @@ return function(WindUI, config)
                 end
                 bridge.ServerSwitch = serverSwitch
             else common:AddParagraph({Title = "切服模块未加载", Content = "请检查构建是否包含 ServerSwitch。"}) end
+            -- Shared optional runtime telemetry. Constructor failures never abort the game window.
+            if type(RuntimeMonitorFactory) == "function" then
+                local diagnosticsTab = wrapTab(groups.Common:Tab({Title = "性能诊断", Icon = "lucide-gauge"}))
+                local okMonitor, monitor = pcall(RuntimeMonitorFactory, diagnosticsTab, bridge)
+                if okMonitor and self.Active then
+                    bridge.RuntimeMonitor = monitor
+                elseif not okMonitor then
+                    bridge.LastError = "RuntimeMonitor: " .. tostring(monitor)
+                    warn("[Vortexion/Wind] " .. bridge.LastError)
+                end
+            end
             installSettings(groups)
             if not self.Active then cancelled = true; return nil end
             local cameraConnection
@@ -41422,6 +41651,9 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
                 pcall(function() bridge:Notify({Title = "游戏初始化失败", Content = summary, Duration = 6}) end)
             end
         end
+        local existingPartial = bridge.BootStatus == "partial"
+        bridge.BootStatus = (summary or existingPartial) and "partial" or "ready"
+        bridge.BootError = summary or (existingPartial and bridge.BootError or nil)
         return ok and result or bridge
     end
     if entry then
@@ -41433,7 +41665,11 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
         pcall(function() bridge:Destroy() end)
     end
     local fallbackOk, fallback = pcall(Router.ShowUnsupported, WindUI, WindBridgeFactory, universe, place, reason, summary)
-    if fallbackOk then return fallback end
+    if fallbackOk and type(fallback) == "table" then
+        fallback.BootStatus = entry and "partial" or "unsupported"
+        fallback.BootError = summary
+        return fallback
+    end
     warn("[Vortexion/Wind] Generic UI initialization: " .. tostring(fallback))
     return nil
 end
@@ -45040,21 +45276,21 @@ local function stopvoidrushcontrol()
 end
 
 local function fireproximityprompt(Obj, Amount, Skip)
-    if Obj.ClassName == "ProximityPrompt" then 
+    if Obj.ClassName == "ProximityPrompt" then
         Amount = Amount or 1
         local PromptTime = Obj.HoldDuration
-        if Skip then 
+        if Skip then
             Obj.HoldDuration = 0
         end
-        for i = 1, Amount do 
+        for i = 1, Amount do
             Obj:InputHoldBegin()
-            if not Skip then 
+            if not Skip then
                 task.wait(Obj.HoldDuration)
             end
             Obj:InputHoldEnd()
         end
         Obj.HoldDuration = PromptTime
-    else 
+    else
         error("userdata<ProximityPrompt> expected")
     end
 end
@@ -45071,8 +45307,8 @@ local function NameProtect()
         if not gui then return end
 
         --  TemporaryUI.PlayerInfo.CurrentSurvivors -> Username
-        local currentSurvivors = gui:FindFirstChild("TemporaryUI") 
-            and gui.TemporaryUI:FindFirstChild("PlayerInfo") 
+        local currentSurvivors = gui:FindFirstChild("TemporaryUI")
+            and gui.TemporaryUI:FindFirstChild("PlayerInfo")
             and gui.TemporaryUI.PlayerInfo:FindFirstChild("CurrentSurvivors")
 
         if currentSurvivors then
@@ -45094,9 +45330,9 @@ local function NameProtect()
         end
 
         --  MainUI.PlayerListHolder.Contents.Players -> Username
-        local mainPlayers = gui:FindFirstChild("MainUI") 
-            and gui.MainUI:FindFirstChild("PlayerListHolder") 
-            and gui.MainUI.PlayerListHolder:FindFirstChild("Contents") 
+        local mainPlayers = gui:FindFirstChild("MainUI")
+            and gui.MainUI:FindFirstChild("PlayerListHolder")
+            and gui.MainUI.PlayerListHolder:FindFirstChild("Contents")
             and gui.MainUI.PlayerListHolder.Contents:FindFirstChild("Players")
 
         if mainPlayers then
@@ -45122,7 +45358,7 @@ local function NameProtect()
         end
 
         --  Workspace.Players.Spectating -> humanoids, set DisplayDistanceType to None
-        local spectatingFolder = workspace:FindFirstChild("Players") 
+        local spectatingFolder = workspace:FindFirstChild("Players")
             and workspace.Players:FindFirstChild("Spectating")
 
         if spectatingFolder then
@@ -45153,7 +45389,7 @@ local function NameProtect()
         end
 
         --  MainUI.Spectate -> Username
-        local spectateUI = gui:FindFirstChild("MainUI") 
+        local spectateUI = gui:FindFirstChild("MainUI")
             and gui.MainUI:FindFirstChild("Spectate")
 
         if spectateUI then
@@ -45386,7 +45622,7 @@ local function handleToggle(enabled)
                     animator = Instance.new("Animator")
                     animator.Parent = humanoid
                 end
-                
+
                 local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
                 if torso and torso.Transparency ~= 0 then
                     if not animTrack or not animTrack.IsPlaying then
@@ -45759,8 +45995,8 @@ local function enableAimbot()
 				if humanoid then
 					humanoid.AutoRotate = true
 				end
-			end        
-		end	
+			end
+		end
     end)
 end
 
@@ -46905,12 +47141,12 @@ local IsMobile = UserInputService.TouchEnabled
 -- Mobile sizing and scroll safety live in the WindUI bridge.
 if FluentLoaded then
     Window = Fluent:CreateWindow({
-    	Title = "Forsaken",
-    	SubTitle = "",
-    	TabWidth = 160,
-    	Size = UDim2.fromOffset(580, 460),
-    	Theme = "Dark",
-    	MinimizeKey = Enum.KeyCode.K
+        Title = "Forsaken",
+        SubTitle = "",
+        TabWidth = 160,
+        Size = UDim2.fromOffset(580, 460),
+        Theme = "Dark",
+        MinimizeKey = Enum.KeyCode.K
 	})
 
 	Tabs = {
@@ -47118,15 +47354,15 @@ if FluentLoaded then
     })
 
 	Tabs.Survival:AddToggle("VoidRushControl", {
-    	Title = "虚空冲刺控制（感谢 golden）",
-    	Default = false,
-    	Callback = function(state)
-    	    if state then
-    	        startvoidrushcontrol()
-    	    else
-    	        stopvoidrushcontrol()
-    	    end
-    	end
+        Title = "虚空冲刺控制（感谢 golden）",
+        Default = false,
+        Callback = function(state)
+            if state then
+                startvoidrushcontrol()
+            else
+                stopvoidrushcontrol()
+            end
+        end
 	})
 
     Tabs.Combat:AddButton({
@@ -47190,9 +47426,9 @@ if FluentLoaded then
         Callback = function()
 			if setclipboard then setclipboard("https://discord.gg/ETTV2g8kxS") end
 			Fluent:Notify({
-    			Title = "Two Time 自动背刺",
-    			Content = "由 skibisaken 制作，已复制 Discord 链接。",
-    			Duration = 8
+                Title = "Two Time 自动背刺",
+                Content = "由 skibisaken 制作，已复制 Discord 链接。",
+                Duration = 8
 			})
             local okLoad, errLoad = pcall(function() loadstring(game:HttpGet('https://raw.githubusercontent.com/NumanTF3/two-time-backstab/refs/heads/main/main.lua'))() end)
             if not okLoad then
@@ -47503,7 +47739,7 @@ if FluentLoaded then
             end
         })
     end
-	
+
     -- Auto Rejoin on Kick (default ON)
     Tabs.Survival:AddToggle("AutoRejoinToggle", {
         Title = "被踢出后自动重进",
@@ -47533,7 +47769,7 @@ if FluentLoaded then
             pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId) end)
         end
     })
-    
+
     Tabs.Survival:AddToggle("autofixgen", {
         Title = "自动解当前发电机（需进入解谜）",
 		Default = false,
@@ -47563,7 +47799,7 @@ if FluentLoaded then
             end
         end
     })
-    
+
     --------------------------------------------------------------------------
     -- Misc Tab
     --------------------------------------------------------------------------
@@ -48136,9 +48372,9 @@ if FluentLoaded then
         Callback = function()
 			if setclipboard then setclipboard("https://discord.gg/aXNagEYb2f") end
 			Fluent:Notify({
-    			Title = "已复制 Discord 邀请链接",
-    			Content = "邀请链接已复制到剪贴板。",
-    			Duration = 8
+                Title = "已复制 Discord 邀请链接",
+                Content = "邀请链接已复制到剪贴板。",
+                Duration = 8
 			})
         end
     })
@@ -48291,7 +48527,7 @@ end)()
 do
 -- v3: Combat feature checks run on a bounded budget; disabled features do not scan players.
 local lastCombatScan = 0
-RunService.Heartbeat:Connect(function()
+track(RunService.Heartbeat:Connect(function()
     if not (GuestSettingsOn or blockTPEnabled or predictiveBlockOn or AutoPunchEnabled) then return end
     local now = os.clock()
     if now - lastCombatScan < 0.06 then return end
@@ -48380,8 +48616,8 @@ RunService.Heartbeat:Connect(function()
 
             for _, killer in ipairs(killersFolder:GetChildren()) do
 	            if not game.Players:GetPlayerFromCharacter(killer) then
-                	continue
-            	end
+                    continue
+                end
                 local hrp = killer:FindFirstChild("HumanoidRootPart")
                 if hrp then
                     local dist = (myHRP.Position - hrp.Position).Magnitude
@@ -48429,7 +48665,7 @@ RunService.Heartbeat:Connect(function()
                     local myChar = LocalPlayer.Character
                     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
                     if root and myRoot and (root.Position - myRoot.Position).Magnitude <= 10 then
-						
+
                         -- Aim Punch: Constant look at killer with prediction
 						if aimPunch then
 							local humanoid = myChar:FindFirstChild("Humanoid")
@@ -48441,8 +48677,8 @@ RunService.Heartbeat:Connect(function()
 								local start = tick()
 								while tick() - start < 2 do
 									local myRootNow = myChar:FindFirstChild("HumanoidRootPart")
-									local targetRoot = root 
-										and root.Parent 
+									local targetRoot = root
+										and root.Parent
 										and root.Parent:FindFirstChild("HumanoidRootPart")
 
 									if myRootNow and targetRoot then
@@ -48450,7 +48686,7 @@ RunService.Heartbeat:Connect(function()
 										local lookDir = predictedPos - myRootNow.Position
 										if lookDir.Magnitude > 0.01 then
 											myRootNow.CFrame = CFrame.lookAt(
-												myRootNow.Position, 
+												myRootNow.Position,
 												predictedPos
 											)
 										end
@@ -48500,7 +48736,7 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
-end)
+end))
 
 end -- scoped performance/UI helpers
 
@@ -48573,7 +48809,9 @@ end)
 do
 --// Hitbox ride logic: check at 20Hz when enabled, instead of each frame.
 local lastHitboxScan = 0
-RunService.Heartbeat:Connect(function()
+local lastCandidateScan = 0
+local candidateCache, cachedPlayers, cachedNpcs = {}, nil, nil
+track(RunService.Heartbeat:Connect(function()
     if not hitboxmodificationEnabled then return end
     local now = os.clock()
     if now - lastHitboxScan < 0.05 then return end
@@ -48596,7 +48834,7 @@ RunService.Heartbeat:Connect(function()
 
 	local function scanGroup(group)
 		for _, obj in ipairs(group) do
-			if obj == Character or not obj:FindFirstChild("HumanoidRootPart") then continue end
+			if obj == Character or not obj.Parent or not obj:FindFirstChild("HumanoidRootPart") then continue end
 			local dist = (obj.HumanoidRootPart.Position - HumanoidRootPart.Position).Magnitude
 			if dist < NearestDist then
 				NearestDist = dist
@@ -48605,12 +48843,27 @@ RunService.Heartbeat:Connect(function()
 		end
 	end
 
-	local playersFolder = workspace:FindFirstChild("Players")
-	if playersFolder then scanGroup(playersFolder:GetDescendants()) end
-	local npcs = workspace:FindFirstChild("Map", true) and workspace.Map:FindFirstChild("NPCs", true)
-	if npcs then
-		scanGroup(npcs:GetChildren())
-	end
+    -- Snapshot a scene candidate list at most twice per second. This avoids
+    -- walking every descendant 20 times/second while the option is enabled.
+    local playersFolder = workspace:FindFirstChild("Players")
+    local map = workspace:FindFirstChild("Map")
+    local npcs = map and map:FindFirstChild("NPCs", true)
+    if now - lastCandidateScan >= 0.5 or playersFolder ~= cachedPlayers or npcs ~= cachedNpcs then
+        candidateCache = {}
+        cachedPlayers, cachedNpcs = playersFolder, npcs
+        lastCandidateScan = now
+        if playersFolder then
+            for _, object in ipairs(playersFolder:GetDescendants()) do
+                if object:FindFirstChild("HumanoidRootPart") then table.insert(candidateCache, object) end
+            end
+        end
+        if npcs then
+            for _, object in ipairs(npcs:GetChildren()) do
+                if object:FindFirstChild("HumanoidRootPart") then table.insert(candidateCache, object) end
+            end
+        end
+    end
+    scanGroup(candidateCache)
 
 	if not Target then return end
 
@@ -48623,8 +48876,10 @@ RunService.Heartbeat:Connect(function()
 	local oldVelocity = HumanoidRootPart.Velocity
 	HumanoidRootPart.Velocity = neededVelocity
 	RunService.RenderStepped:Wait()
-	HumanoidRootPart.Velocity = oldVelocity
-end)
+    if HumanoidRootPart and HumanoidRootPart.Parent and sessionEnv.VortexionSessionId == thisSessionId then
+        HumanoidRootPart.Velocity = oldVelocity
+    end
+end))
 
 end -- scoped performance/UI helpers
 

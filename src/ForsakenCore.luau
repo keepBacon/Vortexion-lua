@@ -122,21 +122,21 @@ local function stopvoidrushcontrol()
 end
 
 local function fireproximityprompt(Obj, Amount, Skip)
-    if Obj.ClassName == "ProximityPrompt" then 
+    if Obj.ClassName == "ProximityPrompt" then
         Amount = Amount or 1
         local PromptTime = Obj.HoldDuration
-        if Skip then 
+        if Skip then
             Obj.HoldDuration = 0
         end
-        for i = 1, Amount do 
+        for i = 1, Amount do
             Obj:InputHoldBegin()
-            if not Skip then 
+            if not Skip then
                 task.wait(Obj.HoldDuration)
             end
             Obj:InputHoldEnd()
         end
         Obj.HoldDuration = PromptTime
-    else 
+    else
         error("userdata<ProximityPrompt> expected")
     end
 end
@@ -153,8 +153,8 @@ local function NameProtect()
         if not gui then return end
 
         --  TemporaryUI.PlayerInfo.CurrentSurvivors -> Username
-        local currentSurvivors = gui:FindFirstChild("TemporaryUI") 
-            and gui.TemporaryUI:FindFirstChild("PlayerInfo") 
+        local currentSurvivors = gui:FindFirstChild("TemporaryUI")
+            and gui.TemporaryUI:FindFirstChild("PlayerInfo")
             and gui.TemporaryUI.PlayerInfo:FindFirstChild("CurrentSurvivors")
 
         if currentSurvivors then
@@ -176,9 +176,9 @@ local function NameProtect()
         end
 
         --  MainUI.PlayerListHolder.Contents.Players -> Username
-        local mainPlayers = gui:FindFirstChild("MainUI") 
-            and gui.MainUI:FindFirstChild("PlayerListHolder") 
-            and gui.MainUI.PlayerListHolder:FindFirstChild("Contents") 
+        local mainPlayers = gui:FindFirstChild("MainUI")
+            and gui.MainUI:FindFirstChild("PlayerListHolder")
+            and gui.MainUI.PlayerListHolder:FindFirstChild("Contents")
             and gui.MainUI.PlayerListHolder.Contents:FindFirstChild("Players")
 
         if mainPlayers then
@@ -204,7 +204,7 @@ local function NameProtect()
         end
 
         --  Workspace.Players.Spectating -> humanoids, set DisplayDistanceType to None
-        local spectatingFolder = workspace:FindFirstChild("Players") 
+        local spectatingFolder = workspace:FindFirstChild("Players")
             and workspace.Players:FindFirstChild("Spectating")
 
         if spectatingFolder then
@@ -235,7 +235,7 @@ local function NameProtect()
         end
 
         --  MainUI.Spectate -> Username
-        local spectateUI = gui:FindFirstChild("MainUI") 
+        local spectateUI = gui:FindFirstChild("MainUI")
             and gui.MainUI:FindFirstChild("Spectate")
 
         if spectateUI then
@@ -468,7 +468,7 @@ local function handleToggle(enabled)
                     animator = Instance.new("Animator")
                     animator.Parent = humanoid
                 end
-                
+
                 local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
                 if torso and torso.Transparency ~= 0 then
                     if not animTrack or not animTrack.IsPlaying then
@@ -841,8 +841,8 @@ local function enableAimbot()
 				if humanoid then
 					humanoid.AutoRotate = true
 				end
-			end        
-		end	
+			end
+		end
     end)
 end
 
@@ -1993,12 +1993,12 @@ local IsMobile = UserInputService.TouchEnabled
 -- Mobile sizing and scroll safety live in the WindUI bridge.
 if FluentLoaded then
     Window = Fluent:CreateWindow({
-    	Title = "Forsaken",
-    	SubTitle = "",
-    	TabWidth = 160,
-    	Size = UDim2.fromOffset(580, 460),
-    	Theme = "Dark",
-    	MinimizeKey = Enum.KeyCode.K
+        Title = "Forsaken",
+        SubTitle = "",
+        TabWidth = 160,
+        Size = UDim2.fromOffset(580, 460),
+        Theme = "Dark",
+        MinimizeKey = Enum.KeyCode.K
 	})
 
 	Tabs = {
@@ -2206,15 +2206,15 @@ if FluentLoaded then
     })
 
 	Tabs.Survival:AddToggle("VoidRushControl", {
-    	Title = "虚空冲刺控制（感谢 golden）",
-    	Default = false,
-    	Callback = function(state)
-    	    if state then
-    	        startvoidrushcontrol()
-    	    else
-    	        stopvoidrushcontrol()
-    	    end
-    	end
+        Title = "虚空冲刺控制（感谢 golden）",
+        Default = false,
+        Callback = function(state)
+            if state then
+                startvoidrushcontrol()
+            else
+                stopvoidrushcontrol()
+            end
+        end
 	})
 
     Tabs.Combat:AddButton({
@@ -2278,9 +2278,9 @@ if FluentLoaded then
         Callback = function()
 			if setclipboard then setclipboard("https://discord.gg/ETTV2g8kxS") end
 			Fluent:Notify({
-    			Title = "Two Time 自动背刺",
-    			Content = "由 skibisaken 制作，已复制 Discord 链接。",
-    			Duration = 8
+                Title = "Two Time 自动背刺",
+                Content = "由 skibisaken 制作，已复制 Discord 链接。",
+                Duration = 8
 			})
             local okLoad, errLoad = pcall(function() loadstring(game:HttpGet('https://raw.githubusercontent.com/NumanTF3/two-time-backstab/refs/heads/main/main.lua'))() end)
             if not okLoad then
@@ -2591,7 +2591,7 @@ if FluentLoaded then
             end
         })
     end
-	
+
     -- Auto Rejoin on Kick (default ON)
     Tabs.Survival:AddToggle("AutoRejoinToggle", {
         Title = "被踢出后自动重进",
@@ -2621,7 +2621,7 @@ if FluentLoaded then
             pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId) end)
         end
     })
-    
+
     Tabs.Survival:AddToggle("autofixgen", {
         Title = "自动解当前发电机（需进入解谜）",
 		Default = false,
@@ -2651,7 +2651,7 @@ if FluentLoaded then
             end
         end
     })
-    
+
     --------------------------------------------------------------------------
     -- Misc Tab
     --------------------------------------------------------------------------
@@ -3224,9 +3224,9 @@ if FluentLoaded then
         Callback = function()
 			if setclipboard then setclipboard("https://discord.gg/aXNagEYb2f") end
 			Fluent:Notify({
-    			Title = "已复制 Discord 邀请链接",
-    			Content = "邀请链接已复制到剪贴板。",
-    			Duration = 8
+                Title = "已复制 Discord 邀请链接",
+                Content = "邀请链接已复制到剪贴板。",
+                Duration = 8
 			})
         end
     })
@@ -3379,7 +3379,7 @@ end)()
 do
 -- v3: Combat feature checks run on a bounded budget; disabled features do not scan players.
 local lastCombatScan = 0
-RunService.Heartbeat:Connect(function()
+track(RunService.Heartbeat:Connect(function()
     if not (GuestSettingsOn or blockTPEnabled or predictiveBlockOn or AutoPunchEnabled) then return end
     local now = os.clock()
     if now - lastCombatScan < 0.06 then return end
@@ -3468,8 +3468,8 @@ RunService.Heartbeat:Connect(function()
 
             for _, killer in ipairs(killersFolder:GetChildren()) do
 	            if not game.Players:GetPlayerFromCharacter(killer) then
-                	continue
-            	end
+                    continue
+                end
                 local hrp = killer:FindFirstChild("HumanoidRootPart")
                 if hrp then
                     local dist = (myHRP.Position - hrp.Position).Magnitude
@@ -3517,7 +3517,7 @@ RunService.Heartbeat:Connect(function()
                     local myChar = LocalPlayer.Character
                     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
                     if root and myRoot and (root.Position - myRoot.Position).Magnitude <= 10 then
-						
+
                         -- Aim Punch: Constant look at killer with prediction
 						if aimPunch then
 							local humanoid = myChar:FindFirstChild("Humanoid")
@@ -3529,8 +3529,8 @@ RunService.Heartbeat:Connect(function()
 								local start = tick()
 								while tick() - start < 2 do
 									local myRootNow = myChar:FindFirstChild("HumanoidRootPart")
-									local targetRoot = root 
-										and root.Parent 
+									local targetRoot = root
+										and root.Parent
 										and root.Parent:FindFirstChild("HumanoidRootPart")
 
 									if myRootNow and targetRoot then
@@ -3538,7 +3538,7 @@ RunService.Heartbeat:Connect(function()
 										local lookDir = predictedPos - myRootNow.Position
 										if lookDir.Magnitude > 0.01 then
 											myRootNow.CFrame = CFrame.lookAt(
-												myRootNow.Position, 
+												myRootNow.Position,
 												predictedPos
 											)
 										end
@@ -3588,7 +3588,7 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
-end)
+end))
 
 end -- scoped performance/UI helpers
 
@@ -3661,7 +3661,9 @@ end)
 do
 --// Hitbox ride logic: check at 20Hz when enabled, instead of each frame.
 local lastHitboxScan = 0
-RunService.Heartbeat:Connect(function()
+local lastCandidateScan = 0
+local candidateCache, cachedPlayers, cachedNpcs = {}, nil, nil
+track(RunService.Heartbeat:Connect(function()
     if not hitboxmodificationEnabled then return end
     local now = os.clock()
     if now - lastHitboxScan < 0.05 then return end
@@ -3684,7 +3686,7 @@ RunService.Heartbeat:Connect(function()
 
 	local function scanGroup(group)
 		for _, obj in ipairs(group) do
-			if obj == Character or not obj:FindFirstChild("HumanoidRootPart") then continue end
+			if obj == Character or not obj.Parent or not obj:FindFirstChild("HumanoidRootPart") then continue end
 			local dist = (obj.HumanoidRootPart.Position - HumanoidRootPart.Position).Magnitude
 			if dist < NearestDist then
 				NearestDist = dist
@@ -3693,12 +3695,27 @@ RunService.Heartbeat:Connect(function()
 		end
 	end
 
-	local playersFolder = workspace:FindFirstChild("Players")
-	if playersFolder then scanGroup(playersFolder:GetDescendants()) end
-	local npcs = workspace:FindFirstChild("Map", true) and workspace.Map:FindFirstChild("NPCs", true)
-	if npcs then
-		scanGroup(npcs:GetChildren())
-	end
+    -- Snapshot a scene candidate list at most twice per second. This avoids
+    -- walking every descendant 20 times/second while the option is enabled.
+    local playersFolder = workspace:FindFirstChild("Players")
+    local map = workspace:FindFirstChild("Map")
+    local npcs = map and map:FindFirstChild("NPCs", true)
+    if now - lastCandidateScan >= 0.5 or playersFolder ~= cachedPlayers or npcs ~= cachedNpcs then
+        candidateCache = {}
+        cachedPlayers, cachedNpcs = playersFolder, npcs
+        lastCandidateScan = now
+        if playersFolder then
+            for _, object in ipairs(playersFolder:GetDescendants()) do
+                if object:FindFirstChild("HumanoidRootPart") then table.insert(candidateCache, object) end
+            end
+        end
+        if npcs then
+            for _, object in ipairs(npcs:GetChildren()) do
+                if object:FindFirstChild("HumanoidRootPart") then table.insert(candidateCache, object) end
+            end
+        end
+    end
+    scanGroup(candidateCache)
 
 	if not Target then return end
 
@@ -3711,8 +3728,10 @@ RunService.Heartbeat:Connect(function()
 	local oldVelocity = HumanoidRootPart.Velocity
 	HumanoidRootPart.Velocity = neededVelocity
 	RunService.RenderStepped:Wait()
-	HumanoidRootPart.Velocity = oldVelocity
-end)
+    if HumanoidRootPart and HumanoidRootPart.Parent and sessionEnv.VortexionSessionId == thisSessionId then
+        HumanoidRootPart.Velocity = oldVelocity
+    end
+end))
 
 end -- scoped performance/UI helpers
 

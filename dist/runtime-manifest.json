@@ -1,0 +1,58 @@
+{
+  "build_tag": "loader-v2-modular-r1",
+  "core": {
+    "bytes": 1453009,
+    "path": "dist/Vortexion_Core.lua",
+    "sha256": "0baedf6b75235a353fd46408d4b14f5e28b9c528b29504752bf733f999c486d6"
+  },
+  "fallback": "standalone-bundle-manual-only",
+  "modules": {
+    "AOTR_Battle": {
+      "bytes": 96939,
+      "path": "dist/Vortexion_Module_AOTR_Battle.lua",
+      "sha256": "2d218983bbbd470090ec1fc968763fe82741446f5f326651fe1d6a5c9b14801f"
+    },
+    "AOTR_Lobby": {
+      "bytes": 24948,
+      "path": "dist/Vortexion_Module_AOTR_Lobby.lua",
+      "sha256": "abc022a3c272972213949808081e12c9991a66350f56d355f3108fcc98fa026f"
+    },
+    "BloxStrike": {
+      "bytes": 156641,
+      "path": "dist/Vortexion_Module_BloxStrike.lua",
+      "sha256": "5fa9a53458e22e7dd76546be85fca6a736bed2c01f4cfbe4b3c491122d42ef80"
+    },
+    "Forsaken": {
+      "bytes": 316585,
+      "path": "dist/Vortexion_Module_Forsaken.lua",
+      "sha256": "641d2508fe996e9739d801e3e60bfa524831534ffb8caaf0b1f23c72173a4aca"
+    },
+    "SCP": {
+      "bytes": 127782,
+      "path": "dist/Vortexion_Module_SCP.lua",
+      "sha256": "f9953b757fe877f6bcdbe932be00bb56fcf2a86596b673b23156186462cc5b17"
+    }
+  },
+  "routes": {
+    "aotr_places": {
+      "13379208636": "AOTR_Lobby",
+      "13379349730": "AOTR_Battle",
+      "13904207646": "AOTR_Battle",
+      "14012874501": "AOTR_Battle",
+      "14638336319": "AOTR_Battle",
+      "14916516914": "AOTR_Lobby"
+    },
+    "aotr_universe": 4658598196,
+    "places": {
+      "114234929420007": "BloxStrike",
+      "18687417158": "Forsaken",
+      "5041144419": "SCP"
+    },
+    "universes": {
+      "1742264997": "SCP",
+      "6331902150": "Forsaken",
+      "7633926880": "BloxStrike"
+    }
+  },
+  "schema": 2
+}

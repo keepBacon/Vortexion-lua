@@ -485,7 +485,7 @@ return function(c)
             end)
         end
     end
-    tab:AddToggle("BloxSkinEnabled",{Title="启用本地皮肤替换",Default=false,Callback=function(v)
+    local skinEnabledOption = tab:AddToggle("BloxSkinEnabled",{Title="启用本地皮肤替换",Default=false,Callback=function(v)
         state.enabled=v
         updateCamera()
         dirty = true
@@ -493,68 +493,135 @@ return function(c)
     end})
     tab:AddDropdown("BloxSkinWear",{Title="磨损版本",Values={"Factory New","Minimal Wear","Field-Tested","Well-Worn","Battle-Scarred"},
         Default="Factory New",Callback=function(v)state.wear=v;updateCamera() end})
-    local created={}
-    local usedIds={}
-    local function addCategory(category)
-        if not c.IsCurrent() or not category or not category:IsA("Folder") or created[category.Name] then return end
-        local values={}
-        for _,skin in ipairs(category:GetChildren()) do
-            if skin:IsA("Folder") or skin:IsA("Model") then table.insert(values,skin.Name) end
+    local created, usedIds = {}, {}
+    local skinFolderConn, resourcesConn
+    local refreshing, queuedRefresh = false, false
+    local function skinValues(category)
+        local values = {}
+        for _, skin in ipairs(category:GetChildren()) do
+            if skin:IsA("Folder") or skin:IsA("Model") then table.insert(values, skin.Name) end
         end
         table.sort(values)
-        if #values==0 then return end
-        created[category.Name]=true
-        local categoryName=category.Name
-        local optionId="BloxSkin_"..categoryName:gsub("[^%w]","_")
-        if usedIds[optionId] then
+        return values
+    end
+    local function addCategory(category)
+        if not c.IsCurrent() or not category or not category:IsA("Folder") then return false end
+        local values = skinValues(category)
+        if #values == 0 then return false end
+        local categoryName = category.Name
+        local existing = created[categoryName]
+        if existing then
+            -- Newly replicated skins extend the current dropdown in place.
+            if existing.option and type(existing.option.SetValues) == "function" then
+                local changed = #existing.values ~= #values
+                if not changed then
+                    for i, v in ipairs(values) do
+                        if existing.values[i] ~= v then changed = true; break end
+                    end
+                end
+                if changed then
+                    local ok = pcall(function() existing.option:SetValues(values) end)
+                    if ok then existing.values = values end
+                end
+            end
+            return false
+        end
+        local optionId = "BloxSkin_" .. categoryName:gsub("[^%w]", "_")
+        if usedIds[optionId] and usedIds[optionId] ~= categoryName then
             local suffix = ""
-            for i=1,#categoryName do suffix ..= ("%02x"):format(categoryName:byte(i)) end
+            for i = 1, #categoryName do suffix ..= ("%02x"):format(categoryName:byte(i)) end
             optionId ..= "_" .. suffix
         end
-        usedIds[optionId] = true
-        local default=state.selected[categoryName] or values[1]
-        state.selected[categoryName]=default
-        local targetTab=tab
-        if categoryName:find("Knife") or categoryName:find("Glove") or categoryName=="Karambit" then
-            targetTab=knifeTab
+        local default = state.selected[categoryName]
+        if not default or not table.find(values, default) then default = values[1] end
+        local targetTab = tab
+        if categoryName:find("Knife") or categoryName:find("Glove") or categoryName == "Karambit" then
+            targetTab = knifeTab
         end
-        targetTab:AddDropdown(optionId,{Title=categoryName.." · 皮肤",Values=values,Default=default,
-            Callback=function(v)
-                state.selected[categoryName]=v
-                if state.enabled then updateCamera() end
-            end})
+        -- Reserve id before creating the native option; restore on exception so refresh can retry.
+        created[categoryName] = {values = values}
+        local ok, option = pcall(function()
+            return targetTab:AddDropdown(optionId, {Title = categoryName .. " · 皮肤", Values = values,
+                Default = default, Callback = function(v)
+                    state.selected[categoryName] = v
+                    if state.enabled then updateCamera() end
+                end})
+        end)
+        if not ok or not option then
+            created[categoryName] = nil
+            warn("[Vortexion/BloxStrike] skin dropdown " .. categoryName .. ": " .. tostring(option))
+            return false
+        end
+        created[categoryName].option = option
+        usedIds[optionId] = categoryName
+        state.selected[categoryName] = default
+        return true
     end
-    local skinFolderConn
-    local function createSkinControls()
-        if not c.IsCurrent() then return end
-        local _,skins=roots()
+    local createSkinControls
+    local function queueSkinRefresh()
+        if queuedRefresh or not c.IsCurrent() then return end
+        queuedRefresh = true
+        task.defer(function()
+            queuedRefresh = false
+            if c.IsCurrent() and createSkinControls then createSkinControls(false) end
+        end)
+    end
+    createSkinControls = function(manual)
+        if not c.IsCurrent() or refreshing then return end
+        local _, skins = roots()
         if not skins then
-            c.Notify("皮肤资源","Assets/Skins 尚未加载，可使用刷新按钮")
+            if manual then c.Notify("皮肤资源", "Assets/Skins 尚未加载，正在等待资源出现") end
             return
         end
-        local list=skins:GetChildren()
-        table.sort(list,function(a,b)return a.Name<b.Name end)
-        local createdCount=0
-        for _,category in ipairs(list) do
-            if not c.IsCurrent() then return end
-            if not created[category.Name] then
-                addCategory(category)
-                createdCount+=1
-                if createdCount%6==0 then task.wait() end
-            end
+        refreshing = true
+        local list = skins:GetChildren()
+        table.sort(list, function(a, b) return a.Name < b.Name end)
+        local createdCount = 0
+        for _, category in ipairs(list) do
+            if not c.IsCurrent() then break end
+            if addCategory(category) then createdCount += 1 end
+            if createdCount > 0 and createdCount % 8 == 0 then task.wait() end
         end
-        if not c.IsCurrent() then return end
-        if skinFolderConn then skinFolderConn:Disconnect() end
-        skinFolderConn=skins.ChildAdded:Connect(function(category)
-            if c.IsCurrent() then task.defer(addCategory,category) end
+        refreshing = false
+        if skinFolderConn then skinFolderConn:Disconnect(); skinFolderConn = nil end
+        if skins.DescendantAdded then
+            skinFolderConn = skins.DescendantAdded:Connect(queueSkinRefresh)
+        else
+            skinFolderConn = skins.ChildAdded:Connect(queueSkinRefresh)
+        end
+        if manual and c.IsCurrent() then
+            c.Notify("皮肤菜单", ("当前 %d 个分类，新增 %d 个控件"):format(#list, createdCount))
+        end
+    end
+    -- No busy polling: react only when Assets/Skins is replicated or its children change.
+    if c.ReplicatedStorage.DescendantAdded then
+        resourcesConn = c.ReplicatedStorage.DescendantAdded:Connect(function(obj)
+            if obj.Name == "Skins" or (obj.Parent and obj.Parent.Name == "Skins") then
+                queueSkinRefresh()
+            end
         end)
-        c.Notify("皮肤菜单","已加载 "..tostring(#list).." 个武器分类")
+    else
+        resourcesConn = c.ReplicatedStorage.ChildAdded:Connect(queueSkinRefresh)
     end
     tab:AddButton({Title="刷新皮肤分类与下拉框",Callback=function()
-        task.spawn(createSkinControls)
+        task.spawn(function() createSkinControls(true) end)
+    end})
+    tab:AddButton({Title="查看皮肤资源状态",Callback=function()
+        local assets, skins = roots()
+        local total = skins and #skins:GetChildren() or 0
+        local selectors = 0
+        for _ in pairs(created) do selectors += 1 end
+        c.Notify("皮肤资源状态", ("Assets=%s · Skins=%s · 分类=%d · 控件=%d"):format(
+            assets and "就绪" or "缺失", skins and "就绪" or "缺失", total, selectors))
     end})
     tab:AddButton({Title="恢复默认皮肤",Callback=function()
-        state.enabled=false;restoreParts()
+        -- Synchronize the visible toggle and the internal state (avoids stale UI).
+        if skinEnabledOption and type(skinEnabledOption.SetValue) == "function" then
+            skinEnabledOption:SetValue(false)
+        else
+            state.enabled = false
+        end
+        restoreParts()
         c.Notify("已恢复","本地已修改的材质已撤销")
     end})
     reconcileKnife = function()
@@ -779,8 +846,9 @@ return function(c)
         state.enabled=false;state.knife=false
         if cameraConnection then cameraConnection:Disconnect() end
         if skinFolderConn then skinFolderConn:Disconnect() end
+        if resourcesConn then resourcesConn:Disconnect() end
         destroyButtons()
         restoreParts();restoreKnife()
     end)
-    task.defer(createSkinControls)
+    task.defer(function() createSkinControls(false) end)
 end

@@ -1,3 +1,5 @@
+> **R1 更新（2026-10-17）**：`loader.lua` 已改为 V2.1 分阶段加载器。先获取 `dist/runtime-manifest.json`，再按当前游戏加载共享 UI 核心和单一游戏模块；新增共享性能 HUD、可选自适应视觉节拍以及 Forsaken 常驻连接清理。详细边界见 [REFACTOR_R1](docs/REFACTOR_R1.md)。本地自动测试不代表 Roblox 安卓实测，发布之前请将 loader / dist 清单和模块文件放在同一 Git 提交。
+
 # Vortexion · WindUI
 
 此版本基于提供的 Vortexion 与 WindUI 附件，使用附件内 WindUI v1.6.66 发行库。主入口是 `dist/Vortexion_Wind.lua`，执行时按当前 GameId/PlaceId 只初始化对应游戏。旧 R46 文档记录的是离线交付状态；`main` 现有统一包已发布到 GitHub。当前 Loader V2 P0 修改尚需单独提交，详见 `docs/LOADER_P0.md`。
@@ -97,3 +99,9 @@ Luau 编译验证使用固定的 luau-web 1.5.1。切服测试使用 Lua 5.4；�
 WindUI 原始发行库与 MIT 许可证保留在 `vendor/WindUI/`，未修改附件库。WindUI 在部分执行器中仍联网获取图标，游戏音视频/资产和可选第三方功能也有网络依赖，单文件构建不代表完全离线运行。
 
 `src/StarlightAdapter.luau`、`vendor/Starlight/`、旧 `test_stage2/mobile/toggle/touch` 测试及旧发布文档作为原附件历史保留，不进入 Wind 活动构建，不作为此版本验收结果。原项目与派生业务的其他来源说明仍保留，新增 WindUI MIT 许可不改变旧代码的许可。
+
+
+## R2 (本地交付；远程部署前需确认)
+
+- 详见 [R2 修复记录](docs/REFACTOR_R2.md)。本轮修复子模块启动错误感知、BloxStrike 动态皮肤 UI、SCP 兼容降级和 AOTR Cloak 异常隔离。
+- 共享性能诊断增加帧耗时/卡顿计数。未经过 Roblox 安卓实机验证。

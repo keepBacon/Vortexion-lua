@@ -1,0 +1,2362 @@
+-- Vortexion WindUI - generated offline; publishing must be performed separately.
+-- WindUI attribution and license are retained in vendor/WindUI/.
+-- Forsaken retains runtime model rbxassetid://132866968194043.
+-- Modify src/*.luau and run python3 build.py; do not edit this output.
+return function(kernel)
+assert(type(kernel) == 'table' and type(kernel.WindBridgeFactory) == 'function', 'Invalid Vortexion core')
+local WindUI, WindBridgeFactory, GameRouter = kernel.WindUI, kernel.WindBridgeFactory, kernel.GameRouter
+local entry = function()
+local AOTRCommon = (function()
+-- Lifecycle, capability probe and UI shared by AOTR lobby and battle.
+-- Modules receive this app table and register features against it.
+return function(scene, WindUI, Bridge)
+    local Players=game:GetService("Players")
+    local RunService=game:GetService("RunService")
+    local Workspace=game:GetService("Workspace")
+    local ReplicatedStorage=game:GetService("ReplicatedStorage")
+    local Lighting=game:GetService("Lighting")
+    local UserInputService=game:GetService("UserInputService")
+    local Stats=game:GetService("Stats")
+    local client=(getgenv and getgenv()) or _G
+    if type(client.VortexionAOTRCleanup)=="function" then pcall(client.VortexionAOTRCleanup) end
+    local app={scene=scene, connections={}, disposers={}, active=true, flags={}, player=Players.LocalPlayer}
+    app.Services={Players=Players,RunService=RunService,Workspace=Workspace,
+        ReplicatedStorage=ReplicatedStorage,Lighting=Lighting,Input=UserInputService,
+        UserInputService=UserInputService,Stats=Stats}
+
+    --=========================================================================
+    -- Executor floor: same policy as Forsaken/SCP/BloxStrike.
+    --=========================================================================
+    do
+        local executorName="unknown"
+        pcall(function()
+            if type(identifyexecutor)=="function" then executorName=tostring(identifyexecutor() or "unknown") end
+        end)
+        for _,bad in ipairs({"Xeno","Velocity","LX63"}) do
+            if string.find(executorName,bad,1,true) then
+                warn("[Vortexion/AOTR] unsupported executor: "..executorName)
+                return
+            end
+        end
+    end
+
+    --=========================================================================
+    -- Capability probe: every optional integration checks these, never guesses.
+    --=========================================================================
+    local Caps={
+        Drawing=type(Drawing)=="table" or type(Drawing)=="userdata",
+        DrawingUserdata=type(Drawing)=="userdata",
+        hookfunction=type(hookfunction)=="function",
+        replaceclosure=type(replaceclosure)=="function",
+        hookmetamethod=type(hookmetamethod)=="function",
+        getrawmetatable=type(getrawmetatable)=="function",
+        newcclosure=type(newcclosure)=="function",
+        checkcaller=type(checkcaller)=="function",
+        getnamecallmethod=type(getnamecallmethod)=="function",
+        mousemoverel=type(mousemoverel)=="function",
+        mouse1press=type(mouse1press)=="function",
+        mouse1release=type(mouse1release)=="function",
+        VirtualUser=type(VirtualUser)=="table",
+        gethui=type(gethui)=="function",
+        getgenv=type(getgenv)=="function",
+    }
+    app.Caps=Caps
+    app.HasDrawing=(Caps.Drawing or Caps.DrawingUserdata) and true or false
+    app.CanCloak=Caps.hookmetamethod and Caps.checkcaller and Caps.getnamecallmethod
+
+    --=========================================================================
+    -- Guarded logging: Debug flag gates verbose output; warn is throttled so a
+    -- stuck subsystem cannot flood the console.
+    --=========================================================================
+    app.Debug=false
+    local lastWarn={}
+    local function Log(fmt,...)
+        if not app.Debug then return end
+        local ok,msg=pcall(string.format,fmt,...)
+        print("[Vortexion/AOTR/"..tostring(scene).."] "..(ok and msg or tostring(fmt)))
+    end
+    local function Guard(tag,fn,...)
+        local ok,err=pcall(fn,...)
+        if not ok then
+            local now=tick()
+            if now-(lastWarn[tag] or 0)>5 then
+                lastWarn[tag]=now
+                warn("[Vortexion/AOTR/"..tostring(tag).."] "..tostring(err))
+            end
+        end
+        return ok,err
+    end
+    local function RandomName()
+        local s={}
+        for i=1,14 do s[i]=string.char(math.random(65,90)) end
+        return table.concat(s)
+    end
+    local function GetGuiParent()
+        if Caps.gethui then
+            local ok,h=pcall(gethui)
+            if ok and h then return h end
+        end
+        local ok,cg=pcall(function() return game:GetService("CoreGui") end)
+        if ok and cg then return cg end
+        -- Render callers already retry on nil; never suspend a visual tick.
+        local lp=Players.LocalPlayer
+        if not lp then return nil end
+        local okPG,pg=pcall(function() return lp:FindFirstChild("PlayerGui") end)
+        if okPG and pg then return pg end
+        return nil
+    end
+    local function Ping()
+        local ok,item=pcall(function() return Stats.Network.ServerStatsItem["Data Ping"] end)
+        if ok and item then
+            local okv,v=pcall(function() return item:GetValue() end)
+            if okv and type(v)=="number" and v>0 then return math.clamp(v/1000,0.02,0.4) end
+        end
+        return 0.08
+    end
+    app.Log=Log
+    app.Guard=Guard
+    app.RandomName=RandomName
+    app.GetGuiParent=GetGuiParent
+    app.Ping=Ping
+    app.OnCleanup=function(fn)
+        if type(fn)=="function" then return app:OnStop(fn) end
+        return fn
+    end
+    app.Notify=app.Notify -- keep original signature (message)
+
+    --=========================================================================
+    -- Remote surface: one probe, every consumer. AOTR protocol is stable across
+    -- the known scripts (GET RemoteFunction + POST RemoteEvent under
+    -- ReplicatedStorage.Assets.Remotes); missing pieces degrade per feature.
+    --=========================================================================
+    local Remotes={ready=false,GET=nil,POST=nil}
+    local function probeRemotes()
+        local ok,res=pcall(function()
+            local folder=ReplicatedStorage:FindFirstChild("Assets")
+            folder=folder and folder:FindFirstChild("Remotes")
+            if not folder then return nil end
+            return folder
+        end)
+        if ok and res then
+            Remotes.GET=res:FindFirstChild("GET")
+            Remotes.POST=res:FindFirstChild("POST")
+        end
+        Remotes.ready=(Remotes.GET~=nil) or (Remotes.POST~=nil)
+        Log("remotes GET=%s POST=%s",tostring(Remotes.GET~=nil),tostring(Remotes.POST~=nil))
+        return Remotes.ready
+    end
+    app.Remotes=Remotes
+    app.ProbeRemotes=probeRemotes
+
+    --=========================================================================
+    -- HUD reader: blade/spear counters live in deeply nested labels whose
+    -- intermediate names drift between versions. Probe a candidate chain once,
+    -- cache the resolved labels, re-probe on nil text.
+    --=========================================================================
+    local HUD={blades=nil,spears=nil,lastProbe=0}
+    local function findLabel(root,path)
+        local cur=root
+        for _,name in ipairs(path) do
+            if not cur then return nil end
+            cur=cur:FindFirstChild(name,true)
+        end
+        if cur and cur:IsA("TextLabel") then return cur end
+    end
+    -- Gas sits at an exact non-recursive path (Top["7"].Gas.Percentage); a
+    -- missing hop, a raised error or a non-TextLabel terminal all resolve nil.
+    local function findExactLabel(root,path)
+        local cur=root
+        for _,name in ipairs(path) do
+            if not cur then return nil end
+            local ok,child=pcall(function() return cur:FindFirstChild(name) end)
+            if not ok or not child then return nil end
+            cur=child
+        end
+        if not cur then return nil end
+        local okText,isText=pcall(function() return cur:IsA("TextLabel") end)
+        if okText and isText then return cur end
+        return nil
+    end
+    local function probeHUD(force)
+        if not force and tick()-HUD.lastProbe<2 then return HUD end
+        HUD.lastProbe=tick()
+        local ok,gui=pcall(function()
+            local lp=Players.LocalPlayer
+            return lp and lp:FindFirstChild("PlayerGui")
+        end)
+        if not ok or not gui then HUD.blades=nil; HUD.spears=nil; HUD.gas=nil; return HUD end
+        HUD.blades=findLabel(gui,{"Interface","HUD","Main","Top","Blades","Sets"})
+        HUD.spears=findLabel(gui,{"Interface","HUD","Main","Top","Spears","Spears"})
+        HUD.gas=findExactLabel(gui,{"Interface","HUD","Main","Top","7","Gas","Percentage"})
+        return HUD
+    end
+    local function readCount(label)
+        if not label or not label.Parent then return nil end
+        local ok,text=pcall(function() return label.Text end)
+        if not ok or not text then return nil end
+        local have,max=string.match(text,"(%d+)%s*/%s*(%d+)")
+        if have then return tonumber(have),tonumber(max) end
+        local m=string.match(text,"(%d+)")
+        if m then local n=tonumber(m); return n,n end
+        return nil
+    end
+    -- Strict decimal percentage: "42%", "42.5%", bare 0/100 with surrounding
+    -- whitespace. Rejects negatives, nan/inf, >100 and mixed text. Never
+    -- reuses readCount, which would truncate a leading minus into digits.
+    local function readPercent(label)
+        if not label then return nil end
+        local okParent,parent=pcall(function() return label.Parent end)
+        if not okParent or not parent then return nil end
+        local okText,text=pcall(function() return label.Text end)
+        if not okText or type(text)~="string" then return nil end
+        local trimmed=string.match(text,"^%s*(.-)%s*$")
+        local body=string.match(trimmed,"^(.-)%s*%%$")
+        if body==nil then body=trimmed end
+        if not string.match(body,"^%d+$") and not string.match(body,"^%d+%.%d+$") then return nil end
+        local value=tonumber(body)
+        if not value or value~=value or value==math.huge or value==-math.huge then return nil end
+        if value<0 or value>100 then return nil end
+        return value
+    end
+    app.HUD=HUD
+    app.ProbeHUD=probeHUD
+    app.ReadCount=readCount
+    app.ReadPercent=readPercent
+
+    local function cleanup()
+        if not app.active then return end
+        app.active=false
+        for _,con in ipairs(app.connections) do pcall(function() con:Disconnect() end) end
+        for _,fn in ipairs(app.disposers) do pcall(fn) end
+        if app.ui then pcall(function() app.ui:Destroy() end) end
+    end
+    client.VortexionAOTRCleanup=cleanup
+    function app:Track(con) table.insert(self.connections,con);return con end
+    function app:OnStop(fn) table.insert(self.disposers,fn);return fn end
+
+    --=========================================================================
+    -- Touch layer: mobile trigger + fly drag. Single finger held = trigger;
+    -- single finger drag = horizontal fly; two fingers = vertical fly.
+    --=========================================================================
+    app.Touch = { Enabled = false, Held = false, RightSideOnly = true }
+    do
+        local UIS = app.Services and app.Services.UserInputService
+        if not UIS then
+            local ok, svc = pcall(function() return game:GetService("UserInputService") end)
+            if ok then UIS = svc end
+        end
+        if UIS and UIS.TouchEnabled then
+            app.Touch.Enabled = true
+            local touchPoints = {}
+            local touchOrder = {}
+            local touchConns = {}
+            local touchType = Enum and Enum.UserInputType and Enum.UserInputType.Touch
+            local function isTouch(input)
+                return input and (not touchType or input.UserInputType==touchType)
+            end
+            local function beginTouch(input, processed)
+                if not app.active or processed or not isTouch(input) or touchPoints[input] then return end
+                local position=input.Position
+                if not position then return end
+                local camera=Workspace.CurrentCamera
+                local viewport=camera and camera.ViewportSize
+                if app.Touch.RightSideOnly and viewport and viewport.X>0 and position.X<viewport.X*0.5 then return end
+                touchPoints[input]={start=position,current=position}
+                table.insert(touchOrder,input)
+                app.Touch.Held=true
+            end
+            local function moveTouch(input)
+                local point=touchPoints[input]
+                if point and input.Position then point.current=input.Position end
+            end
+            local function endTouch(input)
+                if not touchPoints[input] then return end
+                touchPoints[input]=nil
+                local index=table.find(touchOrder,input)
+                if index then table.remove(touchOrder,index) end
+                app.Touch.Held=#touchOrder>0
+            end
+            if UIS.InputBegan then
+                table.insert(touchConns, UIS.InputBegan:Connect(beginTouch))
+                table.insert(touchConns, UIS.InputChanged:Connect(moveTouch))
+                table.insert(touchConns, UIS.InputEnded:Connect(endTouch))
+            else
+                table.insert(touchConns, UIS.TouchStarted:Connect(beginTouch))
+                table.insert(touchConns, UIS.TouchMoved:Connect(moveTouch))
+                table.insert(touchConns, UIS.TouchEnded:Connect(endTouch))
+            end
+            function app.Touch:Drag()
+                local first=touchPoints[touchOrder[1]]
+                local second=touchPoints[touchOrder[2]]
+                if not first then return Vector2.zero,0 end
+                local delta=first.current-first.start
+                local vertical=0
+                if second then vertical=second.current.Y-second.start.Y end
+                return Vector2.new(delta.X,delta.Y),vertical
+            end
+            local function clearTouches()
+                table.clear(touchPoints)
+                table.clear(touchOrder)
+                app.Touch.Held=false
+            end
+            if UIS.WindowFocusReleased then
+                table.insert(touchConns,UIS.WindowFocusReleased:Connect(clearTouches))
+            end
+            app.OnCleanup(function()
+                for _,cn in ipairs(touchConns) do pcall(function() cn:Disconnect() end) end
+                clearTouches()
+            end)
+        end
+    end
+    function app:Alive() return self.active and client.VortexionAOTRCleanup==cleanup end
+    -- Bounded visual cadence from the shared bridge (app.ui). Degrades to the
+    -- caller's base interval when the bridge or method is absent, so pre-bridge
+    -- cadence is preserved and the fixture path keeps its original frequency.
+    function app:GetVisualInterval(base)
+        base=tonumber(base) or 0.1
+        -- Reject non-finite or non-positive bases: math.huge freezes visuals
+        -- forever, NaN or <=0 stalls the cadence.
+        if base~=base or base==math.huge or base==-math.huge or base<=0 then base=0.1 end
+        local ui=self.ui
+        if ui and type(ui.GetVisualInterval)=="function" then
+            local ok,value=pcall(function() return ui:GetVisualInterval(base) end)
+            if ok and type(value)=="number" and value==value and value~=math.huge and value~=-math.huge and value>0 then
+                return math.max(base,value)
+            end
+        end
+        return base
+    end
+    function app:Notify(message)
+        if self.ui and self:Alive() then self.ui:Notify({Title="AOTR",Content=message,Duration=3}) end
+    end
+    function app:Open()
+        if not self:Alive() then return end
+        local ok,ui=pcall(function()
+            return Bridge(WindUI,{Name="AOTR",Folder="VortexionAOTR",Section="A T T A C K  O N  T I T A N"})
+        end)
+        if not ok or not ui then warn("[Vortexion/AOTR] WindUI initialization failed: "..tostring(ui));cleanup();return end
+        -- Bridge may yield while cleanup retires this app; reclaim the late UI.
+        if not self:Alive() then pcall(function() ui:Destroy() end);return end
+        self.ui=ui
+        local initialized,window=pcall(function()
+            ui:OnDestroy(cleanup)
+            if not self:Alive() then return end
+            return ui:CreateWindow({Title=scene=="lobby" and "AOTR 大厅" or "AOTR 战斗"})
+        end)
+        if not initialized or not window then
+            if not initialized or self:Alive() then
+                warn("[Vortexion/AOTR] WindUI initialization failed: "..tostring(window))
+            end
+            cleanup()
+            return
+        end
+        if not self:Alive() then return end
+        return window
+    end
+    function app:Loop(id, interval, work)
+        self.flags[id]=(self.flags[id] or 0)+1
+        local generation=self.flags[id]
+        task.spawn(function()
+            while self:Alive() and self.flags[id]==generation do
+                local started=os.clock()
+                local ok,err=pcall(work)
+                if not ok then warn("[AOTR/"..id.."] "..tostring(err)) end
+                task.wait(math.max(0.1,interval-(os.clock()-started)))
+            end
+        end)
+    end
+    function app:StopLoop(id) self.flags[id]=(self.flags[id] or 0)+1 end
+    function app:Character()
+        local c=self.player and self.player.Character
+        local hum=c and c:FindFirstChildOfClass("Humanoid")
+        local root=c and c:FindFirstChild("HumanoidRootPart")
+        if hum and root and hum.Health>0 then return c,hum,root end
+    end
+    function app:Status(tab)
+        tab:AddParagraph({Title="当前场景",Content=scene=="lobby" and "大厅 / 主菜单" or "战斗任务"})
+        tab:AddParagraph({Title="脚本状态",Content="独立模块已启动。禁用功能不会保留后台循环；重新执行会清理旧监听。"})
+    end
+    return app
+end
+
+end)()
+local AOTRCloakFactory = (function()
+-- Vortexion AOTR cloak: hides script-created instances from game scripts.
+--
+-- Adapted from the Vanity-General-Roblox design (local sandbox study). Game
+-- anti-cheat / anti-ESP logic that enumerates children cannot see instances
+-- registered here. The hook only rewrites enumeration calls made by game
+-- threads (checkcaller() == false); executor-side reads are untouched.
+--
+-- Two defenses compose:
+--   1. Enumeration filter - GetChildren/GetDescendants/FindFirstChild* skip
+--      protected instances for game-thread callers.
+--   2. RandomName - every created instance gets a 14-letter random name so
+--      static name signatures ("_chams", "ESP") never match.
+return function(common)
+    local Workspace = common.Services.Workspace
+    local Players = common.Services.Players
+
+    local Cloak = {}
+    local protectedSet = setmetatable({}, { __mode = "k" })
+    local hookInstalled = false
+    local namecallConnection = nil
+    local inFilter = false
+
+    local FILTERED_METHODS = {
+        GetChildren = true,
+        GetDescendants = true,
+        FindFirstChild = true,
+        FindFirstChildOfClass = true,
+        FindFirstChildWhichIsA = true,
+    }
+
+    local function isHidden(instance)
+        local current = instance
+        local depth = 0
+        while current and depth < 64 do
+            if protectedSet[current] then return true end
+            current = current.Parent
+            depth += 1
+        end
+        return false
+    end
+    Cloak.IsHidden = isHidden
+
+    -- Instances parented into Workspace or PlayerGui are game-visible surfaces:
+    -- a hidden instance there still needs its enumeration filtered (handled by
+    -- the hook), but gethui-parented instances are outside the game tree and
+    -- need nothing. This distinction keeps the hook's hot path short.
+    local function exposedToGame(instance)
+        local current = instance
+        local depth = 0
+        while current and depth < 64 do
+            if current == Workspace then return true end
+            local playerGui = current == Players.LocalPlayer:FindFirstChild("PlayerGui")
+            if playerGui then return true end
+            current = current.Parent
+            depth += 1
+        end
+        return false
+    end
+    Cloak.ExposedToGame = exposedToGame
+
+    function Cloak.Protect(instance)
+        if typeof(instance) ~= "Instance" then return instance end
+        protectedSet[instance] = true
+        return instance
+    end
+
+    function Cloak.Unprotect(instance)
+        protectedSet[instance] = nil
+    end
+
+    --=========================================================================
+    -- Hook. newcclosure wrapping keeps the hook invisible to islclosure /
+    -- getinfo / string.dump probing (looks like a C closure). hookmetamethod
+    -- is preferred over getrawmetatable + __namecall assignment because it
+    -- restores cleanly and does not disturb other executor hooks.
+    --=========================================================================
+    local function installHook()
+        if hookInstalled then return end
+        if not (common.Caps.hookmetamethod and common.Caps.checkcaller) then
+            common.Log("Cloak", "hook unavailable; enumeration filter disabled")
+            return
+        end
+
+        local ok, err = pcall(function()
+            local gameMetatable = getrawmetatable(game)
+            local originalNamecall = gameMetatable.__namecall
+            local namecallHook
+
+            namecallHook = hookmetamethod(game, "__namecall", function(self, ...)
+                -- Only game threads are filtered. Executor threads (this
+                -- script, the UI library) must see everything or the UI dies.
+                local fromGameScript = false
+                if common.Caps.checkcaller then
+                    local okCaller, caller = pcall(checkcaller)
+                    fromGameScript = okCaller and (caller == false)
+                end
+
+                if fromGameScript and not inFilter then
+                    local method = getnamecallmethod and getnamecallmethod() or nil
+                    if method and FILTERED_METHODS[method] then
+                        inFilter = true
+                        local arguments = table.pack(...)
+                        local okFilter, result = pcall(function()
+                            if isHidden(self) then
+                                -- The container itself is hidden: report it empty.
+                                if method == "GetChildren" or method == "GetDescendants" then
+                                    return {}
+                                end
+                                return nil
+                            end
+                            local children = originalNamecall(self, table.unpack(arguments, 1, arguments.n))
+                            if method == "GetChildren" or method == "GetDescendants" then
+                                local visible = {}
+                                for _, child in ipairs(children) do
+                                    if not isHidden(child) then
+                                        table.insert(visible, child)
+                                    end
+                                end
+                                return visible
+                            end
+                            return children
+                        end)
+                        inFilter = false
+                        if okFilter then return result end
+                    end
+                end
+                return originalNamecall(self, ...)
+            end)
+
+            if common.Caps.newcclosure then
+                namecallHook = newcclosure(namecallHook)
+            end
+            namecallConnection = namecallHook
+            hookInstalled = true
+            common.Log("Cloak", "enumeration hook installed")
+        end)
+
+        if not ok then
+            warn("[Vortexion/AOTR/Cloak] install failed: " .. tostring(err))
+        end
+    end
+
+    function Cloak.Start()
+        installHook()
+    end
+
+    function Cloak.Stop()
+        -- The metatable hook cannot be surgically removed without the original
+        -- reference on every executor; the filter is inert once protectedSet is
+        -- cleared, so clearing is the supported teardown.
+        table.clear(protectedSet)
+        hookInstalled = false
+        namecallConnection = nil
+    end
+
+    -- Keep the factory contract symmetric with the other AOTR modules.
+    common:OnStop(function()
+        Cloak.Stop()
+    end)
+
+    return Cloak
+end
+
+end)()
+local AOTRTitansFactory = (function()
+-- Vortexion AOTR titan awareness: shared candidate pool.
+--
+-- One 10Hz scan resolves every titan into a cached entry (humanoid / HRP /
+-- nape / type / boss flag); consumers read live fields without touching the
+-- tree. Nape resolution tries several known layouts so version drift degrades
+-- to a slower probe instead of a dead feature.
+return function(app)
+    local Workspace=app.Services.Workspace
+    local Players=app.Services.Players
+    local Titans={}
+
+    local Config={
+        MaxDistance=1200,
+        ScanInterval=0.1,
+        MaxTitans=32,
+        IgnoreAfterFails=3,
+        IgnoreDuration=5,
+    }
+
+    local state={
+        entries={},           -- model -> entry
+        lastScan=0,
+        dirty=true,
+        folder=nil,
+        failCount={},         -- model -> fails (nape unreachable)
+        ignoredUntil={},      -- model -> os.clock()
+    }
+
+    local BOSS_NAMES={
+        Attack_Titan=true,Armored_Titan=true,Female_Titan=true,
+        Colossal_Titan=true,Beast_Titan=true,Jaw_Titan=true,Cart_Titan=true,
+    }
+
+    --=========================================================================
+    -- Path resolution: nape lives at Hitboxes.Hit.Nape in every known layout;
+    -- the fallbacks cover renamed containers from older/newer builds.
+    --=========================================================================
+    local function resolveNape(titan)
+        local hitboxes=titan:FindFirstChild("Hitboxes")
+        if hitboxes then
+            local hit=hitboxes:FindFirstChild("Hit")
+            if hit then
+                local nape=hit:FindFirstChild("Nape")
+                if nape and nape:IsA("BasePart") then return nape end
+                local any=hit:FindFirstChildWhichIsA("BasePart")
+                if any then return any end
+            end
+            local direct=hitboxes:FindFirstChild("Nape")
+            if direct and direct:IsA("BasePart") then return direct end
+        end
+        local loose=titan:FindFirstChild("Nape",true)
+        if loose and loose:IsA("BasePart") then return loose end
+        return nil
+    end
+    Titans.ResolveNape=resolveNape
+
+    local function resolveRoot(titan)
+        local root=titan:FindFirstChild("HumanoidRootPart")
+        if root and root:IsA("BasePart") then return root end
+        root=titan:FindFirstChild("UpperTorso")
+        if root and root:IsA("BasePart") then return root end
+        root=titan:FindFirstChild("Torso")
+        if root and root:IsA("BasePart") then return root end
+        for _,child in ipairs(titan:GetChildren()) do
+            if child:IsA("BasePart") then return child end
+        end
+        return nil
+    end
+    Titans.ResolveRoot=resolveRoot
+
+    local function isIgnored(model)
+        local until_=state.ignoredUntil[model]
+        if not until_ then return false end
+        if os.clock()>=until_ then
+            state.ignoredUntil[model]=nil
+            state.failCount[model]=nil
+            return false
+        end
+        return true
+    end
+    Titans.IsIgnored=isIgnored
+
+    function Titans:RegisterFail(model)
+        local n=(state.failCount[model] or 0)+1
+        state.failCount[model]=n
+        if n>=Config.IgnoreAfterFails then
+            state.ignoredUntil[model]=os.clock()+Config.IgnoreDuration
+            app.Log("titan %s ignored %.0fs after %d fails",model.Name,Config.IgnoreDuration,n)
+        end
+    end
+
+    function Titans:ClearFails(model)
+        state.failCount[model]=nil
+        state.ignoredUntil[model]=nil
+    end
+
+    --=========================================================================
+    -- Scan: rebuild the entry set on a fixed cadence, refresh live fields
+    -- every scan. Watches the Titans folder for spawn/despawn.
+    --=========================================================================
+    local stopped=false
+    local addedConnection,removingConnection
+    local function disconnectFolder()
+        if addedConnection then addedConnection:Disconnect();addedConnection=nil end
+        if removingConnection then removingConnection:Disconnect();removingConnection=nil end
+    end
+
+    local function ensureFolder()
+        if stopped then return nil end
+        local folder=Workspace:FindFirstChild("Titans")
+        if folder~=state.folder then
+            disconnectFolder()
+            state.folder=folder
+            state.dirty=true
+            if folder then
+                -- Replaceable handles belong to this module, not the app registry.
+                addedConnection=folder.ChildAdded:Connect(function() state.dirty=true end)
+                removingConnection=folder.ChildRemoving:Connect(function() state.dirty=true end)
+            end
+        end
+        return folder
+    end
+
+    local function clearVisual(entry)
+        entry.screenPos=nil
+        entry.onScreen=false
+        entry.worldDist=nil
+        entry.outOfRange=false
+    end
+
+    local function retireEntry(entry)
+        clearVisual(entry)
+        entry.alive=false
+        entry.health=nil
+        entry.nape=nil
+    end
+
+    local function buildEntry(model)
+        local humanoid=model:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return nil end
+        local root=resolveRoot(model)
+        if not root then return nil end
+        local entry=state.entries[model]
+        if not entry then
+            entry={model=model,humanoid=humanoid,root=root,nape=nil}
+            state.entries[model]=entry
+        else
+            entry.humanoid=humanoid
+            entry.root=root
+        end
+        if not entry.nape or not entry.nape:IsDescendantOf(model) then
+            entry.nape=resolveNape(model)
+        end
+        entry.boss= BOSS_NAMES[model.Name] and true or false
+        local ok,kind=pcall(function() return model:GetAttribute("Type") end)
+        entry.type=(ok and type(kind)=="string" and kind) or (entry.boss and "Boss" or "Normal")
+        return entry
+    end
+
+    local function scan(force)
+        if stopped then return end
+        local now=tick()
+        if not force and now-state.lastScan<Config.ScanInterval then return end
+        state.lastScan=now
+        local folder=ensureFolder()
+        if not folder then
+            for _,entry in pairs(state.entries) do retireEntry(entry) end
+            state.entries={}
+            state.dirty=false
+            return
+        end
+        local rootPos
+        local char,_,hrp=app:Character()
+        if hrp then rootPos=hrp.Position end
+        local seen={}
+        local n=0
+        for _,model in ipairs(folder:GetChildren()) do
+            if model:IsA("Model") and n<Config.MaxTitans then
+                local entry=buildEntry(model)
+                -- Derived fields need fresh inputs on every scan.
+                if entry then clearVisual(entry) end
+                if entry and entry.nape and entry.humanoid.Health>0 then
+                    seen[model]=true
+                    n+=1
+                    if rootPos then
+                        entry.worldDist=(entry.nape.Position-rootPos).Magnitude
+                        if Config.MaxDistance>0 and entry.worldDist>Config.MaxDistance then
+                            entry.nape=nil -- out of range: drop so consumers skip it
+                            entry.outOfRange=true
+                        else
+                            entry.outOfRange=false
+                            local cam=Workspace.CurrentCamera
+                            if cam then
+                                local sp,on=cam:WorldToViewportPoint(entry.nape.Position)
+                                entry.screenPos=Vector2.new(sp.X,sp.Y)
+                                entry.onScreen=on and sp.Z>0
+                            else
+                                entry.screenPos=nil
+                                entry.onScreen=false
+                            end
+                        end
+                    end
+                    entry.health=entry.humanoid.Health
+                    entry.alive=true
+                elseif entry then
+                    retireEntry(entry)
+                    entry.health=entry.humanoid.Health
+                    seen[model]=true
+                end
+            end
+        end
+        for model,entry in pairs(state.entries) do
+            if not seen[model] then
+                retireEntry(entry)
+                state.entries[model]=nil
+            end
+        end
+        state.dirty=false
+    end
+    Titans.Scan=scan
+
+    -- folder lifecycle: mark dirty on spawn/despawn; scan picks it up next tick.
+    -- The folder itself appears late (it parents after load), so Update retries
+    -- the watch until it sticks.
+    ensureFolder()
+
+    function Titans:Update(dt)
+        if stopped then return end
+        ensureFolder()
+        if state.dirty then
+            scan(true)
+        else
+            scan(false)
+        end
+    end
+
+    --=========================================================================
+    -- Selection: nearest nape by world distance; boss priority optional.
+    --=========================================================================
+    function Titans:Nearest(preferBoss)
+        scan(false)
+        local rootPos
+        local char,_,hrp=app:Character()
+        if hrp then rootPos=hrp.Position end
+        if not rootPos then return nil end
+        local best,bestDist=nil,math.huge
+        local bossBest,bossDist=nil,math.huge
+        for model,entry in pairs(state.entries) do
+            if entry.nape and entry.alive and not isIgnored(model) and not entry.outOfRange then
+                local d=(entry.nape.Position-rootPos).Magnitude
+                if entry.boss and d<bossDist then bossBest,bossDist=entry,d end
+                if d<bestDist then best,bestDist=entry,d end
+            end
+        end
+        if preferBoss and bossBest then return bossBest,bossDist end
+        return best,bestDist
+    end
+
+    function Titans:All()
+        local out={}
+        for model,entry in pairs(state.entries) do
+            if entry.nape and entry.alive and not isIgnored(model) and not entry.outOfRange then
+                table.insert(out,entry)
+            end
+        end
+        return out
+    end
+
+    function Titans:Bosses()
+        local out={}
+        for _,entry in ipairs(self:All()) do
+            if entry.boss then table.insert(out,entry) end
+        end
+        return out
+    end
+
+    function Titans:Count()
+        scan(false)
+        local n=0
+        for _,entry in pairs(state.entries) do
+            if entry.alive then n+=1 end
+        end
+        return n
+    end
+
+    function Titans:DebugSnapshot()
+        local total,withNape=0,0
+        for _,entry in pairs(state.entries) do
+            total+=1
+            if entry.nape then withNape+=1 end
+        end
+        return {titans=total,nape=withNape,dirty=state.dirty}
+    end
+
+    app:OnStop(function()
+        if stopped then return end
+        stopped=true
+        disconnectFolder()
+        for _,entry in pairs(state.entries) do retireEntry(entry) end
+        state.entries={}
+        state.failCount={}
+        state.ignoredUntil={}
+        state.folder=nil
+        state.dirty=false
+    end)
+
+    return Titans
+end
+
+end)()
+local AOTRCombatFactory = (function()
+-- Vortexion AOTR combat: nape lock, remote hit registration, spears, hitbox.
+--
+-- AOTR's damage surface is two remotes (validated across every known public
+-- script): POST FireServer("Attacks","Slash",true) fires the swing and
+-- POST FireServer("Hitboxes","Register",nape,dmg,crit,combo) registers a hit
+-- on a nape instance; the server trusts the instance reference and the client
+-- damage number. Thunder spears use GET InvokeServer("Spears","S_Fire",slot)
+-- plus POST FireServer("Spears","S_Explode",position).
+--
+-- Anti-detection posture (the public scripts do none of this):
+--   * attack cadence is a randomized interval, never a fixed timer
+--   * damage rolls inside the game's own 625-850 band, crit inside 0.2-0.3
+--   * combo index cycles 1..4 like real mastery strings
+--   * HitChance gates each registration: a failed roll targets a point a few
+--     studs off the nape, so the conversion rate stays human
+--   * everything pauses while the Roblox window is unfocused
+--   * local nape size growth uses a 20Hz lerp state machine with a restore
+--     table, never a per-frame write
+return function(app)
+    local RunService=app.Services.RunService
+    local Workspace=app.Services.Workspace
+    local UserInputService=app.Services.Input
+    local LocalPlayer=app.Services.Players.LocalPlayer
+    local Combat={}
+
+    local Config={
+        Enabled=false,
+        TargetMode="Nearest",     -- Nearest | Boss
+        Mode="Camera",            -- Camera | Mouse | Both
+        FOV=160,
+        MaxDistance=1200,
+        Smoothness=0.85,
+        MaxAngle=30,
+        HitChance=0.85,
+        Prediction=0.12,
+        TriggerKey="Always",      -- Always | Hold
+        AttackCooldown=0.25,
+        CooldownJitter=0.4,       -- +/- fraction of the cooldown
+        Weapon="Auto",            -- Auto | Blades | Spears
+        DamageMin=625,
+        DamageMax=850,
+        CritChance=0.25,
+        ComboCycle=true,
+        SpearBurst=30,            -- S_Explode calls per boss kill
+        SpearInterval=0.03,
+        HitboxEnabled=false,
+        HitboxSize=1.6,
+        FOVCircle=true,
+    }
+    Combat.Config=Config
+
+    local state={
+        locked=nil,
+        lastLocked=nil,
+        lastAttack=0,
+        nextCooldown=Config.AttackCooldown,
+        comboIndex=1,
+        firing=false,
+        fireAt=0,
+        hitboxEntries={},
+        hitboxAccum=0,
+        napeVel=Vector3.zero,
+        napeVelInit=false,
+        aimSmooth=Vector3.zero,
+        cost=0,
+        attacks=0,
+        errors=0,
+        windowFocused=true,
+    }
+
+    local rayParams=RaycastParams.new()
+    rayParams.FilterType=Enum.RaycastFilterType.Blacklist
+    rayParams.IgnoreWater=true
+
+    local function wallBlocked(fromPos,toPos,char)
+        local diff=toPos-fromPos
+        local dist=diff.Magnitude
+        if dist<0.1 then return false end
+        rayParams.FilterDescendantsInstances=char and {char} or {}
+        return Workspace:Raycast(fromPos,diff.Unit*(dist+2),rayParams)~=nil
+    end
+
+    --=========================================================================
+    -- Weapon read: HUD counters decide Blades vs Spears when Auto.
+    --=========================================================================
+    local function currentWeapon()
+        if Config.Weapon~="Auto" then return Config.Weapon end
+        local blades=app.ReadCount(app.HUD.blades)
+        if blades and blades>0 then return "Blades" end
+        local spears=app.ReadCount(app.HUD.spears)
+        if spears and spears>0 then return "Spears" end
+        return "Blades"
+    end
+
+    local function spearSlot()
+        local count=app.ReadCount(app.HUD.spears)
+        return count or 1
+    end
+
+    --=========================================================================
+    -- Target acquisition from the shared titan pool.
+    --=========================================================================
+    local function acquire()
+        local Titans=app.Titans
+        if not Titans then return nil end
+        local entry
+        if Config.TargetMode=="Boss" then
+            local bosses=Titans:Bosses()
+            entry=bosses[1]
+        end
+        if not entry then entry=Titans:Nearest(Config.TargetMode=="Boss") end
+        if not entry then return nil end
+        local char,_,hrp=app:Character()
+        if not (entry.nape and entry.nape.Parent) then
+            Titans:RegisterFail(entry.model)
+            return nil
+        end
+        Titans:ClearFails(entry.model)
+        if hrp then
+            local worldDist=(entry.nape.Position-hrp.Position).Magnitude
+            if worldDist>Config.MaxDistance then return nil end
+        end
+        return entry
+    end
+
+    --=========================================================================
+    -- Prediction: nape parts bob vertically. EMA the nape velocity and lead by
+    -- half a ping, scaled by the Prediction slider.
+    --=========================================================================
+    local function predictedPoint(entry)
+        local nape=entry.nape
+        local pos=nape.Position
+        local vel=nape.AssemblyLinearVelocity or Vector3.zero
+        if state.napeVelInit then
+            state.napeVel=state.napeVel:Lerp(vel,0.15)
+        else
+            state.napeVel=vel
+            state.napeVelInit=true
+        end
+        local lead=0.5*app.Ping()+0.05
+        local offset=state.napeVel*(lead*(Config.Prediction/0.12))
+        if (offset-state.aimSmooth).Magnitude>0.05 then
+            state.aimSmooth=state.aimSmooth:Lerp(offset,0.25)
+        end
+        return pos+state.aimSmooth
+    end
+
+    --=========================================================================
+    -- Camera aim: clamped alpha, angular speed ceiling, vertical damping,
+    -- soft first frame after a target switch (same policy as SCP/BloxStrike).
+    --=========================================================================
+    local function cameraAim(dt,aimPos)
+        local cam=Workspace.CurrentCamera
+        if not cam then return end
+        local camPos=cam.CFrame.Position
+        local look=aimPos-camPos
+        if look.Magnitude<0.01 then return end
+        local targetLook=look.Unit
+        local targetCF=CFrame.lookAt(camPos,aimPos)
+        local angle=math.acos(math.clamp(cam.CFrame.LookVector:Dot(targetLook),-1,1))
+        local screen,on=cam:WorldToViewportPoint(aimPos)
+        local viewport=cam.ViewportSize
+        local center=Vector2.new(viewport.X/2,viewport.Y/2)
+        local screenDist=on and (Vector2.new(screen.X,screen.Y)-center).Magnitude or math.huge
+        local fovT=1-math.clamp(screenDist/math.max(Config.FOV,1),0,1)
+        local alpha=math.clamp((1-Config.Smoothness)*(0.4+0.6*fovT),0.10,0.45)
+        if math.abs(targetLook.Y)>0.6 then alpha=alpha*0.85 end
+        if state.locked~=state.lastLocked then alpha=math.min(alpha,0.10) end
+        if angle>1e-4 then alpha=math.min(alpha,(math.rad(22)*dt)/angle) end
+        if alpha<=0.001 then return end
+        cam.CFrame=cam.CFrame:Lerp(targetCF,alpha)
+    end
+
+    --=========================================================================
+    -- Remote registration. The server trusts the nape instance, so "tracking"
+    -- here means choosing which nape to register on, not steering a bullet.
+    --=========================================================================
+    local function rollDamage()
+        local lo=math.min(Config.DamageMin,Config.DamageMax)
+        local hi=math.max(Config.DamageMin,Config.DamageMax)
+        local span=hi-lo
+        local center=(lo+hi)/2
+        local gauss=(math.random()+math.random()+math.random())/3
+        return math.floor(center+(gauss-0.5)*span)
+    end
+
+    local function rollCrit()
+        return math.random()<Config.CritChance and (0.2+math.random()*0.1) or nil
+    end
+
+    local function jitteredCooldown()
+        local j=1+(math.random()*2-1)*Config.CooldownJitter
+        return math.max(0.05,Config.AttackCooldown*j)
+    end
+
+    local function registerBlades(entry)
+        local Remotes=app.Remotes
+        if not Remotes.POST then return false end
+        if not (entry.nape and entry.nape.Parent) then return false end
+        local ok=pcall(function()
+            Remotes.POST:FireServer("Attacks","Slash",true)
+            local combo=Config.ComboCycle and state.comboIndex or nil
+            Remotes.POST:FireServer("Hitboxes","Register",entry.nape,rollDamage(),rollCrit(),combo)
+        end)
+        if not ok then return false end
+        local combo=Config.ComboCycle and state.comboIndex or nil
+        if combo then
+            state.comboIndex+=1
+            if state.comboIndex>4 then state.comboIndex=1 end
+        end
+        return true
+    end
+
+    local spearBursting = false
+    local function registerSpears(entry)
+        local Remotes=app.Remotes
+        if not (Remotes.POST and Remotes.GET) then return false end
+        if spearBursting then return false end
+        spearBursting = true
+        local ok = pcall(function()
+            local slot=spearSlot()
+            Remotes.GET:InvokeServer("Spears","S_Fire",tostring(slot))
+            local burst=entry.boss and Config.SpearBurst or 1
+            for i=1,burst do
+                if not (entry.nape and entry.nape.Parent) then break end
+                Remotes.POST:FireServer("Spears","S_Explode",entry.nape.Position)
+                if i<burst then task.wait(Config.SpearInterval) end
+            end
+        end)
+        spearBursting = false
+        return ok
+    end
+
+    -- Human gate: with probability 1-HitChance the shot misses by a few
+    -- studs, so the server-side conversion profile stays plausible.
+    local function attackRoll()
+        return math.random()<=Config.HitChance
+    end
+
+    local function triggerHeld()
+        if Config.TriggerKey=="Always" then return true end
+        return UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+            or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+            or (app.Touch.Enabled and app.Touch.Held)
+    end
+
+    --=========================================================================
+    -- Hitbox: local nape size growth, 20Hz lerp + restore table.
+    --=========================================================================
+    local function hitboxParts(entry)
+        local parts={}
+        if entry.nape and entry.nape:IsA("BasePart") then table.insert(parts,entry.nape) end
+        return parts
+    end
+
+    local function restoreHitEntry(key,record)
+        if not record then return end
+        for _,item in ipairs(record.parts) do
+            local part=item.part
+            if part and part.Parent then
+                part.Size=item.origSize
+                part.Transparency=item.origTransparency
+                part.CanCollide=item.origCollide
+            end
+        end
+        state.hitboxEntries[key]=nil
+    end
+
+    local function hitboxTick(dt)
+        if not Config.HitboxEnabled then
+            for key,record in pairs(state.hitboxEntries) do restoreHitEntry(key,record) end
+            return
+        end
+        state.hitboxAccum+=dt
+        if state.hitboxAccum<0.05 then return end
+        state.hitboxAccum=0
+        local entry=state.locked
+        if not (entry and entry.nape and entry.nape.Parent) then
+            for key,record in pairs(state.hitboxEntries) do restoreHitEntry(key,record) end
+            return
+        end
+        local record=state.hitboxEntries[entry.model]
+        if not record then
+            local parts={}
+            for _,part in ipairs(hitboxParts(entry)) do
+                table.insert(parts,{part=part,origSize=part.Size,
+                    origTransparency=part.Transparency,origCollide=part.CanCollide})
+            end
+            if #parts==0 then return end
+            record={parts=parts}
+            state.hitboxEntries[entry.model]=record
+        end
+        for _,item in ipairs(record.parts) do
+            local part=item.part
+            if not part or not part.Parent then
+                restoreHitEntry(entry.model,record)
+                break
+            end
+            local orig=item.origSize
+            local target=Vector3.new(
+                math.min(orig.X*Config.HitboxSize,orig.X+10),
+                math.min(orig.Y*Config.HitboxSize,orig.Y+10),
+                math.min(orig.Z*Config.HitboxSize,orig.Z+10))
+            part.Size=part.Size:Lerp(target,0.35)
+            part.Transparency=part.Transparency+(0.55-part.Transparency)*0.35
+            part.CanCollide=false
+        end
+    end
+
+    --=========================================================================
+    -- FOV circle.
+    --=========================================================================
+    local fovGui,fovFrame
+    local function fovTick()
+        if Config.Enabled and Config.FOVCircle then
+            if not (fovFrame and fovFrame.Parent) then
+                local parent=app.GetGuiParent()
+                if not parent then return end
+                local sg=Instance.new("ScreenGui")
+                sg.Name=app.RandomName()
+                sg.ResetOnSpawn=false
+                sg.IgnoreGuiInset=true
+                sg.DisplayOrder=999
+                sg.Parent=parent
+                if app.Cloak then sg=app.Cloak.Protect(sg) end
+                local frame=Instance.new("Frame")
+                frame.Name=app.RandomName()
+                frame.AnchorPoint=Vector2.new(0.5,0.5)
+                frame.Position=UDim2.fromScale(0.5,0.5)
+                frame.BackgroundTransparency=1
+                local corner=Instance.new("UICorner")
+                corner.CornerRadius=UDim.new(1,0)
+                corner.Parent=frame
+                local stroke=Instance.new("UIStroke")
+                stroke.Color=Color3.fromRGB(255,90,60)
+                stroke.Thickness=1.5
+                stroke.Transparency=0.35
+                stroke.Parent=frame
+                frame.Parent=sg
+                if app.Cloak then frame=app.Cloak.Protect(frame) end
+                fovGui,fovFrame=sg,frame
+            end
+            fovFrame.Size=UDim2.fromOffset(Config.FOV*2,Config.FOV*2)
+            fovFrame.Visible=true
+        elseif fovFrame and fovFrame.Parent then
+            fovFrame.Visible=false
+        end
+    end
+
+    --=========================================================================
+    -- Update.
+    --=========================================================================
+    function Combat:Update(dt)
+        if not Config.Enabled then
+            state.locked=nil
+            fovTick()
+            return
+        end
+        local t0=tick()
+        state.lastLocked=state.locked
+
+        -- Window focus gate: a focused window is the only human state.
+        if not state.windowFocused then
+            state.locked=nil
+            fovTick()
+            return
+        end
+
+        state.locked=acquire()
+        local entry=state.locked
+        if entry then
+            local aimPos=predictedPoint(entry)
+            if aimPos then
+                if Config.Mode=="Mouse" and app.Caps.mousemoverel then
+                    local cam=Workspace.CurrentCamera
+                    local screen,on=cam and cam:WorldToViewportPoint(aimPos)
+                    if on and screen.Z>0 then
+                        local viewport=cam.ViewportSize
+                        local delta=Vector2.new(screen.X,screen.Y)-Vector2.new(viewport.X/2,viewport.Y/2)
+                        if delta.Magnitude>2 then
+                            mousemoverel(math.floor(delta.X*0.12+0.5),math.floor(delta.Y*0.12+0.5))
+                        end
+                    end
+                else
+                    cameraAim(dt,aimPos)
+                end
+            end
+
+            -- Remote registration cadence.
+            local now=tick()
+            if triggerHeld() and now-state.lastAttack>=state.nextCooldown then
+                state.lastAttack=now
+                state.nextCooldown=jitteredCooldown()
+                if attackRoll() then
+                    app.Guard("Combat.Register",function()
+                        local weapon=currentWeapon()
+                        local okRegister
+                        if weapon=="Spears" then
+                            okRegister=registerSpears(entry)
+                        else
+                            okRegister=registerBlades(entry)
+                        end
+                        if okRegister then state.attacks+=1 end
+                    end)
+                end
+            end
+        else
+            state.napeVelInit=false
+            state.comboIndex=1
+        end
+
+        hitboxTick(dt)
+        fovTick()
+        state.cost=tick()-t0
+    end
+
+    function Combat:GetLock()
+        return state.locked
+    end
+
+    function Combat:DebugSnapshot()
+        return {
+            locked=state.locked and state.locked.model.Name or "-",
+            dist=state.locked and math.floor(state.locked.worldDist or 0) or 0,
+            attacks=state.attacks,
+            weapon=currentWeapon(),
+            costMs=math.floor(state.cost*100000)/100,
+        }
+    end
+
+    function Combat:Stop()
+        for key,record in pairs(state.hitboxEntries) do restoreHitEntry(key,record) end
+        if fovGui then fovGui:Destroy();fovGui=nil;fovFrame=nil end
+        Config.Enabled=false
+    end
+
+    -- Window focus watch.
+    app:Track(UserInputService.WindowFocused:Connect(function() state.windowFocused=true end))
+    app:Track(UserInputService.WindowFocusReleased:Connect(function() state.windowFocused=false end))
+
+    app:OnStop(function()
+        Combat:Stop()
+    end)
+
+    return Combat
+end
+
+end)()
+local AOTRMovementFactory = (function()
+-- Vortexion AOTR movement: hover glide, teleport follow, noclip, speed, anti-AFK.
+--
+-- Hover drives AssemblyLinearVelocity toward a hold point above the locked
+-- titan (the same shape the game's own ODM flight uses), which replicates as
+-- ordinary motion. The teleport mode exists for completeness but is the
+-- noisy path; hover is the default.
+return function(app)
+    local RunService=app.Services.RunService
+    local Workspace=app.Services.Workspace
+    local UserInputService=app.Services.Input
+    local LocalPlayer=app.Services.Players.LocalPlayer
+    local Movement={}
+
+    local Config={
+        FollowEnabled=false,
+        MoveMode="Hover",        -- Hover | Teleport
+        HeightOffset=25,         -- studs above the titan HRP hold point
+        BehindOffset=30,         -- studs behind the titan HRP
+        GlideSpeed=120,
+        FollowBossOnly=false,
+        SpeedEnabled=false,
+        SpeedValue=24,
+        Noclip=false,
+        AntiAFK=true,
+        TouchAssist=false,     -- mobile touch-fly assist: strafe / forward-back / lift
+        TouchFlySpeed=120,
+    }
+    Movement.Config=Config
+
+    local state={
+        pulse="idle",
+        pulseAt=0,
+        speedBackup=nil,
+        speedHumanoid=nil,
+        collisionBackup={},
+        noclipAccum=0,
+        following=false,
+        lastDragX=0,
+        lastDragY=0,
+        lastVertical=0,
+    }
+
+    local function restoreSpeed()
+        local hum=state.speedHumanoid
+        if hum and hum.Parent and state.speedBackup~=nil then
+            pcall(function() hum.WalkSpeed=state.speedBackup end)
+        end
+        state.speedHumanoid=nil
+        state.speedBackup=nil
+        state.pulse="idle"
+    end
+
+    local function restoreCollision()
+        for part,value in pairs(state.collisionBackup) do
+            if part.Parent then pcall(function() part.CanCollide=value end) end
+            state.collisionBackup[part]=nil
+        end
+        state.noclipAccum=0
+    end
+
+    local function holdPoint(entry)
+        if not entry then return nil end
+        local model=entry.model
+        local hrp=model:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            return (hrp.CFrame*CFrame.new(0,Config.HeightOffset,Config.BehindOffset)).Position
+        end
+        if entry.nape and entry.nape.Parent then
+            return entry.nape.Position+Vector3.new(0,Config.HeightOffset,0)
+        end
+        return nil
+    end
+
+    local function updateFollow(dt)
+        local char,hum,hrp=app:Character()
+        if not (char and hrp) then return end
+        local entry=app.Combat and app.Combat:GetLock()
+        if not entry and app.Titans then entry=app.Titans:Nearest(false) end
+        if not entry then return end
+        if Config.FollowBossOnly and not entry.boss then return end
+        local target=holdPoint(entry)
+        if not target then return end
+
+        if Config.MoveMode=="Teleport" then
+            hrp.CFrame=CFrame.new(target)
+        else
+            local dir=target-hrp.Position
+            if dir.Magnitude>2 then
+                hrp.AssemblyLinearVelocity=dir.Unit*Config.GlideSpeed
+            else
+                hrp.AssemblyLinearVelocity=Vector3.zero
+            end
+        end
+    end
+
+    local function updateSpeed()
+        local char,hum,hrp=app:Character()
+        if not (char and hum and hrp) then return end
+        if state.speedHumanoid~=hum then
+            restoreSpeed()
+            state.speedHumanoid=hum
+            state.speedBackup=hum.WalkSpeed
+        end
+        hum.WalkSpeed=Config.SpeedValue
+        local dir=hum.MoveDirection
+        if dir.Magnitude<=0 then return end
+        local now=tick()
+        if state.pulse=="idle" then state.pulse="boost";state.pulseAt=now end
+        local boosting
+        if state.pulse=="boost" then
+            if now-state.pulseAt>=0.1 then state.pulse="coast";state.pulseAt=now;boosting=false
+            else boosting=true end
+        else
+            if now-state.pulseAt>=0.15 then state.pulse="boost";state.pulseAt=now;boosting=true
+            else boosting=false end
+        end
+        local target=dir.Unit*(boosting and Config.SpeedValue or Config.SpeedValue*0.16)
+        hrp.AssemblyLinearVelocity=Vector3.new(target.X,hrp.AssemblyLinearVelocity.Y,target.Z)
+    end
+
+    local function updateNoclip(dt)
+        state.noclipAccum=(state.noclipAccum or 0)+(dt or 0)
+        if state.noclipAccum<0.05 then return end
+        state.noclipAccum=0
+        local char=app.Character and select(1,app:Character())
+        if not char then
+            local c=LocalPlayer.Character
+            char=c
+        end
+        if not char then return end
+        for _,part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if state.collisionBackup[part]==nil then state.collisionBackup[part]=part.CanCollide end
+                part.CanCollide=false
+            end
+        end
+    end
+
+    -- Mobile touch-fly assist: right-half drag drives camera-relative motion.
+    -- Single-finger X strafes, single-finger Y moves forward/back, two-finger
+    -- vertical lifts. Release stops assist writes and keeps current momentum
+    -- (no automatic braking). Runs on the same Heartbeat cadence as the rest
+    -- of movement; never throttled by the visual interval.
+    local function updateTouchFly()
+        local touch=app.Touch
+        if not (touch and touch.Enabled and touch.Held) then
+            -- Released or disabled: only the input deltas reset. Any velocity
+            -- already written stays; the assist never brakes the character.
+            state.lastDragX=0
+            state.lastDragY=0
+            state.lastVertical=0
+            return
+        end
+        local ok,drag,vertical=pcall(function() return touch:Drag() end)
+        if not ok or not drag then
+            state.lastDragX=0
+            state.lastDragY=0
+            state.lastVertical=0
+            return
+        end
+        local dx=drag.X-state.lastDragX
+        local dy=drag.Y-state.lastDragY
+        local dv=(tonumber(vertical) or 0)-state.lastVertical
+        state.lastDragX=drag.X
+        state.lastDragY=drag.Y
+        state.lastVertical=vertical or 0
+        local _,_,hrp=app:Character()
+        if not hrp then return end
+        local camera=Workspace.CurrentCamera
+        local cf=camera and camera.CFrame
+        local vel=hrp.AssemblyLinearVelocity
+        local hx,hz=vel.X,vel.Z
+        if dx~=0 and cf then
+            local rx,rz=cf.RightVector.X,cf.RightVector.Z
+            local mag=math.sqrt(rx*rx+rz*rz)
+            if mag>0.0001 then
+                local scale=math.clamp(dx/8,-1,1)*Config.TouchFlySpeed
+                hx,hz=(rx/mag)*scale,(rz/mag)*scale
+            end
+        end
+        if dy~=0 and cf then
+            -- Forward/back along the flattened camera LookVector. Downward
+            -- drag (positive deltaY in screen space) moves backward.
+            local lx,lz=cf.LookVector.X,cf.LookVector.Z
+            local mag=math.sqrt(lx*lx+lz*lz)
+            if mag>0.0001 then
+                local scale=-math.clamp(dy/8,-1,1)*Config.TouchFlySpeed
+                hx,hz=hx+(lx/mag)*scale,hz+(lz/mag)*scale
+            end
+        end
+        local vy=vel.Y
+        if dv~=0 then
+            vy=math.clamp(dv/8,-1,1)*Config.TouchFlySpeed
+        end
+        hrp.AssemblyLinearVelocity=Vector3.new(hx,vy,hz)
+    end
+
+    local function teleportLobby()
+        local Remotes=app.Remotes
+        if Remotes.GET then
+            local ok=pcall(function()
+                Remotes.GET:InvokeServer("Functions","Teleport","Lobby")
+            end)
+            if ok then return true end
+        end
+        local TeleportService=game:GetService("TeleportService")
+        pcall(function()
+            TeleportService:Teleport(game.PlaceId,LocalPlayer)
+        end)
+        return false
+    end
+    Movement.TeleportLobby=teleportLobby
+
+    if LocalPlayer.CharacterRemoving then
+        app:Track(LocalPlayer.CharacterRemoving:Connect(function()
+            restoreSpeed()
+            restoreCollision()
+        end))
+    end
+    if LocalPlayer.CharacterAdded then
+        app:Track(LocalPlayer.CharacterAdded:Connect(function()
+            restoreSpeed()
+            restoreCollision()
+        end))
+    end
+
+    local function antiAFK()
+        local VirtualUser=game:GetService("VirtualUser")
+        app:Track(LocalPlayer.Idled:Connect(function()
+            if not Config.AntiAFK then return end
+            pcall(function()
+                VirtualUser:Button2Down(Vector2.new(0,0),Workspace.CurrentCamera and Workspace.CurrentCamera.CFrame or CFrame.new())
+                task.wait(1)
+                VirtualUser:Button2Up(Vector2.new(0,0),Workspace.CurrentCamera and Workspace.CurrentCamera.CFrame or CFrame.new())
+            end)
+        end))
+    end
+    antiAFK()
+
+    -- Heartbeat loop: velocity writes must land before the physics solver.
+    app:Track(RunService.Heartbeat:Connect(function(dt)
+        if not app:Alive() then return end
+        app.Guard("Movement",function()
+            if Config.FollowEnabled then updateFollow(dt) end
+            if Config.SpeedEnabled then updateSpeed() else restoreSpeed() end
+            if Config.Noclip then updateNoclip(dt) else restoreCollision() end
+            if Config.TouchAssist then updateTouchFly() end
+        end)
+    end))
+
+    app:OnStop(function()
+        Config.FollowEnabled=false
+        Config.SpeedEnabled=false
+        Config.Noclip=false
+        Config.TouchAssist=false
+        state.lastDragX=0
+        state.lastDragY=0
+        state.lastVertical=0
+        restoreSpeed()
+        restoreCollision()
+    end)
+
+    return Movement
+end
+
+end)()
+local AOTRESPFactory = (function()
+-- Vortexion AOTR ESP: per-titan billboard tags and nape highlights.
+--
+-- Tags live in one cloaked ScreenGui (gethui/CoreGui) with Adornee pointing at
+-- each titan nape: parenting them into the titan model would expose them to
+-- workspace enumeration, and a name like "TitanESP" is a one-line scan hit.
+-- Refresh runs at 10Hz with entry reuse; dead/despawned titans drop their tag.
+return function(app)
+    local Players=app.Services.Players
+    local Workspace=app.Services.Workspace
+    local LocalPlayer=Players.LocalPlayer
+    local ESP={}
+
+    local Config={
+        Enabled=false,
+        Tags=true,
+        Health=true,
+        Distance=true,
+        NapeHighlight=false,
+        MaxDistance=1200,
+        BossColor=Color3.fromRGB(255,80,80),
+        NormalColor=Color3.fromRGB(255,200,90),
+    }
+    ESP.Config=Config
+
+    local state={screenGui=nil,entries={},accum=0,disposed=false}
+
+    local function ensureGui()
+        if state.screenGui and state.screenGui.Parent then return state.screenGui end
+        if state.screenGui then
+            pcall(function() state.screenGui:Destroy() end)
+            state.screenGui=nil
+        end
+        local parent=app.GetGuiParent()
+        if not parent then return nil end
+        local raw=Instance.new("ScreenGui")
+        local ok,result=pcall(function()
+            raw.Name=app.RandomName()
+            raw.ResetOnSpawn=false
+            raw.DisplayOrder=990
+            raw.Parent=parent
+            return app.Cloak and app.Cloak.Protect(raw) or raw
+        end)
+        if not ok then
+            pcall(function() raw:Destroy() end)
+            error(result,0)
+        end
+        state.screenGui=result
+        return result
+    end
+
+    local function buildEntry(entry)
+        local gui=ensureGui()
+        if not gui then return nil end
+        local created={}
+        local function allocate(class)
+            local object=Instance.new(class)
+            table.insert(created,object)
+            return object
+        end
+        -- Own every allocation before setting properties; failed setup rolls back.
+        local ok,result=pcall(function()
+            local billboard=allocate("BillboardGui")
+            billboard.Name=app.RandomName()
+            billboard.Adornee=entry.nape
+            billboard.Size=UDim2.fromOffset(160,44)
+            billboard.StudsOffset=Vector3.new(0,4,0)
+            billboard.AlwaysOnTop=true
+            billboard.MaxDistance=Config.MaxDistance
+            local nameLabel=allocate("TextLabel")
+            nameLabel.Name="Name"
+            nameLabel.BackgroundTransparency=1
+            nameLabel.Size=UDim2.new(1,0,0,16)
+            nameLabel.Font=Enum.Font.GothamBold
+            nameLabel.TextSize=13
+            nameLabel.TextStrokeTransparency=0.4
+            nameLabel.Text=entry.model.Name
+            nameLabel.Parent=billboard
+            local sub=allocate("TextLabel")
+            sub.Name="Sub"
+            sub.BackgroundTransparency=1
+            sub.Position=UDim2.new(0,0,0,16)
+            sub.Size=UDim2.new(1,0,0,14)
+            sub.Font=Enum.Font.Gotham
+            sub.TextSize=12
+            sub.TextStrokeTransparency=0.5
+            sub.Parent=billboard
+            local barBack=allocate("Frame")
+            barBack.Name="BarBack"
+            barBack.Position=UDim2.new(0,0,0,30)
+            barBack.Size=UDim2.new(1,0,0,4)
+            barBack.BackgroundColor3=Color3.fromRGB(20,20,20)
+            barBack.BorderSizePixel=0
+            barBack.Parent=billboard
+            local barFill=allocate("Frame")
+            barFill.Name="BarFill"
+            barFill.Size=UDim2.fromScale(1,1)
+            barFill.BackgroundColor3=Color3.fromRGB(90,220,110)
+            barFill.BorderSizePixel=0
+            barFill.Parent=barBack
+            billboard.Parent=gui
+            if app.Cloak then billboard=app.Cloak.Protect(billboard) end
+
+            local record={billboard=billboard,nameLabel=nameLabel,subLabel=sub,barBack=barBack,barFill=barFill,highlight=nil,cache={}}
+            return record
+        end)
+        if not ok then
+            for i=#created,1,-1 do pcall(function() created[i]:Destroy() end) end
+            error(result,0)
+        end
+        return result
+    end
+
+    local function destroyEntry(record)
+        local owned={}
+        for _,key in ipairs({"nameLabel","subLabel","barFill","barBack","highlight","billboard"}) do
+            if record[key] then table.insert(owned,record[key]) end
+            record[key]=nil
+        end
+        record.cache={}
+        for _,object in ipairs(owned) do pcall(function() object:Destroy() end) end
+    end
+
+    local function validEntry(record)
+        if not record then return false end
+        local ok,valid=pcall(function()
+            return record.billboard and record.billboard.Parent==state.screenGui
+                and record.nameLabel and record.nameLabel.Parent==record.billboard
+                and record.subLabel and record.subLabel.Parent==record.billboard
+                and record.barBack and record.barBack.Parent==record.billboard
+                and record.barFill and record.barFill.Parent==record.barBack
+        end)
+        return ok and valid==true
+    end
+
+    local function clearAll()
+        for _,record in pairs(state.entries) do destroyEntry(record) end
+        state.entries={}
+    end
+
+    local function syncHighlight(record,entry,color)
+        if not Config.NapeHighlight then
+            if record.highlight then record.highlight:Destroy();record.highlight=nil end
+            return
+        end
+        if not record.highlight or not record.highlight.Parent then
+            if record.highlight then record.highlight:Destroy();record.highlight=nil end
+            local raw=Instance.new("Highlight")
+            local ok,result=pcall(function()
+                raw.Name=app.RandomName()
+                raw.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
+                raw.FillTransparency=0.7
+                raw.OutlineTransparency=0
+                raw.Parent=state.screenGui
+                return app.Cloak and app.Cloak.Protect(raw) or raw
+            end)
+            if not ok then
+                pcall(function() raw:Destroy() end)
+                error(result,0)
+            end
+            record.highlight=result
+        end
+        record.highlight.Adornee=entry.model
+        record.highlight.FillColor=color
+        record.highlight.OutlineColor=color
+    end
+
+    local function updateESP()
+        local Titans=app.Titans
+        if not Titans then clearAll();return end
+        local entries=Titans:All()
+        if #entries==0 then clearAll();return end
+        if not ensureGui() then clearAll();return end
+        local hrp
+        local char,_,root=app:Character()
+        if root then hrp=root end
+        local seen={}
+        for _,entry in ipairs(entries) do
+            if entry.nape and entry.nape.Parent then
+                seen[entry.model]=true
+                local record=state.entries[entry.model]
+                if not validEntry(record) then
+                    if record then destroyEntry(record) end
+                    record=buildEntry(entry)
+                    state.entries[entry.model]=record
+                end
+                if record then
+                    local cache=record.cache
+                    local color=entry.boss and Config.BossColor or Config.NormalColor
+                    if cache.nape~=entry.nape then
+                        cache.nape=entry.nape
+                        record.billboard.Adornee=entry.nape
+                    end
+                    if cache.maxDist~=Config.MaxDistance then
+                        cache.maxDist=Config.MaxDistance
+                        record.billboard.MaxDistance=Config.MaxDistance
+                    end
+                    if cache.nameText~=entry.model.Name then
+                        cache.nameText=entry.model.Name
+                        record.nameLabel.Text=entry.model.Name
+                    end
+                    if cache.tagsVis~=Config.Tags then
+                        cache.tagsVis=Config.Tags
+                        record.nameLabel.Visible=Config.Tags
+                    end
+                    if cache.boss~=entry.boss then
+                        cache.boss=entry.boss
+                        record.nameLabel.TextColor3=color
+                    end
+                    if Config.Distance and hrp then
+                        local d=math.floor((entry.nape.Position-hrp.Position).Magnitude)
+                        local text=("%d studs"):format(d)
+                        if cache.distText~=text then
+                            cache.distText=text
+                            record.subLabel.Text=text
+                        end
+                        if not record.subLabel.Visible then record.subLabel.Visible=true end
+                    else
+                        if record.subLabel.Visible then record.subLabel.Visible=false end
+                    end
+                    if Config.Health and entry.humanoid then
+                        local maxH=math.max(entry.humanoid.MaxHealth,1)
+                        local frac=math.clamp(entry.humanoid.Health/maxH,0,1)
+                        if cache.frac~=frac then
+                            cache.frac=frac
+                            record.barFill.Size=UDim2.fromScale(frac,1)
+                            record.barFill.BackgroundColor3=Color3.fromRGB(220,60,60):Lerp(Color3.fromRGB(90,220,110),frac)
+                        end
+                        if not record.barFill.Parent.Visible then record.barFill.Parent.Visible=true end
+                    else
+                        if record.barFill.Parent.Visible then record.barFill.Parent.Visible=false end
+                    end
+                    local enabled=Config.Tags or record.subLabel.Visible or record.barFill.Parent.Visible
+                    if cache.enabled~=enabled then
+                        cache.enabled=enabled
+                        record.billboard.Enabled=enabled
+                    end
+                    syncHighlight(record,entry,color)
+                end
+            end
+        end
+        for model,record in pairs(state.entries) do
+            if not seen[model] then
+                destroyEntry(record)
+                state.entries[model]=nil
+            end
+        end
+    end
+
+    local function visualInterval(base)
+        base=tonumber(base) or 0.1
+        if base~=base or base==math.huge or base==-math.huge or base<=0 then base=0.1 end
+        local function accept(v)
+            return type(v)=="number" and v==v and v~=math.huge and v~=-math.huge and v>0
+        end
+        if type(app.GetVisualInterval)=="function" then
+            local ok,value=pcall(app.GetVisualInterval,app,base)
+            if ok and accept(value) then return math.max(base,value) end
+            return base
+        end
+        local ui=app.ui
+        if ui and type(ui.GetVisualInterval)=="function" then
+            local ok,value=pcall(function() return ui:GetVisualInterval(base) end)
+            if ok and accept(value) then return math.max(base,value) end
+        end
+        return base
+    end
+
+    function ESP:Update(dt)
+        if state.disposed then return end
+        if not Config.Enabled then
+            state.accum=0
+            clearAll()
+            return
+        end
+        -- Losing the local character must drop stale distance text immediately,
+        -- independent of the (possibly throttled) visual cadence.
+        if next(state.entries)~=nil then
+            local _,_,root=app:Character()
+            if not root then
+                for _,record in pairs(state.entries) do
+                    if record.subLabel.Visible then record.subLabel.Visible=false end
+                end
+            end
+        end
+        state.accum+=dt
+        if state.accum<visualInterval(0.1) then return end
+        state.accum=0
+        app.Guard("ESP",updateESP)
+    end
+
+    function ESP:Stop()
+        state.accum=0
+        clearAll()
+        if state.screenGui then
+            pcall(function() state.screenGui:Destroy() end)
+            state.screenGui=nil
+        end
+        Config.Enabled=false
+    end
+
+    app:OnStop(function()
+        state.disposed=true
+        ESP:Stop()
+    end)
+
+    return ESP
+end
+
+end)()
+local AOTRFarmFactory = (function()
+-- Vortexion AOTR farm: reload/refill automation, server-side FPS settings.
+--
+-- Reload triggers read the HUD blade counter; refills resolve once from
+-- workspace.Unclimbable.Reloads and are re-resolved when the part leaves.
+-- The FPS settings go through the game's own settings remote
+-- (Functions/Settings), which is a server-side change: no local lighting or
+-- render hacks that a client-side scan could notice.
+return function(app)
+    local Workspace=app.Services.Workspace
+    local Players=app.Services.Players
+    local Farm={}
+
+    local Config={
+        AutoReload=false,
+        AutoRefill=false,
+        CheckInterval=0.5,
+        FPSSettings=false,
+        Settings={
+            Damage_Indicator="Off",
+            Shadows="Off",
+            Blur="Off",
+            Player_Effects="Off",
+            Effects=0,
+            Music=0,
+        },
+    }
+    Farm.Config=Config
+
+    local state={
+        refillPart=nil,
+        settingsApplied=false,
+        reloads=0,
+        refills=0,
+    }
+
+    --=========================================================================
+    -- Refill point: workspace.Unclimbable.Reloads.<something>.Refill
+    --=========================================================================
+    local function resolveRefill()
+        local root=Workspace:FindFirstChild("Unclimbable")
+        local reloads=root and root:FindFirstChild("Reloads")
+        if not reloads then return nil end
+        for _,station in ipairs(reloads:GetChildren()) do
+            local refill=station:FindFirstChild("Refill")
+            if refill and refill:IsA("BasePart") then return refill end
+        end
+        return nil
+    end
+    Farm.ResolveRefill=resolveRefill
+
+    local function doReload()
+        local Remotes=app.Remotes
+        if not Remotes.GET then return false end
+        local have,max=app.ReadCount(app.HUD.blades)
+        if not have then return false end
+        if have>0 then return false end
+        local ok=pcall(function()
+            Remotes.GET:InvokeServer("Blades","Reload")
+        end)
+        if ok then state.reloads+=1 end
+        return ok
+    end
+
+    local function doRefill()
+        local Remotes=app.Remotes
+        if not Remotes.POST then return false end
+        if not state.refillPart or not state.refillPart.Parent then
+            state.refillPart=resolveRefill()
+            if not state.refillPart then return false end
+        end
+        local ok=pcall(function()
+            Remotes.POST:FireServer("Attacks","Reload",state.refillPart)
+        end)
+        if ok then state.refills+=1 end
+        return ok
+    end
+
+    --=========================================================================
+    -- Server-side settings: one-shot per session, idempotent.
+    --=========================================================================
+    local function applySettings()
+        if state.settingsApplied then return end
+        local Remotes=app.Remotes
+        if not Remotes.GET then return end
+        local ok=pcall(function()
+            for key,value in pairs(Config.Settings) do
+                Remotes.GET:InvokeServer("Functions","Settings",key,value)
+                task.wait(0.05)
+            end
+        end)
+        state.settingsApplied=ok
+        app.Log("farm settings applied=%s",tostring(ok))
+    end
+
+    local accum=0
+    local function tickFarm(dt)
+        if Config.AutoReload then app.Guard("Farm.Reload",doReload) end
+        if Config.AutoRefill then app.Guard("Farm.Refill",doRefill) end
+    end
+
+    function Farm:Update(dt)
+        if Config.FPSSettings and not state.settingsApplied then
+            app.Guard("Farm.Settings",applySettings)
+        end
+        accum+=dt
+        if accum<Config.CheckInterval then return end
+        accum=0
+        app.Guard("Farm",tickFarm,dt)
+    end
+
+    function Farm:DebugSnapshot()
+        return {reloads=state.reloads,refills=state.refills,
+            refill=state.refillPart and state.refillPart.Parent and true or false}
+    end
+
+    app:OnStop(function()
+        Config.AutoReload=false
+        Config.AutoRefill=false
+    end)
+
+    return Farm
+end
+
+end)()
+-- AOTR battle: full combat suite (nape lock, remote registration, spears,
+-- hitbox, follow, ESP, farm) wired through one budgeted render loop.
+local app=AOTRCommon("battle",WindUI,WindBridgeFactory)
+if not app then return end
+local window=app:Open()
+if not window then return end
+
+--=========================================================================
+-- Environment probe before features: remotes, HUD labels, executor caps.
+--=========================================================================
+app:ProbeRemotes()
+app.ProbeHUD(true)
+local bootFailures = {}
+local function reportBootFailure(name, message)
+    local detail = tostring(name) .. ": " .. tostring(message):sub(1, 160)
+    table.insert(bootFailures, detail)
+    if app.ui then
+        app.ui.BootStatus = "partial"
+        app.ui.BootError = table.concat(bootFailures, "; ")
+    end
+    warn("[Vortexion/AOTR] " .. detail)
+end
+local Cloak
+if type(AOTRCloakFactory) == "function" then
+    local ok, value = pcall(AOTRCloakFactory, app)
+    if ok then Cloak = value else reportBootFailure("cloak", value) end
+else
+    reportBootFailure("cloak", "factory missing")
+end
+app.Cloak = Cloak
+if type(Cloak) == "table" and type(Cloak.Start) == "function" then
+    local ok, err = app.Guard("Cloak", Cloak.Start)
+    if not ok then reportBootFailure("cloak start", err) end
+end
+
+local tabs={
+    combat=window:AddTab({Title="战斗",Icon="lucide-swords"}),
+    visual=window:AddTab({Title="感知",Icon="lucide-eye"}),
+    movement=window:AddTab({Title="移动",Icon="lucide-activity"}),
+    farm=window:AddTab({Title="农场",Icon="lucide-package"}),
+    settings=window:AddTab({Title="设置",Icon="lucide-settings"}),
+}
+window:InstallSettings(tabs.settings)
+
+local function setup(name,factory,key)
+    if type(factory)~="function" then
+        reportBootFailure(name, "factory missing")
+        return nil
+    end
+    local ok,result=pcall(factory,app)
+    if not ok then
+        reportBootFailure(name, result)
+        app:Notify(name.." 模块失败: "..tostring(result))
+        return nil
+    end
+    if key then app[key]=result end
+    return result
+end
+
+setup("titans",AOTRTitansFactory,"Titans")
+setup("combat",AOTRCombatFactory,"Combat")
+setup("movement",AOTRMovementFactory,"Movement")
+setup("esp",AOTRESPFactory,"ESP")
+setup("farm",AOTRFarmFactory,"Farm")
+
+local Titans,Combat,Movement,ESP,Farm=app.Titans,app.Combat,app.Movement,app.ESP,app.Farm
+
+--=========================================================================
+-- Shared render loop: one BindToRenderStep(Last), dt gate, per-subsystem
+-- budget, 2s debug snapshot. Movement runs on Heartbeat inside its module.
+--=========================================================================
+local budgets={Titans=0.4,Combat=1.5,ESP=1.0,Farm=0.2}
+local costs={Titans=0,Combat=0,ESP=0,Farm=0}
+local slowLoops=0
+app:OnStop(function()
+    app.Services.RunService:UnbindFromRenderStep("VortexionAOTRFrame")
+end)
+app.Services.RunService:BindToRenderStep("VortexionAOTRFrame",Enum.RenderPriority.Last.Value,function(dt)
+    if not app:Alive() then return end
+    app.Guard("Frame",function()
+        if dt<0.004 then return end
+        if Titans then
+            local t0=tick()
+            app.Guard("Titans",function() Titans:Update(dt) end)
+            costs.Titans=tick()-t0
+        end
+        if Combat then
+            local t0=tick()
+            app.Guard("Combat",function() Combat:Update(dt) end)
+            costs.Combat=tick()-t0
+        end
+        if ESP then
+            local t0=tick()
+            app.Guard("ESP",function() ESP:Update(dt) end)
+            costs.ESP=tick()-t0
+        end
+        if Farm then
+            local t0=tick()
+            app.Guard("Farm",function() Farm:Update(dt) end)
+            costs.Farm=tick()-t0
+        end
+        for name,cost in pairs(costs) do
+            if cost*1000>budgets[name] then slowLoops+=1 end
+        end
+    end)
+end)
+
+task.spawn(function()
+    while app:Alive() do
+        task.wait(2)
+        if not app:Alive() then break end
+        if app.Debug then
+            local combat=Combat and Combat:DebugSnapshot() or {}
+            local titans=Titans and Titans:DebugSnapshot() or {}
+            local farm=Farm and Farm:DebugSnapshot() or {}
+            local remotes=app.Remotes
+            print(("[Vortexion/AOTR] titans=%d nape=%d lock=%s dist=%s atk=%d wpn=%s reload=%d refill=%d | %.2f/%.2f/%.2f/%.2fms slow=%d GET=%s POST=%s"):format(
+                titans.titans or 0,titans.nape or 0,
+                tostring(combat.locked or "-"),tostring(combat.dist or 0),
+                tonumber(combat.attacks) or 0,tostring(combat.weapon or "-"),
+                tonumber(farm.reloads) or 0,tonumber(farm.refills) or 0,
+                costs.Titans*1000,costs.Combat*1000,costs.ESP*1000,costs.Farm*1000,
+                slowLoops,
+                tostring(remotes.GET~=nil),tostring(remotes.POST~=nil)))
+        end
+    end
+end)
+
+--=========================================================================
+-- UI: combat.
+--=========================================================================
+if Combat then
+    local c=Combat.Config
+    local tab=tabs.combat
+    tab:AddToggle("AOTRAimEnabled",{Title="斩击锁定（自动注册命中）",Default=false,Callback=function(v)
+        c.Enabled=v
+        app.Log("combat enabled=%s",tostring(v))
+    end})
+    tab:AddDropdown("AOTRTargetMode",{Title="目标选择",Values={"Nearest","Boss"},Default="Nearest",
+        Callback=function(v) c.TargetMode=v end})
+    tab:AddDropdown("AOTRAimMode",{Title="瞄准模式",Values={"Camera","Mouse","Both"},Default="Camera",
+        Callback=function(v) c.Mode=v end})
+    tab:AddSlider("AOTRAimFov",{Title="锁定 FOV",Min=40,Max=600,Default=160,Rounding=0,
+        Callback=function(v) c.FOV=v end})
+    tab:AddSlider("AOTRAimDist",{Title="锁定距离",Min=100,Max=3000,Default=1200,Rounding=0,
+        Callback=function(v) c.MaxDistance=v end})
+    tab:AddSlider("AOTRAimSmooth",{Title="平滑（越小越快）",Min=0.05,Max=0.95,Default=0.85,Rounding=2,
+        Callback=function(v) c.Smoothness=v end})
+    tab:AddSlider("AOTRAimPrediction",{Title="预瞄（浮动补偿）",Min=0,Max=0.5,Default=0.12,Rounding=2,
+        Callback=function(v) c.Prediction=v end})
+    tab:AddSlider("AOTRAimHitChance",{Title="注册命中率（%）",Min=10,Max=100,Default=85,Rounding=0,
+        Callback=function(v) c.HitChance=v/100 end})
+    tab:AddDropdown("AOTRAimKey",{Title="触发键",Values={"Always","Hold"},Default="Always",
+        Callback=function(v) c.TriggerKey=v end})
+    tab:AddSlider("AOTRAttackCd",{Title="攻击间隔（秒）",Min=0.08,Max=1.5,Default=0.25,Rounding=2,
+        Callback=function(v) c.AttackCooldown=v end})
+    tab:AddSlider("AOTRAttackJitter",{Title="节奏抖动（±）",Min=0,Max=0.8,Default=0.4,Rounding=2,
+        Callback=function(v) c.CooldownJitter=v end})
+    tab:AddDropdown("AOTRWeapon",{Title="武器",Values={"Auto","Blades","Spears"},Default="Auto",
+        Callback=function(v) c.Weapon=v end})
+    tab:AddSlider("AOTRDmgMin",{Title="伤害下限",Min=100,Max=2000,Default=625,Rounding=0,
+        Callback=function(v) c.DamageMin=v end})
+    tab:AddSlider("AOTRDmgMax",{Title="伤害上限",Min=100,Max=2000,Default=850,Rounding=0,
+        Callback=function(v) c.DamageMax=v end})
+    tab:AddSlider("AOTRCritChance",{Title="暴击概率（%）",Min=0,Max=100,Default=25,Rounding=0,
+        Callback=function(v) c.CritChance=v/100 end})
+    tab:AddToggle("AOTRComboCycle",{Title="连击序号循环",Default=true,
+        Callback=function(v) c.ComboCycle=v end})
+    tab:AddSlider("AOTRSpearBurst",{Title="雷枪连发（Boss）",Min=1,Max=60,Default=30,Rounding=0,
+        Callback=function(v) c.SpearBurst=v end})
+    tab:AddToggle("AOTRHitboxEnabled",{Title="后颈碰撞箱放大",Default=false,
+        Callback=function(v) c.HitboxEnabled=v end})
+    tab:AddSlider("AOTRHitboxSize",{Title="碰撞箱倍率",Min=1.1,Max=4,Default=1.6,Rounding=1,
+        Callback=function(v) c.HitboxSize=v end})
+    tab:AddToggle("AOTRFovCircle",{Title="FOV 圆圈",Default=true,
+        Callback=function(v) c.FOVCircle=v end})
+end
+
+--=========================================================================
+-- UI: visual (ESP) + preserved awareness readouts.
+--=========================================================================
+if ESP then
+    local c=ESP.Config
+    local tab=tabs.visual
+    tab:AddToggle("AOTRESPEnabled",{Title="巨人 ESP",Default=false,Callback=function(v) c.Enabled=v end})
+    tab:AddToggle("AOTRESPTags",{Title="名称标签",Default=true,Callback=function(v) c.Tags=v end})
+    tab:AddToggle("AOTRESPHealth",{Title="血量条",Default=true,Callback=function(v) c.Health=v end})
+    tab:AddToggle("AOTRESPDistance",{Title="距离",Default=true,Callback=function(v) c.Distance=v end})
+    tab:AddToggle("AOTRNapeHighlight",{Title="后颈高亮",Default=false,
+        Callback=function(v) c.NapeHighlight=v end})
+    tab:AddSlider("AOTRESPDist",{Title="ESP 距离",Min=200,Max=3000,Default=1200,Rounding=0,
+        Callback=function(v) c.MaxDistance=v end})
+end
+
+tabs.visual:AddButton({Title="刷新巨人数量",Callback=function()
+    if Titans then app:Notify("当前发现巨人 "..tostring(Titans:Count()).." 个") end
+end})
+tabs.visual:AddButton({Title="当前 ESP 刷新间隔",Callback=function()
+    local interval=app:GetVisualInterval(0.1)
+    app:Notify(("ESP 刷新间隔 %.3f 秒（约 %d Hz，随共享桥接档位变化）"):format(interval,math.max(1,math.floor(1/interval+0.5))))
+end})
+tabs.visual:AddButton({Title="查看刀片/雷枪余量",Callback=function()
+    if not app:Alive() then return end
+    app.ProbeHUD(false)
+    local bh,bm=app.ReadCount(app.HUD.blades)
+    local sh,sm=app.ReadCount(app.HUD.spears)
+    app:Notify(("刀片 %s · 雷枪 %s"):format(
+        bh and ("%d/%d"):format(bh,bm) or "未读取",
+        sh and ("%d/%d"):format(sh,sm) or "未读取"))
+end})
+tabs.visual:AddButton({Title="查看燃气余量",Callback=function()
+    if not app:Alive() then return end
+    local ok,percent=pcall(function()
+        app.ProbeHUD(false)
+        return app.ReadPercent(app.HUD.gas)
+    end)
+    local valid=ok and type(percent)=="number" and percent==percent and percent>=0 and percent<=100
+    local text=valid and ("%.1f%%"):format(percent) or "未读取"
+    if app:Alive() then app:Notify("燃气: "..text) end
+end})
+tabs.visual:AddParagraph({Title="感知策略",
+    Content="巨人池 10Hz 扫描一次，后颈解析带多路径回退；解锁目标自动忽略 5 秒，避免卡死重试。"})
+
+--=========================================================================
+-- UI: movement.
+--=========================================================================
+if Movement then
+    local c=Movement.Config
+    local tab=tabs.movement
+    tab:AddToggle("AOTRFollow",{Title="自动跟随锁定目标",Default=false,
+        Callback=function(v) c.FollowEnabled=v end})
+    tab:AddDropdown("AOTRMoveMode",{Title="移动方式",Values={"Hover","Teleport"},Default="Hover",
+        Callback=function(v) c.MoveMode=v end})
+    tab:AddSlider("AOTRHeightOffset",{Title="跟随高度",Min=5,Max=80,Default=25,Rounding=0,
+        Callback=function(v) c.HeightOffset=v end})
+    tab:AddSlider("AOTRBehindOffset",{Title="身后距离",Min=0,Max=80,Default=30,Rounding=0,
+        Callback=function(v) c.BehindOffset=v end})
+    tab:AddSlider("AOTRGlideSpeed",{Title="滑行速度",Min=30,Max=400,Default=120,Rounding=0,
+        Callback=function(v) c.GlideSpeed=v end})
+    tab:AddToggle("AOTRFollowBoss",{Title="仅跟随 Boss",Default=false,
+        Callback=function(v) c.FollowBossOnly=v end})
+    tab:AddToggle("AOTRSpeedEnabled",{Title="自定义移动速度",Default=false,
+        Callback=function(v) c.SpeedEnabled=v end})
+    tab:AddSlider("AOTRSpeedValue",{Title="速度值",Min=16,Max=80,Default=24,Rounding=0,
+        Callback=function(v) c.SpeedValue=v end})
+    tab:AddToggle("AOTRNoclip",{Title="穿墙",Default=false,Callback=function(v) c.Noclip=v end})
+    tab:AddToggle("AOTRTouchAssist",{Title="触摸飞行辅助（右半屏拖动）",Default=false,Callback=function(v) c.TouchAssist=v end})
+    tab:AddSlider("AOTRTouchFlySpeed",{Title="触摸飞行速度",Min=30,Max=400,Default=120,Rounding=0,
+        Callback=function(v) c.TouchFlySpeed=v end})
+    tab:AddParagraph({Title="触屏飞行操作",
+        Content="右半屏单指左右=侧移，单指上下=前后，双指上下=升降，均按相机朝向映射。松手或关闭仅停止写入并保留当前动量，不自动制动。"})
+    tab:AddToggle("AOTRAntiAFK",{Title="反挂机",Default=true,Callback=function(v) c.AntiAFK=v end})
+    tab:AddButton({Title="远程传送回大厅",Callback=function()
+        if Movement.TeleportLobby then Movement.TeleportLobby() end
+    end})
+end
+
+--=========================================================================
+-- UI: farm.
+--=========================================================================
+if Farm then
+    local c=Farm.Config
+    local tab=tabs.farm
+    tab:AddToggle("AOTRAutoReload",{Title="自动换刃（刀片耗尽）",Default=false,
+        Callback=function(v) c.AutoReload=v end})
+    tab:AddToggle("AOTRAutoRefill",{Title="自动补给（气罐/弹药）",Default=false,
+        Callback=function(v) c.AutoRefill=v end})
+    tab:AddToggle("AOTRFPSSettings",{Title="服务端画质设置（关特效）",Default=true,
+        Callback=function(v)
+            c.FPSSettings=v
+        end})
+    tab:AddParagraph({Title="农场说明",
+        Content="换刃/补给读取 HUD 计数后调用游戏远程；画质设置走服务端 Settings 远程，不留本地渲染改动。"})
+end
+
+--=========================================================================
+-- UI: settings (camera + debug + status + unload), preserving the original
+-- local FOV control and scene awareness.
+--=========================================================================
+local AOTRWorkspace=app.Services.Workspace or workspace
+local cameraDefaults={}
+local camera=AOTRWorkspace and AOTRWorkspace.CurrentCamera
+local defaultFov=camera and camera.FieldOfView or 70
+local fovOn=false
+local fovValue=math.clamp(math.floor(defaultFov),60,110)
+local function restoreCameraFov()
+    for cam,original in pairs(cameraDefaults) do
+        pcall(function() cam.FieldOfView=original end)
+    end
+    table.clear(cameraDefaults)
+end
+local function applyCameraFov(cam)
+    if not cam or not fovOn or not app:Alive() then return end
+    if cameraDefaults[cam]==nil then cameraDefaults[cam]=cam.FieldOfView or 70 end
+    if fovOn then cam.FieldOfView=fovValue end
+end
+tabs.settings:AddToggle("AOTRCameraFovOn",{Title="启用视场角修改",Default=false,Callback=function(v)
+    if not app:Alive() then return end
+    fovOn=v
+    local cam=AOTRWorkspace and AOTRWorkspace.CurrentCamera
+    if v then applyCameraFov(cam)
+    else
+        restoreCameraFov()
+    end
+end})
+tabs.settings:AddSlider("AOTRCameraFov",{Title="本地视场角",Min=60,Max=110,Default=math.clamp(math.floor(defaultFov),60,110),Rounding=0,
+    Callback=function(v)
+        if not app:Alive() then return end
+        fovValue=v
+        if fovOn then applyCameraFov(AOTRWorkspace and AOTRWorkspace.CurrentCamera) end
+    end})
+if AOTRWorkspace and AOTRWorkspace.GetPropertyChangedSignal then
+    app:Track(AOTRWorkspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        if not app:Alive() then return end
+        restoreCameraFov()
+        applyCameraFov(AOTRWorkspace.CurrentCamera)
+    end))
+end
+app:OnStop(function()
+    fovOn=false
+    restoreCameraFov()
+end)
+tabs.settings:AddToggle("AOTRDebug",{Title="调试日志",Default=false,Callback=function(v)
+    app.Debug=v
+end})
+tabs.settings:AddParagraph({Title="场景识别",
+    Content="仅在已核实的任务 PlaceId 中启动；未识别地图不会误加载战斗脚本。"})
+tabs.settings:AddButton({Title="子模块初始化诊断",Callback=function()
+    app:Notify(#bootFailures > 0 and table.concat(bootFailures, " / ") or "已调用全部子模块工厂；玩法有效性仍需实机测试")
+end})
+tabs.settings:AddButton({Title="运行状态",Callback=function()
+    local Titans,Combat,Farm=app.Titans,app.Combat,app.Farm
+    local remotes=app.Remotes
+    local titanInfo=Titans and ("巨人 "..tostring(Titans:Count())) or "巨人池未加载"
+    local combatInfo=Combat and ("锁定 "..tostring(Combat:DebugSnapshot().locked)) or "战斗未加载"
+    app:Notify(("GET=%s POST=%s / %s / %s"):format(
+        tostring(remotes.GET~=nil),tostring(remotes.POST~=nil),titanInfo,combatInfo))
+end})
+tabs.settings:AddButton({Title="卸载全部 AOTR 功能",Callback=function()
+    local client=(getgenv and getgenv()) or _G
+    if type(client.VortexionAOTRCleanup)=="function" then
+        pcall(client.VortexionAOTRCleanup)
+    end
+    pcall(function() app.ui:Destroy() end)
+end})
+
+app:Status(tabs.settings)
+window:SelectTab(1)
+app:Notify("战斗模块已加载：进入任务后启用对应功能")
+
+end
+return GameRouter.Run(WindUI, WindBridgeFactory, entry, game.GameId, game.PlaceId, "AOTR_Battle")
+end
