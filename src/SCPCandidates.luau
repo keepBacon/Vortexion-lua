@@ -11,7 +11,7 @@ return function(common)
 	local Camera = Workspace.CurrentCamera
 
 	local Candidates = {}
-	Candidates.MAX_CANDIDATES = 24
+	Candidates.MAX_CANDIDATES = 56
 	Candidates.REGION_PARTS = {
 		Head = { "Head" },
 		Torso = { "HumanoidRootPart", "UpperTorso", "LowerTorso", "Torso" },
@@ -24,7 +24,58 @@ return function(common)
 	local roster = Players:GetPlayers()
 	local accumulator = 0
 	local dirty = true
-	Candidates.Config = { TickRate = 20 }
+	Candidates.Config = { TickRate = 30 }
+    local function normalize(value)
+        return tostring(value or ""):lower():gsub("[^%w]", "")
+    end
+    local function teamName(player)
+        if not player then return "" end
+        local team=player.Team
+        return team and team.Name or player:GetAttribute("Team") or player:GetAttribute("Faction") or ""
+    end
+    function Candidates:GetSide(player)
+        if not player then return "SCP" end
+        local raw=normalize(teamName(player))
+        if raw:find("chaos") or raw:find("insurgenc") or raw:find("hostile") then return "HOSTILE" end
+        if raw:find("classd") or raw:find("prisoner") or raw:find("neutral") then return "NEUTRAL" end
+        if raw:find("foundation") or raw:find("security") or raw:find("scientific")
+            or raw:find("taskforce") or raw:find("intelligence") or raw:find("response")
+            or raw:find("medical") or raw:find("administrative") or raw:find("o5") then
+            return "FOUNDATION"
+        end
+        return "UNKNOWN"
+    end
+    -- UNKNOWN falls back to exact Team comparison; do not mark all unrecognized teams hostile.
+    function Candidates:IsHostile(cand)
+        if not cand.Player then return true end
+        local targetSide=self:GetSide(cand.Player)
+        local localSide=self:GetSide(Players.LocalPlayer)
+        if targetSide=="NEUTRAL" or localSide=="NEUTRAL" then return false end
+        if targetSide~="UNKNOWN" and localSide~="UNKNOWN" and localSide~="NEUTRAL" then
+            return targetSide~=localSide
+        end
+        if cand.Player.Team and Players.LocalPlayer.Team then
+            return cand.Player.Team~=Players.LocalPlayer.Team
+        end
+        return false
+    end
+    function Candidates:GetJob(cand)
+        if not cand.Player then return "SCP收容体" end
+        local player=cand.Player
+        for _,attr in ipairs({"Job", "Role", "TeamRole", "Rank", "TeamRank", "Title"}) do
+            local value=player:GetAttribute(attr)
+            if type(value)=="string" and value~="" then return value end
+        end
+        local stats=player:FindFirstChild("leaderstats")
+        if stats then
+            for _,name in ipairs({"Rank","Role","Job"}) do
+                local item=stats:FindFirstChild(name)
+                if item and item:IsA("StringValue") and item.Value~="" then return item.Value end
+            end
+        end
+        local name=teamName(player)
+        return name~="" and tostring(name) or "未知职位"
+    end
 	local rosterConns = {
 		Players.PlayerAdded:Connect(function(player) table.insert(roster, player) dirty = true end),
 		Players.PlayerRemoving:Connect(function(player)
@@ -62,9 +113,10 @@ return function(common)
 
 	local function resolveCandidate(player, character, humanoid)
 		if not character.Parent then return nil end
-		local head = character:FindFirstChild("Head")
-		local hrp = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
-		if not (head and hrp and head:IsA("BasePart") and hrp:IsA("BasePart")) then return nil end
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+            or character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+        local head = character:FindFirstChild("Head") or hrp
+        if not (head and hrp and head:IsA("BasePart") and hrp:IsA("BasePart")) then return nil end
 		if humanoid.Health <= 0 then return nil end
 
 		local cand = {
@@ -152,11 +204,10 @@ return function(common)
 		table.sort(pool, function(a, b) return a.WorldDistance < b.WorldDistance end)
 		for i = #pool, Candidates.MAX_CANDIDATES + 1, -1 do pool[i] = nil end
 		-- Only project the bounded nearest pool, not every player in the server.
-		for _, cand in ipairs(pool) do
-			cand.AnchorScreen = Camera:WorldToViewportPoint(cand.Anchor.Position)
-			cand.TopScreen, cand.TopOnScreen = Camera:WorldToViewportPoint(cand.Head.Position + Vector3.new(0, 1.5, 0))
-			cand.BotScreen = Camera:WorldToViewportPoint(cand.HRP.Position - Vector3.new(0, 1.5, 0))
-		end
+        for _,cand in ipairs(pool) do
+            cand.AnchorScreen = Camera:WorldToViewportPoint(cand.Anchor.Position)
+            cand.TopOnScreen = cand.AnchorScreen.Z>0
+        end
 	end
 
 	function Candidates:Get()

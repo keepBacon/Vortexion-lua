@@ -31,13 +31,13 @@ return function(common)
 	local Hitbox = {}
 	local Config = {
 		Enabled = false,
-		ScaleMax = 1.5,
+		ScaleMax = 1.8,
 		HeadScale = 1,
 		TorsoScale = 1,          -- peak multiplier at point blank
-		MaxDistance = 250,       -- studs; beyond this no expansion
-		FOV = 120,               -- px; only on/near-screen candidates
-		TickRate = 20,           -- Hz
-		MaxActive = 3,           -- simultaneous characters per tick
+		MaxDistance = 500,       -- studs; beyond this no expansion
+		FOV = 600,               -- px; only on/near-screen candidates
+		TickRate = 12,           -- Hz
+		MaxActive = 8,           -- simultaneous characters per tick
 		GrowAlpha = 0.35,        -- lerp toward target size
 		ShrinkAlpha = 0.5,       -- lerp back during collapsing
 		PendingMs = 250,         -- grace period before collapsing
@@ -46,7 +46,8 @@ return function(common)
 		AnisoY = 1.3,
 		MaxEdge = 10,            -- studs, hard clamp on any axis
 		MaxRatio = 2.2,          -- multiplier clamp on any axis
-		Mode = "lockedOnly",     -- lockedOnly | fullBody | all
+		Mode = "all",     -- lockedOnly | fullBody | all
+        TargetNPCs = true, OnlyHostile = false,
 		RigParts = {
 			R15 = { "Head", "UpperTorso", "LowerTorso" },
 			R15Full = { "Head", "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg" },
@@ -55,6 +56,7 @@ return function(common)
 		},
 	}
 	Hitbox.Config = Config
+    Hitbox.Stats = { Eligible=0, Expanded=0, LastError="" }
 
 	-- key: Player (or Model for NPCs) -> state
 	local states = {}
@@ -175,7 +177,10 @@ return function(common)
 
 		local eligible = {}
 		for _, cand in ipairs(common.Candidates:Get()) do
-			if Config.Mode ~= "lockedOnly" or (locked and cand.Character == locked.Character) then
+			if (not Config.OnlyHostile or not common.Candidates.IsHostile
+                or common.Candidates:IsHostile(cand))
+                and (cand.Player or Config.TargetNPCs)
+                and (Config.Mode ~= "lockedOnly" or (locked and cand.Character == locked.Character)) then
 				if cand.Character.Parent and cand.Humanoid.Health > 0 and (not cand.Player or cand.Player.Character == cand.Character)
 					and cand.WorldDistance <= Config.MaxDistance and cand.TopOnScreen then
 					local screen = Vector2.new(cand.AnchorScreen.X, cand.AnchorScreen.Y)
@@ -227,8 +232,9 @@ return function(common)
 		local elapsed = accumulator
 		accumulator %= interval
 
-		local eligible = gatherEligible()
-		local seen = {}
+        local eligible = gatherEligible()
+        Hitbox.Stats.Eligible = #eligible
+        local seen = {}
 
 		-- Expand nearest-first, capped at MaxActive.
 		local expanded = 0
@@ -255,7 +261,8 @@ return function(common)
 			end
 		end
 
-		-- Grace/collapse the rest.
+        Hitbox.Stats.Expanded=expanded
+        -- Grace/collapse the rest.
 		for key, state in pairs(states) do
 			if not seen[key] then
 				if state.phase == "expanding" then

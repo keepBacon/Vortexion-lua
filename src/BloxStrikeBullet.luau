@@ -53,6 +53,8 @@ return function(c)
         cost = 0,
         errors = 0,
         weaponProbe = "not run",
+        hitscanCalls = 0,
+        hitscanRewrites = 0,
     }
 
     --==========================================================================
@@ -62,28 +64,67 @@ return function(c)
     -- No server acceptance is presumed from local camera/spread changes.
     --==========================================================================
     local mods = {recoil=false, spread=false, patches={}, candidates=0,
-        checked=0, status="not scanned", patchErrors=0, calls=0}
+        checked=0, status="not scanned", patchErrors=0, calls=0,
+        nativeHooks=0, tablePatches=0, enabledAt=0, lastCallAt=0,
+        retries=0, lastScan=0, workerRunning=false}
+    -- R225: changing owner[key] alone does NOT affect functions captured by
+    -- BloxStrike's controller at startup. Prefer a real executor hookfunction
+    -- when supported. Record the original trampoline for explicit teardown.
     local function recordPatch(owner, key, replacement)
         if type(owner) ~= "table" or type(rawget(owner, key)) ~= "function" then return false end
-        for _, entry in ipairs(mods.patches) do
-            if entry.owner == owner and entry.key == key then return true end
+        for _, item in ipairs(mods.patches) do
+            if item.owner == owner and item.key == key then return true end
         end
-        local original = rawget(owner, key)
-        local ok = pcall(function() owner[key] = replacement(original) end)
+        local target = rawget(owner, key)
+        local hookOriginal
+        local function forward(...)
+            return (hookOriginal or target)(...)
+        end
+        local wrapper = replacement(forward)
+        if c.Caps and c.Caps.hookfunction and type(hookfunction) == "function" then
+            local ok, original = pcall(function()
+                return hookfunction(target, wrapper)
+            end)
+            if ok and type(original) == "function" then
+                hookOriginal = original
+                mods.nativeHooks += 1
+                mods.patches[#mods.patches + 1] = {
+                    owner=owner, key=key, original=target, originalTrampoline=original,
+                    wrapper=wrapper, native=true,
+                }
+                return true
+            end
+            mods.patchErrors += 1
+        end
+        -- Fallback for executors without hookfunction. Mark explicitly as a
+        -- TABLE patch; it may be ineffective if the controller cached methods.
+        local ok = pcall(function() owner[key] = wrapper end)
         if not ok then mods.patchErrors += 1; return false end
-        mods.patches[#mods.patches+1] = {owner=owner,key=key,original=original,wrapper=owner[key]}
+        mods.tablePatches += 1
+        mods.patches[#mods.patches + 1] = {
+            owner=owner, key=key, original=target, wrapper=wrapper, native=false,
+        }
         return true
     end
     local function restoreWeaponMods()
         for i = #mods.patches, 1, -1 do
             local patch = mods.patches[i]
-            pcall(function()
-                if patch.owner[patch.key] == patch.wrapper then
-                    patch.owner[patch.key] = patch.original
+            if patch.native then
+                -- Restoring only hooks we installed; never reset arbitrary
+                -- unrelated functions or the global __namecall chain.
+                if type(hookfunction) == "function" then
+                    pcall(hookfunction, patch.original, patch.originalTrampoline)
                 end
-            end)
+            else
+                pcall(function()
+                    if patch.owner[patch.key] == patch.wrapper then
+                        patch.owner[patch.key] = patch.original
+                    end
+                end)
+            end
             mods.patches[i] = nil
         end
+        mods.nativeHooks, mods.tablePatches = 0, 0
     end
     local function findWeaponTables()
         local results, dedup = {}, {}
@@ -115,7 +156,7 @@ return function(c)
                 local seen = 0
                 for _, item in pairs(items) do
                     seen += 1
-                    if seen > 3500 then break end
+                    if seen > 12000 or #results >= 24 then break end
                     if type(item) == "table" then
                         if type(rawget(item,"weaponKick")) == "function"
                             or type(rawget(item,"getTrueSpread")) == "function"
@@ -140,7 +181,9 @@ return function(c)
         -- Install once; wrappers read current flags. This avoids churn and
         -- avoids leaking closures cached by the game's own controller.
         if #mods.patches > 0 then
-            mods.status = "active=" .. tostring(#mods.patches)
+            mods.status = "hooks=" .. tostring(mods.nativeHooks)
+                .. " table=" .. tostring(mods.tablePatches)
+                .. " calls=" .. tostring(mods.calls)
             return
         end
         local tables = findWeaponTables()
@@ -153,6 +196,7 @@ return function(c)
                         return function(...)
                             if mods.recoil then
                                 mods.calls += 1
+                                mods.lastCallAt = os.clock()
                                 if name == "getWeaponKickRotation" then return Vector3.zero end
                                 return nil
                             end
@@ -168,8 +212,16 @@ return function(c)
                         return function(...)
                             local value = original(...)
                             if mods.spread then
-                                if type(value) == "number" then mods.calls += 1; return 0 end
-                                if typeof(value) == "Vector3" then mods.calls += 1; return Vector3.zero end
+                                if type(value) == "number" then
+                                    mods.calls += 1
+                                    mods.lastCallAt = os.clock()
+                                    return 0
+                                end
+                                if typeof(value) == "Vector3" then
+                                    mods.calls += 1
+                                    mods.lastCallAt = os.clock()
+                                    return Vector3.zero
+                                end
                             end
                             return value
                         end
@@ -177,11 +229,32 @@ return function(c)
                 end
             end
         end
-        mods.status = patched > 0 and ("patched=" .. tostring(patched)) or "not supported: class unavailable"
+        mods.status = patched > 0
+            and ("hooks=" .. tostring(mods.nativeHooks) .. " table=" .. tostring(mods.tablePatches)
+                .. " observed calls=" .. tostring(mods.calls))
+            or "unsupported: weapon methods not located"
     end
     local function setWeaponMod(kind, enabled)
         mods[kind] = enabled == true
+        mods.enabledAt = os.clock()
         installWeaponMods()
+        if not (mods.recoil or mods.spread) then return end
+        -- Controller and gun modules often appear only after a match begins.
+        -- Rescan at most eight times, bounded, without per-frame getgc calls.
+        if mods.workerRunning or type(task) ~= "table" then return end
+        if type(task.spawn) ~= "function" or type(task.wait) ~= "function" then return end
+        mods.workerRunning = true
+        task.spawn(function()
+            for attempt = 1, 8 do
+                task.wait(2.5)
+                if not (mods.recoil or mods.spread) or not c.IsCurrent() then break end
+                if #mods.patches == 0 then
+                    mods.retries += 1
+                    installWeaponMods()
+                end
+            end
+            mods.workerRunning = false
+        end)
     end
     c.OnCleanup(function()
         mods.recoil, mods.spread = false, false
@@ -317,56 +390,86 @@ return function(c)
         local dir = (aimPos - origin)
         if dir.Magnitude < 0.01 then return nil end
         packed[direction.index] = dir.Unit * direction.value.Magnitude
+        state.hitscanRewrites += 1
         c.Log("Bullet", "hitscan rewrite idx", direction.index)
         return packed
     end
 
+    -- R225: the old module-only path no longer locates gun/bullet classes in
+    -- modern BloxStrike. The game may instantiate them into GC tables before
+    -- exposing a stable ReplicatedStorage.Components.Weapon class hierarchy.
+    -- Only opt-in Hitscan/Auto (desktop) paths call this; no global hooks on boot.
     local function installHitscanHooks()
         if not c.Caps.hookfunction then return false end
-        local ok, err = pcall(function()
-            local components = ReplicatedStorage:FindFirstChild("Components")
-            local weaponRoot = components and components:FindFirstChild("Weapon")
-            if not weaponRoot then
-                c.Log("Bullet", "no Components.Weapon; hitscan unavailable")
-                return
+        local function hookMethod(owner, key)
+            if type(owner) ~= "table" then return false end
+            local fn = rawget(owner, key)
+            if type(fn) ~= "function" or state.weaponFunctions[fn] then return false end
+            local original
+            local ok = pcall(function()
+                original = hookfunction(fn, function(...)
+                    state.hitscanCalls += 1
+                    local didRewrite, rewritten = pcall(rewriteHitscanArgs, ...)
+                    if didRewrite and rewritten then
+                        return original(table.unpack(rewritten, 1, rewritten.n))
+                    end
+                    return original(...)
+                end)
+            end)
+            if ok and type(original) == "function" then
+                state.weaponFunctions[fn] = original
+                return true
             end
-            local classes = weaponRoot:FindFirstChild("Classes")
-            local scanRoots = classes and { classes } or { weaponRoot }
-            local hooked = 0
-            for _, root in ipairs(scanRoots) do
-                for _, module in ipairs(root:GetDescendants()) do
-                    if module:IsA("ModuleScript") and hooked < 12 then
-                        local okRequire, result = pcall(require, module)
-                        if okRequire and type(result) == "table" then
-                            for key, value in pairs(result) do
-                                if type(value) == "function" and nameLooksWeapon(key) and hooked < 12 and not state.weaponFunctions[value] then
-                                    local original
-                                    local okHook = pcall(function()
-                                        original = hookfunction(value, function(...)
-                                            local okRw, rewritten = pcall(rewriteHitscanArgs, ...)
-                                            if okRw and rewritten then
-                                                return original(unpack(rewritten, 1, rewritten.n))
-                                            end
-                                            return original(...)
-                                        end)
-                                    end)
-                                    if okHook and original then
-                                        state.weaponFunctions[value] = original
-                                        hooked += 1
-                                    end
-                                end
-                            end
-                        end
+            state.errors += 1
+            return false
+        end
+        local function hookClass(owner)
+            if type(owner) ~= "table" then return 0 end
+            -- 'shoot' / 'create' match current GunClass and Bullet signatures;
+            -- do not blindly hook every function from game GC.
+            local matched = 0
+            for _, name in ipairs({"create", "shoot", "raycast", "cast", "trace"}) do
+                if hookMethod(owner, name) then matched += 1 end
+            end
+            return matched
+        end
+        local hooked = 0
+        local roots = {}
+        local function addModule(start, ...)
+            local node = start
+            for _, key in ipairs({...}) do node = node and node:FindFirstChild(key) end
+            if node and node:IsA("ModuleScript") then
+                local ok, result = pcall(require, node)
+                if ok and type(result) == "table" then roots[#roots + 1] = result end
+            end
+        end
+        addModule(ReplicatedStorage, "Components", "Weapon", "Classes", "Bullet")
+        addModule(ReplicatedStorage, "Controllers", "CameraController")
+        if type(getgc) == "function" then
+            local ok, items = pcall(getgc, true)
+            if ok and type(items) == "table" then
+                local examined = 0
+                for _, item in pairs(items) do
+                    examined += 1
+                    if examined > 12000 or #roots >= 30 then break end
+                    if type(item) == "table" then
+                        local isGun = type(rawget(item, "shoot")) == "function"
+                            and (type(rawget(item, "setupRecoil")) == "function"
+                                 or type(rawget(item, "getSpread")) == "function")
+                        local isBullet = type(rawget(item, "create")) == "function"
+                            and (type(rawget(item, "getTrueSpread")) == "function"
+                                 or type(rawget(item, "getSpreadForConfig")) == "function")
+                        if isGun or isBullet then roots[#roots + 1] = item end
                     end
                 end
             end
-            c.Log("Bullet", "hitscan hooks", hooked)
-        end)
-        if not ok then
-            state.errors += 1
-            c.Log("Bullet", "hitscan install failed", err)
         end
-        return ok and next(state.weaponFunctions) ~= nil
+        for _, owner in ipairs(roots) do
+            hooked += hookClass(owner)
+            if hooked >= 12 then break end
+        end
+        c.Log("Bullet", "game class hooks", hooked, "calls", state.hitscanCalls)
+        return hooked > 0
     end
 
     --=========================================================================
@@ -666,7 +769,14 @@ return function(c)
             costMs = math.floor(state.cost * 100000) / 100,
             probe = state.weaponProbe,
             needsAim = state.activePath == "LeadOnly" and not (c.Combat and c.Combat.IsActive and c.Combat:IsActive()),
+            hitscanCalls = state.hitscanCalls,
+            hitscanRewrites = state.hitscanRewrites,
             weaponMods = mods.status, weaponCalls = mods.calls,
+            weaponNativeHooks = mods.nativeHooks, weaponTablePatches = mods.tablePatches,
+            weaponObserved = mods.calls > 0,
+            weaponLastCallAt = mods.lastCallAt,
+            weaponEnabled = mods.recoil or mods.spread,
+            weaponRetries = mods.retries,
             weaponCandidates = mods.candidates, weaponPatchErrors = mods.patchErrors,
         }
     end
@@ -696,20 +806,35 @@ return function(c)
     -- UI (Weapon tab): bullet tracking controls replace the old placeholder.
     --=========================================================================
     local tab = c.Tabs.Weapon
-    tab:AddParagraph({Title="BloxStrike 武器模块增强", Content="优先检查 CameraController 和 Bullet 实际方法签名；仅在主动开启时安装可撤销的本地方法适配。无法取得类时报告不支持，不伪造效果。"})
+    tab:AddParagraph({Title="BloxStrike 武器模块 R225", Content="按实战 controller/GC 类定位；优先 native hookfunction，失败才替换表方法。界面开关不等于武器方法被调用；可用下方诊断检查实时调用计数。"})
     tab:AddToggle("BloxWeaponNoRecoilR219", {Title="降低本地枪械后坐力", Default=false,
         Callback=function(v) setWeaponMod("recoil", v) end})
     tab:AddToggle("BloxWeaponNoSpreadR219", {Title="本地枪械散布控制", Default=false,
         Callback=function(v) setWeaponMod("spread", v) end})
     tab:AddButton({Title="检查武器修改器状态", Callback=function()
         local snapshot = Bullet:Status()
-        print(("[Vortexion/WeaponMods] status=%s candidates=%d calls=%d errors=%d")
-            :format(snapshot.weaponMods, snapshot.weaponCandidates, snapshot.weaponCalls, snapshot.weaponPatchErrors))
+        print(("[Vortexion/WeaponMods] status=%s candidates=%d native=%d table=%d calls=%d retries=%d errors=%d")
+            :format(snapshot.weaponMods, snapshot.weaponCandidates, snapshot.weaponNativeHooks,
+                snapshot.weaponTablePatches, snapshot.weaponCalls, snapshot.weaponRetries, snapshot.weaponPatchErrors))
+        if c.Notify then
+            local detail = snapshot.weaponObserved and "调用已命中；服务器效果待实测"
+                or (snapshot.weaponNativeHooks > 0 and "已 Hook 但尚无实际调用"
+                or (snapshot.weaponTablePatches > 0 and "仅替换表方法，游戏可能已缓存函数"
+                or "没有定位到武器方法；请在战斗中重试"))
+            c.Notify("武器诊断", detail)
+        end
     end})
     tab:AddParagraph({ Title = "子弹追踪",
         Content = "默认 LeadOnly 只提供瞄准预测，不会改写子弹；联动开启瞄准辅助后才有客户端可见效果。Hitscan/Remote 需有效游戏接口和执行器权限，未确认服务器命中。" })
     tab:AddToggle("BloxBulletLinkCombat", { Title = "子弹追踪联动开启瞄准辅助", Default = true,
         Callback = function(v) Config.LinkCombat = v end })
+    tab:AddButton({ Title = "检查实际子弹 Hook 调用次数", Callback = function()
+        local s = Bullet:Status()
+        local info = ("路径=%s Hook=%d / 类方法调用=%d / 参数修改=%d / 错误=%d"):
+            format(tostring(s.path),s.hooks,s.hitscanCalls,s.hitscanRewrites,s.errors)
+        print("[Vortexion/Blox/Bullet] " .. info)
+        if c.Notify then c.Notify("子弹 Hook 诊断",info) end
+    end })
     tab:AddButton({ Title = "检查真实武器类（只读安全扫描）", Callback = function()
         local msg = probeRuntimeWeapon()
         print("[Vortexion/Blox/Weapon] " .. msg)

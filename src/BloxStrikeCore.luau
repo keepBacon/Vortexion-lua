@@ -202,6 +202,15 @@ local renderPartCache = setmetatable({}, {__mode = "k"})
 local function numberVitals(model, player)
     local health = model:GetAttribute("Health")
     local maximum = model:GetAttribute("MaxHealth")
+    -- BloxStrike's health state is sometimes on the owning Player instead.
+    if health == nil and player and type(player.GetAttribute) == "function" then
+        health = player:GetAttribute("Health")
+    end
+    if maximum == nil and player and type(player.GetAttribute) == "function" then
+        maximum = player:GetAttribute("MaxHealth")
+    end
+    if type(health) == "string" then health = tonumber(health) end
+    if type(maximum) == "string" then maximum = tonumber(maximum) end
     local healthObject = model:FindFirstChild("Health")
     if health == nil and healthObject and healthObject:IsA("NumberValue") then health = healthObject.Value end
     if maximum == nil then
@@ -222,7 +231,10 @@ local function numberVitals(model, player)
 end
 local function livingCharacter(player)
     local model = characterOf(player)
-    if not model or not model.Parent or not model:IsA("Model") or model:GetAttribute("Dead") == true then return nil end
+    if not model or not model.Parent or not model:IsA("Model") then return nil end
+    if tostring(model:GetAttribute("Dead")) == "true" then return nil end
+    if player and type(player.GetAttribute) == "function"
+        and tostring(player:GetAttribute("Dead")) == "true" then return nil end
     if model:GetAttribute("Alive") == false then return nil end
     local hum = model:FindFirstChildOfClass("Humanoid")
     if hum then
@@ -243,15 +255,41 @@ local function livingCharacter(player)
     return nil
 end
 
-local function isEnemy(player,checkTeam)
-    if player==LocalPlayer then return false end
-    if checkTeam==false or Workspace:GetAttribute("Gamemode")=="Deathmatch" then return true end
-    local localTeam=teamFolder(LocalPlayer)
-    local otherTeam=teamFolder(player)
-    if localTeam and otherTeam then return localTeam~=otherTeam end
-    local a,b=LocalPlayer:GetAttribute("Team"),player:GetAttribute("Team")
-    if a~=nil and b~=nil then return a~=b end
-    if LocalPlayer.Team and player.Team then return LocalPlayer.Team~=player.Team end
+-- R225: Characters is a character *container*, NOT a team. In modern
+-- BloxStrike, all players/bots sit directly under this folder. Its common
+-- parent made teamFolder(LocalPlayer)==teamFolder(enemy), silently filtering
+-- every target from ESP, RageBot and aim. Resolve game attributes first.
+local function teamOf(player)
+    if not player then return nil end
+    local model = characterOf(player)
+    local function attribute(obj, key)
+        if not obj or type(obj.GetAttribute) ~= "function" then return nil end
+        local ok, value = pcall(function() return obj:GetAttribute(key) end)
+        return ok and value or nil
+    end
+    local direct = attribute(player, "Team") or attribute(model, "Team")
+    if direct ~= nil and tostring(direct) ~= "" then return tostring(direct) end
+    local look = attribute(model, "CharacterName")
+    if look ~= nil then
+        if look == Workspace:GetAttribute("CTCharacter") then return "Counter-Terrorists" end
+        if look == Workspace:GetAttribute("TCharacter") then return "Terrorists" end
+    end
+    local team = player.Team
+    if team then return tostring(team.Name or team) end
+    local folder = teamFolder(player)
+    local characters = Workspace:FindFirstChild("Characters")
+    -- A genuine CT/T grouping folder can act as a last-resort team hint.
+    if folder and folder ~= characters and folder.Name then return tostring(folder.Name) end
+    return nil
+end
+local function isEnemy(player, checkTeam)
+    if player == LocalPlayer then return false end
+    if checkTeam == false then return true end
+    local mode = tostring(Workspace:GetAttribute("Gamemode") or "")
+    if mode:find("Deathmatch", 1, true) then return true end
+    local mine, theirs = teamOf(LocalPlayer), teamOf(player)
+    if mine ~= nil and theirs ~= nil then return mine ~= theirs end
+    -- Unknown is not 'same team'. The caller may offer a manual override.
     return true
 end
 local function playerFromModel(model)
@@ -268,7 +306,7 @@ local ctx={
     LocalPlayer=LocalPlayer,UI=ui,Window=window,Tabs=tabs,
     Notify=notify,IsCurrent=isCurrent,Own=ownConnection,OnCleanup=ownCleanup,
     Character=characterOf,Living=livingCharacter,TeamFolder=teamFolder,
-    Enemy=isEnemy,PlayerFromModel=playerFromModel,Targets=targets,
+    Enemy=isEnemy,TeamOf=teamOf,PlayerFromModel=playerFromModel,Targets=targets,
 }
 
 --=========================================================================
@@ -429,10 +467,23 @@ tabs.Settings:AddButton({Title="检查运行状态",Callback=function()
     local weapon=components and components:FindFirstChild("Weapon")
     local bullet=weapon and weapon:FindFirstChild("Classes") and weapon.Classes:FindFirstChild("Bullet")
     local status=ctx.Bullet and ctx.Bullet:Status() or {}
+    ensureRoster()
+    local sample, enemies = {}, 0
+    for _, person in ipairs(folderCache.roster) do
+        if person ~= LocalPlayer then
+            if isEnemy(person, true) then enemies = enemies + 1 end
+            if #sample < 3 then
+                sample[#sample + 1] = tostring(person.Name) .. "=" .. tostring(teamOf(person))
+            end
+        end
+    end
     notify("运行环境检查",(characters and "角色目录正常" or "角色目录未加载")
         .." / "..(skins and "皮肤目录正常" or "皮肤目录未加载")
         .." / "..(weapon and "武器组件正常" or "武器组件未加载")
         .." / "..(bullet and "Bullet 模块存在" or "Bullet 模块未找到")
+        .." / 队伍=" .. tostring(teamOf(LocalPlayer))
+        .." / 角色=" .. tostring(#folderCache.roster) .." 敌人="..tostring(enemies)
+        .." / 样本="..table.concat(sample, ",")
         .." / 追踪路径 "..tostring(status.path or "-"))
 end})
 tabs.Settings:AddButton({Title="性能状态",Callback=function()

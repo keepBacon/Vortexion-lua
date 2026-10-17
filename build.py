@@ -37,6 +37,7 @@ SCP_MODULES = [
     ("SCPHitboxFactory", "SCPHitbox.luau"),
     ("SCPMovementFactory", "SCPMovement.luau"),
     ("SCPESPFactory", "SCPESP.luau"),
+    ("SCPInteractFactory", "SCPInteract.luau"),
 ]
 GAMES = {
     "Forsaken": ("ForsakenCore.luau", [("ForsakenEnhancementsFactory", "ForsakenEnhancements.luau"), ("ForsakenPuzzlePlannerFactory", "ForsakenPuzzlePlanner.luau"), ("ForsakenPuzzleAutoFactory", "ForsakenPuzzleAuto.luau")]),

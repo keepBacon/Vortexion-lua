@@ -1,9 +1,9 @@
 {
   "build_tag": "loader-v2-modular-r224-neverlose-mobile",
   "core": {
-    "bytes": 466425,
+    "bytes": 449316,
     "path": "dist/Vortexion_Core.lua",
-    "sha256": "dcf6b9b2b56d1f1647958619247cc8bfbdccfa4e5fb55d873cc0386b8b392a40"
+    "sha256": "0d56cbc1ee643ab8022b92d497271024a1eaeeb86f95a5161f7b1a6bd8e18e31"
   },
   "fallback": "standalone-bundle-manual-only",
   "modules": {
@@ -18,9 +18,9 @@
       "sha256": "ac816cabf202ec3062c3d0dac599613b990d8ab8cfad2cb2012ec0c3453e77d1"
     },
     "BloxStrike": {
-      "bytes": 209882,
+      "bytes": 220175,
       "path": "dist/Vortexion_Module_BloxStrike.lua",
-      "sha256": "7cccd10d40d6e8b8162cc8ec14100f79980f9ff4b5e8b3886a062901dfb802de"
+      "sha256": "2b30c51673d03327dc89ca8ef1a556bd24ac41b37cabace0230297525a899be4"
     },
     "Forsaken": {
       "bytes": 93022,
@@ -28,9 +28,9 @@
       "sha256": "989eb5d397f8afcf28208d183a5c25733ba358c11f231026580531f59dabba8c"
     },
     "SCP": {
-      "bytes": 130512,
+      "bytes": 123518,
       "path": "dist/Vortexion_Module_SCP.lua",
-      "sha256": "391da577f0a3de26a7cdecb9cfb715871e7780e3a8fa1f798684abd151ca1be5"
+      "sha256": "650c4d0f5693ed0f50c2cf88786f4b312c774a326e7a780ce8cdbe3c3eee45aa"
     }
   },
   "routes": {

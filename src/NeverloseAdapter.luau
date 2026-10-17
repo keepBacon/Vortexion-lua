@@ -60,7 +60,7 @@ return function(Neverlose, config)
         self.NoticeHistory[#self.NoticeHistory+1]=record
         if #self.NoticeHistory>20 then table.remove(self.NoticeHistory,1) end
         if not self.NativeNoticesEnabled then print("[Vortexion/Notice] "..record); return end
-        local ok,err=pcall(function() Neverlose:Notification({Title=title,Description=desc,Duration=seconds}) end)
+        local ok,err=pcall(function() Neverlose:Notify({Title=title,Text=desc,Time=seconds,AutoClose=true}) end)
         if not ok then self.LastError=tostring(err) end
     end
     local function trace(id,from,v,ok)
@@ -81,7 +81,7 @@ return function(Neverlose, config)
         table.clear(callbacks); table.clear(connections); table.clear(health)
         if env.VortexionWindBridge==self then env.VortexionWindBridge=nil end
         if env.VortexionNeverloseBridge==self then env.VortexionNeverloseBridge=nil end
-        pcall(function() Neverlose:Unload() end)
+        pcall(function() if Neverlose.Root then Neverlose.Root:Destroy() end end)
         window=nil; root=nil
     end
     bridge.Window=function() return window end
@@ -107,7 +107,7 @@ return function(Neverlose, config)
         local repaired=0
         if not self.Active then return 0 end
         for _,item in pairs(self.Options) do
-            if item.Kind=="Toggle" and item.Native and type(item.Native.Get)=="function" then
+            if item.Kind=="Toggle" and item.Native and (type(item.Native.Get)=="function" or item.Native.Value~=nil) then
                 local ok,value=pcall(function() return item.Native:Get() end)
                 if ok and type(value)=="boolean" and value~=item.Value then
                     if item:SyncFromNative() then repaired=repaired+1 end
@@ -130,146 +130,96 @@ return function(Neverlose, config)
 
     local function readInsets()
         if not bridge.SafeArea then return 0,0,0,0 end
-        local ok,top,bottom=pcall(function() return GuiService:GetGuiInset() end)
-        if not ok or not top or not bottom then return 0,0,0,0 end
-        -- Inset returns top-left and bottom-right Vector2, both are pixel offsets.
-        return clamp(finite(top.X,0),0,1000),clamp(finite(top.Y,0),0,1000),
-               clamp(finite(bottom.X,0),0,1000),clamp(finite(bottom.Y,0),0,1000)
+        local ok,t,b=pcall(function()return GuiService:GetGuiInset() end)
+        if not ok or not t or not b then return 0,0,0,0 end
+        return math.max(0,t.X), math.max(0,t.Y), math.max(0,b.X), math.max(0,b.Y)
     end
+    -- Original library geometry: 203 px left navigation + 643 px main canvas,
+    -- both at 682 px high. Never collapse columns or alter the Section tree.
     function bridge:FitViewport()
         if not self.Active or not root or not scale or not self.AutoFit then return end
         local cam=Workspace.CurrentCamera
         if not cam then return end
-        local viewport=cam.ViewportSize
-        local vx,vy=finite(viewport.X,0),finite(viewport.Y,0)
-        -- Avoid Roblox errors when camera viewport temporarily becomes (0,0),
-        -- NaN or infinity during rotation, app backgrounding or device resize.
-        if vx<=0 or vy<=0 then self.LastViewport="等待有效视口";return end
+        local view=cam.ViewportSize
+        if finite(view.X,0)<100 or finite(view.Y,0)<100 then return end
         local l,t,r,b=readInsets()
-        l,r=clamp(l,0,vx/3),clamp(r,0,vx/3)
-        t,b=clamp(t,0,vy/3),clamp(b,0,vy/3)
-        local width,height=math.max(1,vx-l-r),math.max(1,vy-t-b)
-        if width<=32 or height<=80 then self.LastViewport="视口暂不可用";return end
-        -- On portrait devices the Neverlose sidebar becomes compact and pages
-        -- reflow to a single column. The reference window is intentionally fixed
-        -- in logical pixels, with a single UIScale instance owned by this bridge.
-        local aspect=width/height
-        local menuWidth=mobile and (aspect < 0.86 and 460 or 690) or 790
-        local menuHeight=mobile and (aspect < 0.86 and 630 or 570) or 590
-        local sidebar=mobile and (aspect<0.86 and 112 or 172) or 192
-        local baseW=menuWidth
-        local baseH=menuHeight
-        local fit=math.min((width-16)/baseW,(height-20)/baseH,1.15)
-        local result=clamp(fit*uiScale,0.15,1.2)
-        -- Never place part of the menu outside the usable area, even in split-screen.
-        result=math.min(result,(width-8)/baseW,(height-8)/baseH)
-        if result<=0 or finite(result,0)<=0 then return end
-        local key=("%d:%d:%d:%d:%d:%d:%.3f:%d"):format(vx,vy,l,t,r,b,result,sidebar)
+        local width=math.max(1,view.X-l-r)
+        local height=math.max(1,view.Y-t-b)
+        local fit=math.min((width-20)/846,(height-20)/682,1.1)
+        local applied=clamp(fit*uiScale,0.2,1.4)
+        local key=('%d:%d:%d:%d:%.3f'):format(width,height,l,t,applied)
         if key==lastViewport then return end
         lastViewport=key
-        local anchor=Vector2.new(0.5,0.5)
-        root.AnchorPoint=anchor
-        root.Size=UDim2.fromOffset(baseW,baseH)
-        scale.Scale=result
-        root.Position=UDim2.fromOffset(l+width/2,t+height/2)
-        local elements=window.Native and window.Native.Items
-        if elements then
-            local sidebarFrame=elements.LeftTabs and elements.LeftTabs.Instance
-            if sidebarFrame then
-                sidebarFrame.AnchorPoint=Vector2.new(0,0)
-                sidebarFrame.Position=UDim2.fromOffset(0,55)
-                sidebarFrame.Size=UDim2.new(0,sidebar,1,-55)
-                sidebarFrame.ScrollBarThickness=mobile and 4 or 3
-            end
-            local content=elements.Content and elements.Content.Instance
-            if content then
-                content.Position=UDim2.fromOffset(sidebar,55)
-                content.Size=UDim2.new(1,-sidebar,1,-55)
-            end
-            for _,page in ipairs(window.Native.Pages) do
-                local items=page.Items
-                local btn=items and items.Inactive and items.Inactive.Instance
-                if btn then btn.Size=UDim2.new(1,-4,0,mobile and 44 or 40) end
-                local title=items and items.Text and items.Text.Instance
-                if title then
-                    title.Size=UDim2.new(1,-50,1,0)
-                    title.TextTruncate=Enum.TextTruncate.AtEnd
-                    title.TextSize=mobile and 13 or 14
-                end
-            end
-        end
-        -- Keep the mobile re-open handle below the OS safe area, not under its status bar.
-        if mobile and elements and elements.FloatingButton and elements.FloatingButton.Instance then
-            local floating=elements.FloatingButton.Instance
-            if floating.Position.Y.Scale==0 and floating.Position.Y.Offset<=40 then
-                floating.Position=UDim2.new(floating.Position.X.Scale,floating.Position.X.Offset,0,t+12)
-            end
-        end
+        scale.Scale=applied
+        root.AnchorPoint=Vector2.new(0,0)
+        root.Size=UDim2.fromOffset(643,682)
+        root.Position=UDim2.fromOffset(l+(width-846*applied)/2+203*applied,t+(height-682*applied)/2)
+        self.LastViewport=('%dx%d · %.0f%% · 原生双列'):format(width,height,applied*100)
         stats.resizes=stats.resizes+1
-        self.EffectiveScale=result
-        self.LastViewport=("%d×%d / UI %.2fx / 侧栏 %d"):format(vx,vy,result,sidebar)
     end
     local function bindCamera()
-        if cameraConn then cameraConn:Disconnect(); cameraConn=nil end
-        viewportCamera=Workspace.CurrentCamera
-        if viewportCamera then
-            cameraConn=viewportCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-                bridge:FitViewport()
+        if cameraConn then cameraConn:Disconnect();cameraConn=nil end
+        local cam=Workspace.CurrentCamera
+        if cam then
+            cameraConn=cam:GetPropertyChangedSignal('ViewportSize'):Connect(function()
+                lastViewport='';bridge:FitViewport()
             end)
             connections[#connections+1]=cameraConn
         end
-        bridge:FitViewport()
+        lastViewport='';bridge:FitViewport()
     end
 
+    local tabGroup
     local function createTab(pageName,icon,category)
-        if category and window.Native.Category then window.Native:Category(category) end
-        local sourcePage=window.Native:Page({Name=pageName, Icon=icon or "122669828593160", Columns=mobile and 1 or 2})
-        local tab={Native=sourcePage,Title=pageName,OptionCount=0,Sections={}}
-        -- Reference-like semantic grouping. Headings describe the page domain;
-        -- they are not invented feature switches. Alternating columns on PC,
-        -- stacked sections on touch portrait.
-        local headings
-        if pageName:find("视觉") or pageName:find("ESP") or pageName:find("感知") then
-            headings={"Main", "Players ESP", "World ESP", "Other"}
-        elseif pageName:find("世界") then
-            headings={"Main", "Ambient", "World ESP", "Other"}
-        elseif pageName:find("战斗") or pageName:find("自瞄") then
-            headings={"Main", "Targeting", "Advanced", "Other"}
-        else
-            headings={"Main", "Settings", "Advanced", "Other"}
+        -- Preserves native left navigation: TSection -> Tab -> alternating Section.
+        if category or not tabGroup then
+            tabGroup=window.Native:TSection(category or '游戏功能')
         end
-        local sectionLimit=mobile and 10 or 8
+        local sourcePage=tabGroup:Tab(pageName)
+        local tab={Native=sourcePage,Title=pageName,OptionCount=0,Sections={}}
+        local headings
+        if pageName:find('视觉') or pageName:find('ESP') or pageName:find('感知') then
+            headings={'Main','Players ESP','World ESP','Other'}
+        elseif pageName:find('战斗') or pageName:find('自瞄') then
+            headings={'Main','Targeting','Advanced','Other'}
+        elseif pageName:find('世界') then
+            headings={'Main','World','Visual','Other'}
+        else
+            headings={'Main','Settings','Advanced','Other'}
+        end
+        local sectionLimit=8
         local function newSection()
-            local index=#tab.Sections+1
-            local side=mobile and 1 or (index%2==0 and 2 or 1)
-            local heading=headings[math.min(index,#headings)]
-            if index>#headings then heading="Other · "..(index-#headings+1) end
-            local section=sourcePage:Section({Name=heading,Side=side})
-            table.insert(tab.Sections,section)
-            return section
+            local n=#tab.Sections+1
+            local name=headings[math.min(n,#headings)]
+            if n>#headings then name='Other · '..tostring(n-#headings+1) end
+            local native=sourcePage:Section(name)
+            tab.Sections[#tab.Sections+1]=native
+            return native
         end
         local function sectionFor()
-            if (tab.OptionCount-1)%sectionLimit==0 then return newSection() end
-            return tab.Sections[#tab.Sections] or newSection()
+            if #tab.Sections==0 or tab.OptionCount>1 and (tab.OptionCount-1)%sectionLimit==0 then
+                return newSection()
+            end
+            return tab.Sections[#tab.Sections]
         end
         local function addOption(kind,id,c)
-            c=c or {}; id=tostring(id)
-            assert(bridge.Options[id]==nil,"重复选项 ID: "..id)
+            c=c or {};id=tostring(id)
+            assert(bridge.Options[id]==nil,'重复选项 ID: '..id)
             local values=copy(c.Values or {})
             local low,high=finite(c.Min,0),finite(c.Max,100)
-            local decimals=clamp(math.floor(finite(c.Rounding,0)),0,2)
-            if kind=="Slider" then assert(low<high,"Slider Min must be < Max: "..id) end
+            local decimals=clamp(math.floor(finite(c.Rounding,0)),0,3)
+            if kind=='Slider' then assert(low<high,'Invalid slider range: '..id) end
             local step=10^(-decimals)
             local function normalize(v)
-                if kind=="Toggle" then return v==true end
-                if kind=="Input" then return tostring(v==nil and "" or v) end
-                if kind=="Slider" then
+                if kind=='Toggle' then return v==true end
+                if kind=='Input' then return tostring(v==nil and '' or v) end
+                if kind=='Slider' then
                     local n=clamp(finite(v,low),low,high)
                     return clamp(math.floor(n/step+0.5)*step,low,high)
                 end
-                if kind=="Colorpicker" then return typeof(v)=="Color3" and v or Color3.fromRGB(0,195,255) end
-                if c.Multi then return type(v)=="table" and copy(v) or (v==nil and {} or {v}) end
-                if type(v)=="number" then v=values[v] end
+                if kind=='Colorpicker' then return typeof(v)=='Color3' and v or Color3.fromRGB(0,195,255) end
+                if c.Multi then return type(v)=='table' and copy(v) or (v==nil and {} or {v}) end
+                if type(v)=='number' then v=values[v] end
                 if v==nil then return values[1] end
                 return v
             end
@@ -278,230 +228,195 @@ return function(Neverlose, config)
             bridge.Options[id]=option
             local ready=false
             local initialized=false
-            local function propagate(value, origin)
+            local function propagate(v,origin)
                 if not bridge.Active and not bridge.Cleaning then return false end
-                value=normalize(value)
-                if same(value,option.Value) and initialized then return false end
+                v=normalize(v)
+                if initialized and same(v,option.Value) then return false end
                 initialized=true
-                option.Value=copy(value)
-                trace(id,origin,value,"received")
-                local success=fire(c.Callback,copy(value))
-                trace(id,origin,value,success and "OK" or "ERROR")
-                for _,fn in ipairs(option.listeners) do fire(fn,copy(value)) end
+                option.Value=copy(v)
+                trace(id,origin,v,'received')
+                local success=fire(c.Callback,copy(v))
+                trace(id,origin,v,success and 'OK' or 'ERROR')
+                for _,fn in ipairs(option.listeners) do fire(fn,copy(v)) end
                 return true
             end
-            local data={Name=tostring(c.Title or id),Flag=id,Default=copy(initial),Callback=function(v)
-                if not ready then return end
+            local function changed(v)
+                if not ready or not bridge.Active then return end
                 stats.inputs=stats.inputs+1
-                propagate(v,"native")
-            end}
-            if kind=="Slider" then
-                data.Min,data.Max,data.Decimals=low,high,step
-                data.Suffix=c.Suffix or ""
-            elseif kind=="Dropdown" then
-                data.Items=values; data.Multi=c.Multi==true
-                data.Size=mobile and 144 or 126
-            elseif kind=="Input" then
-                data.Placeholder=c.Placeholder or "请输入"
-                data.Finished=true
+                propagate(v,'native')
             end
             tab.OptionCount=tab.OptionCount+1
             local section=sectionFor()
-            if kind=="Input" then option.Native=section:Textbox(data)
-            elseif kind=="Colorpicker" then
-                option.Native=section:Label(data.Name):Colorpicker(data)
-            else option.Native=section[kind](section,data) end
-            -- Existing gameplay modules call GetValue() on Wind-compatible handles.
+            local label=tostring(c.Title or id)
+            -- Native Neverlose (Mana42138) controls take positional arguments.
+            if kind=='Toggle' then
+                option.Native=section:Toggle(label,changed)
+            elseif kind=='Slider' then
+                option.Native=section:Slider(label,low,high,finite(initial,low),changed)
+            elseif kind=='Dropdown' then
+                if c.Multi then
+                    -- Original library has no multi-dropdown; use a single dropdown
+                    -- with a text summary while retaining the existing table API.
+                    option.Native=section:Dropdown(label,values,function(v)
+                        local nextSelection=copy(option.Value)
+                        if type(nextSelection)~='table' then nextSelection={} end
+                        local found=false
+                        for i,x in ipairs(nextSelection) do
+                            if x==v then table.remove(nextSelection,i);found=true;break end
+                        end
+                        if not found then nextSelection[#nextSelection+1]=v end
+                        changed(nextSelection)
+                    end)
+                else
+                    option.Native=section:Dropdown(label,values,changed)
+                end
+            elseif kind=='Input' then
+                option.Native=section:TextBox(label,changed)
+            elseif kind=='Colorpicker' then
+                option.Native=section:Colorpicker(label,initial,changed)
+            end
             function option:GetValue() return copy(self.Value) end
             function option:GetNativeValue()
-                if not self.Native or type(self.Native.Get)~="function" then return self.Value end
-                local ok,result=pcall(function() return self.Native:Get() end)
-                return ok and normalize(result) or self.Value
+                if not self.Native then return copy(self.Value) end
+                if self.Kind=='Dropdown' and c.Multi then return copy(self.Value) end
+                local ok,v=pcall(function()
+                    if type(self.Native.Get)=='function' then return self.Native:Get() end
+                    return self.Native.Value
+                end)
+                return ok and v~=nil and normalize(v) or copy(self.Value)
             end
             function option:SyncFromNative()
-                return propagate(self:GetNativeValue(),"audit")
+                return propagate(self:GetNativeValue(),'audit')
             end
             function option:SetValue(v)
                 if not bridge.Active and not bridge.Cleaning then return false end
                 v=normalize(v)
                 if same(v,self.Value) then return true end
-                if bridge.Cleaning then return propagate(v,"cleanup") end
-                local ok,err=pcall(function() self.Native:Set(copy(v)) end)
-                if not ok then bridge.LastError=tostring(err); return false end
-                -- Native:Set calls Callback synchronously. Guard duplicates and
-                -- still emit when an executor's implementation omits callback.
-                if same(self.Value,v) then return true end
-                propagate(v,"setvalue")
-                return true
+                if bridge.Cleaning then return propagate(v,'cleanup') end
+                local ok,err=pcall(function()
+                    if self.Native and type(self.Native.Set)=='function' then
+                        if self.Kind=='Dropdown' and c.Multi then
+                            self.Native:Set(table.concat(v,', '))
+                        elseif v~=nil then self.Native:Set(v) end
+                    end
+                end)
+                if not ok then bridge.LastError=tostring(err) end
+                -- Keep original feature callbacks and ID even when native Set fails.
+                propagate(v,'setvalue')
+                return ok
             end
             function option:SetValues(new)
-                if not bridge.Active or kind~="Dropdown" or type(new)~="table" then return false end
-                local snapshot=copy(new)
+                if not bridge.Active or kind~='Dropdown' or type(new)~='table' then return false end
+                values=copy(new);self.Values=copy(new)
                 local ok,err=pcall(function()
-                    -- Native :Refresh mutates Options asynchronously in some forks;
-                    -- default to a valid value after refreshing.
-                    self.Native:Refresh(snapshot)
+                    if self.Native and type(self.Native.Refresh)=='function' then self.Native:Refresh(values) end
                 end)
                 if not ok then bridge.LastError=tostring(err); return false end
-                values=snapshot
-                self.Values=copy(snapshot)
                 if not c.Multi then
-                    local exists=false
-                    for _,item in ipairs(snapshot) do if item==self.Value then exists=true; break end end
-                    if not exists then
-                        if snapshot[1] then self:SetValue(snapshot[1])
-                        else propagate(nil,"refresh-empty") end
+                    local valid=false
+                    for _,entry in ipairs(values) do if entry==self.Value then valid=true;break end end
+                    if not valid then
+                        if values[1] then self:SetValue(values[1])
+                        else propagate(nil,'refresh-empty') end
                     end
-                else
-                    local allowed={}
-                    for _,v in ipairs(snapshot) do allowed[v]=true end
-                    local selected={}
-                    if type(self.Value)=="table" then
-                        for _,v in ipairs(self.Value) do if allowed[v] then selected[#selected+1]=v end end
-                    end
-                    if not same(selected,self.Value) then self:SetValue(selected) end
                 end
                 return true
             end
             function option:OnChanged(fn)
-                if type(fn)=="function" then
-                    table.insert(self.listeners,fn)
+                if type(fn)=='function' then
+                    self.listeners[#self.listeners+1]=fn
                     if bridge.Active then fire(fn,copy(self.Value)) end
                 end
                 return self
             end
             ready=true
-            propagate(initial,"initial")
+            -- Original library expects :Set to update visuals, but callbacks
+            -- are protected until after widget construction.
+            if option.Native and type(option.Native.Set)=='function' and initial~=nil and not (kind=='Dropdown' and c.Multi) then
+                local ok,err=pcall(function()option.Native:Set(initial)end)
+                if not ok then bridge.LastError=tostring(err) end
+            end
+            propagate(initial,'initial')
             return option
         end
-        for _,kind in ipairs({"Toggle","Slider","Dropdown","Input","Colorpicker"}) do
-            tab["Add"..kind]=function(_,id,c) return addOption(kind,id,c) end
+        for _,kind in ipairs({'Toggle','Slider','Dropdown','Input','Colorpicker'}) do
+            tab['Add'..kind]=function(_,id,c)return addOption(kind,id,c)end
         end
         function tab:AddButton(info)
-            info=info or {}; self.OptionCount=self.OptionCount+1
-            local section=sectionFor()
-            return section:Button({Name=tostring(info.Title or "运行"),Callback=function()
+            info=info or {};self.OptionCount=self.OptionCount+1
+            return sectionFor():Button(tostring(info.Title or '运行'),function()
                 if bridge.Active and not info.Locked then fire(info.Callback) end
-            end})
+            end)
         end
         function tab:AddParagraph(info)
-            info=info or {}; self.OptionCount=self.OptionCount+1
-            local section=sectionFor()
-            local label=section:Label(tostring(info.Title or "说明").."\n"..tostring(info.Content or info.Desc or ""))
-            function label:SetDesc(text)
-                self:SetText(tostring(info.Title or "说明").."\n"..tostring(text))
-            end
-            return label
+            info=info or {};self.OptionCount=self.OptionCount+1
+            return sectionFor():Paragraph(info.Title or '说明',info.Content or info.Desc or '')
         end
-        table.insert(bridge.Tabs,tab)
+        bridge.Tabs[#bridge.Tabs+1]=tab
         return tab
     end
 
     local function installSettings()
-        window.Native:Category("VORTEXION · UI")
-        local appearance=createTab("外观与布局","122669828593160")
-        local diagnostics=createTab("UI 调试","122669828593160")
-        local configuration=createTab("配置","122669828593160")
+        local appearance=createTab('界面与布局',nil,'VORTEXION · UI')
+        local diagnostics=createTab('UI 调试')
+        local configuration=createTab('配置')
         bridge.SettingsTabs={['主题']=appearance,['界面']=appearance,['调试']=diagnostics,['配置']=configuration}
-        appearance:AddParagraph({Title="Neverlose · Vortexion",Content="宣传图风格的深色双列功能面板；窄屏自动转为单列。R224 图标使用用户提供的 PNG。"})
-        appearance:AddParagraph({Title="图标资源状态",Content=tostring(bridge.BrandMode or "尚未检测")})
-        appearance:AddToggle("nl_auto_fit",{Title="根据屏幕尺寸自动适配",Default=true,Callback=function(v)
-            bridge.AutoFit=v; lastViewport=""; bridge:FitViewport()
-        end})
-        appearance:AddToggle("nl_safe_area",{Title="遵守系统安全区域",Default=true,Callback=function(v)
-            bridge.SafeArea=v; lastViewport=""; bridge:FitViewport()
-        end})
-        appearance:AddSlider("nl_scale",{Title="UI 尺寸百分比",Min=65,Max=120,Default=100,Rounding=0,Suffix="%",Callback=function(v)
-            uiScale=v/100; lastViewport=""; bridge:FitViewport()
-        end})
-        appearance:AddDropdown("nl_accent",{Title="强调色",Values={"Neverlose 蓝","翡翠绿","灰白","琥珀"},Default="Neverlose 蓝",Callback=function(v)
-            local colors={['Neverlose 蓝']={Color3.fromRGB(66,173,190),Color3.fromRGB(106,210,218)},['翡翠绿']={Color3.fromRGB(18,164,120),Color3.fromRGB(70,201,164)},['灰白']={Color3.fromRGB(170,178,192),Color3.fromRGB(212,217,225)},['琥珀']={Color3.fromRGB(214,142,32),Color3.fromRGB(244,192,83)}}
-            local picked=colors[v]
-            if picked then
-                Neverlose:ChangeTheme("Accent",picked[1]); Neverlose:ChangeTheme("AccentGradient",picked[2])
-            end
-        end})
-        appearance:AddToggle("nl_notifications",{Title="屏幕通知（触屏默认关闭）",Default=not mobile,Callback=function(v) bridge.NativeNoticesEnabled=v end})
-        appearance:AddDropdown("nl_visual_perf",{Title="视觉更新档位",Values={"原速","均衡","省电"},Default=mobile and "均衡" or "原速",Callback=function(v)
-            bridge.VisualHz=({["原速"]=60,["均衡"]=30,["省电"]=10})[v] or 30
-        end})
-        appearance:AddButton({Title="恢复默认窗口尺寸",Callback=function()
-            bridge.Options.nl_scale:SetValue(100); bridge.Options.nl_auto_fit:SetValue(true)
-            bridge.Options.nl_safe_area:SetValue(true); lastViewport=""; bridge:FitViewport()
-        end})
-        diagnostics:AddParagraph({Title="输入诊断",Content="点击下方开关检查真实触摸回调。该测试只证明 UI 回调收到事件，不代表服务器功能生效。"})
-        local diagnosticLabel=diagnostics:AddParagraph({Title="实时状态",Content="正在检测触控与视口..."})
-        local lastDiagnostics=""
+        appearance:AddParagraph({Title='Neverlose · 原生排列', Content='保持侧栏和两列 Section 结构。适配只改变整体缩放和触控区域，不改控件位置。'})
+        appearance:AddParagraph({Title='图标资源',Content=tostring(bridge.BrandMode or '读取中')})
+        appearance:AddToggle('nl_auto_fit',{Title='自适应屏幕',Default=true,Callback=function(v)bridge.AutoFit=v;lastViewport='';bridge:FitViewport()end})
+        appearance:AddToggle('nl_safe_area',{Title='屏幕安全区域',Default=true,Callback=function(v)bridge.SafeArea=v;lastViewport='';bridge:FitViewport()end})
+        appearance:AddSlider('nl_scale',{Title='界面缩放',Min=60,Max=160,Default=100,Callback=function(v)uiScale=v/100;lastViewport='';bridge:FitViewport()end})
+        appearance:AddButton({Title='恢复窗口位置',Callback=function()lastViewport='';bridge:FitViewport()end})
+        appearance:AddToggle('nl_notifications',{Title='屏幕通知',Default=not mobile,Callback=function(v)bridge.NativeNoticesEnabled=v end})
+        appearance:AddDropdown('nl_visual_hz',{Title='画面更新频率',Values={'原速','均衡','省电'},Default='均衡',Callback=function(v)bridge.VisualHz=({['原速']=60,['均衡']=30,['省电']=10})[v] or 30 end})
+        local debug=diagnostics:AddParagraph({Title='触控与回调状态',Content='等待初始化'})
         function bridge:RefreshDiagnostics()
-            if not self.Active then return end
-            local report=("输入设备: %s | 可见: %s\n视口: %s\n收到输入: %d | 回调执行: %d | 异常: %d | 状态修复: %d\n触控试验: %s\n最近控件: %s\n错误: %s")
-                :format(self.TouchMode,tostring(window and window.Native and window.Native.IsOpen),self.LastViewport or "未知",stats.inputs,stats.callbacks,stats.errors,stats.repairs,self.LastTouchProbe or "未进行",recent[#recent] or "无",self.LastError or "无")
-            if report~=lastDiagnostics then lastDiagnostics=report;diagnosticLabel:SetDesc(report) end
+            debug:SetDesc(self:GetDiagnostics())
         end
-        diagnostics:AddToggle("nl_touch_probe",{Title="触控事件计数测试",Default=false,Callback=function(v)
-            bridge.LastTouchProbe="测试回调 "..tostring(v).." · "..tostring(stats.inputs)
-            bridge:RefreshDiagnostics()
-        end})
-        diagnostics:AddToggle("nl_trace",{Title="跟踪控件回调",Default=false,Callback=function(v)bridge.Trace=v end})
-        diagnostics:AddButton({Title="复核所有游戏开关状态",Callback=function()
+        diagnostics:AddButton({Title='输出全部模块运行状态',Callback=function()print(bridge:FeatureHealth())end})
+        diagnostics:AddButton({Title='最近控件事件',Callback=function()print(bridge:FeatureTrace())end})
+        diagnostics:AddToggle('nl_trace',{Title='跟踪控件回调',Default=false,Callback=function(v)bridge.Trace=v end})
+        diagnostics:AddButton({Title='重新同步开关',Callback=function()
             local n=bridge:ReconcileGameplayOptions()
-            bridge:Notify({Title="状态复核",Content=("修复 %d 个本地状态\n%s"):format(n,bridge:FeatureHealth()),Duration=8})
+            bridge:Notify('状态校验','同步 '..n..' 项')
         end})
-        diagnostics:AddButton({Title="运行视口 / 触控自检",Callback=function()
-            lastViewport=""; bridge:FitViewport()
-            local str=("设备: %s\n窗口: %s\n事件: %d | 回调: %d | 修复: %d\n最近触控: %s\n错误: %s")
-                :format(bridge.TouchMode,bridge.LastViewport or "未计算",stats.inputs,stats.callbacks,stats.repairs,bridge.LastTouchProbe or "无",bridge.LastError or "无")
-            bridge.LastProbe=str
+        diagnostics:AddButton({Title='测试触控反馈',Callback=function()
+            bridge.LastTouchProbe='点击成功 '..tostring(os.clock())
+            bridge:Notify('触控测试','Neverlose 点击已收到')
             bridge:RefreshDiagnostics()
-            print("[Vortexion/Neverlose/UIProbe] "..str)
-            bridge:Notify({Title="Neverlose 移动端检查",Content=str,Duration=10})
         end})
-        diagnostics:AddButton({Title="打印最近 24 条控件记录",Callback=function()print(bridge:FeatureTrace()) end})
-        diagnostics:AddButton({Title="打印所有游戏模块状态",Callback=function()print(bridge:FeatureHealth()) end})
-        diagnostics:AddButton({Title="清除最近异常",Callback=function()bridge.LastError=nil end})
         bridge.GetDiagnostics=function()
-            return ("Neverlose | %s | 当前页面 %s | %s | %d 控件 | %d 回调 | %d 次异常 | %d 次重排 | %s")
-                :format(bridge.TouchMode,selectedPage,bridge.LastViewport or "未适配",(function()local n=0;for _ in pairs(bridge.Options)do n=n+1 end;return n end)(),stats.callbacks,stats.errors,stats.resizes,bridge.LastError or "无")
+            local n=0;for _ in pairs(bridge.Options)do n=n+1 end
+            return ('%s | %s | %d 个控件 | %d 回调 | %d 错误 | %s')
+                :format(bridge.TouchMode,bridge.LastViewport or '等待视口',n,stats.callbacks,stats.errors,bridge.LastError or '无')
         end
-        configuration:AddParagraph({Title="会话配置",Content="按 PlaceId 隔离；可选文件接口；仅手动保存或加载，不执行外部脚本。"})
-        local folder="Vortexion/neverlose-"..tostring(game.PlaceId)
-        local configName=configuration:AddInput("nl_config_name",{Title="配置名称",Default="default",Placeholder="字母、数字、下划线或横线"})
-        local function filepath()
-            local name=configName.Value:gsub("[^%w_%-]","")
-            name=name:sub(1,40)
-            if name=="" then name="default" end
-            return folder.."/"..name..".json"
+        local configName=configuration:AddInput('nl_config_name',{Title='配置名称',Default='default'})
+        local function configPath()
+            local name=tostring(configName.Value or 'default')
+            name=name:match('^[%w_%-]+$') and name or 'default'
+            return 'VortexionR227_'..name..'.json'
         end
-        local function ensureDir()
-            if type(isfolder)~="function" or type(makefolder)~="function" then return false end
-            if not isfolder("Vortexion") then makefolder("Vortexion") end
-            if not isfolder(folder) then makefolder(folder) end
-            return true
-        end
-        configuration:AddButton({Title="保存选项配置",Callback=function()
-            if type(writefile)~="function" or not ensureDir() then bridge:Notify("配置","执行器缺少文件接口");return end
-            local data={schema=1,placeId=game.PlaceId,options={}}
+        configuration:AddButton({Title='保存配置',Callback=function()
+            if type(writefile)~='function' then bridge:Notify('配置','执行器不支持 writefile');return end
+            local serialized={}
             for id,opt in pairs(bridge.Options) do
-                if id~="nl_config_name" and opt.Kind~="Colorpicker" then data.options[id]=copy(opt.Value) end
+                if id~='nl_config_name' and opt.Kind~='Colorpicker' then serialized[id]=opt.Value end
             end
-            local ok,err=pcall(function()writefile(filepath(),HttpService:JSONEncode(data)) end)
-            bridge:Notify("保存配置",ok and "保存成功" or tostring(err))
+            local ok,err=pcall(function()writefile(configPath(),HttpService:JSONEncode(serialized))end)
+            bridge:Notify('配置',ok and '保存成功' or tostring(err))
         end})
-        configuration:AddButton({Title="读取选项配置",Callback=function()
-            if type(readfile)~="function" or type(isfile)~="function" then bridge:Notify("配置","执行器缺少读取接口");return end
-            local path=filepath()
-            local ok,result=pcall(function()
-                if not isfile(path) then error("配置文件不存在") end
-                local raw=HttpService:JSONDecode(readfile(path))
-                assert(type(raw)=="table" and raw.schema==1 and raw.placeId==game.PlaceId and type(raw.options)=="table","配置格式或游戏不匹配")
-                local count=0
-                for id,v in pairs(raw.options) do
+        configuration:AddButton({Title='加载配置',Callback=function()
+            if type(readfile)~='function' then bridge:Notify('配置','执行器不支持 readfile');return end
+            local ok,count=pcall(function()
+                local data=HttpService:JSONDecode(readfile(configPath()))
+                local changed=0
+                for id,value in pairs(data) do
                     local opt=bridge.Options[id]
-                    if opt and opt.Kind~="Colorpicker" and opt:SetValue(v) then count=count+1 end
+                    if opt and opt:SetValue(value) then changed=changed+1 end
                 end
-                return count
+                return changed
             end)
-            bridge:Notify("加载配置",ok and ("加载 "..result.." 项") or tostring(result))
+            bridge:Notify('配置',ok and ('读取 '..count..' 项') or tostring(count))
         end})
     end
 
@@ -511,73 +426,90 @@ return function(Neverlose, config)
         info=info or {}
         local deadline=os.clock()+6
         while not Workspace.CurrentCamera and self.Active and os.clock()<deadline do task.wait(0.05) end
-        assert(Workspace.CurrentCamera,"Neverlose requires an active camera")
+        assert(Workspace.CurrentCamera,'Neverlose requires CurrentCamera')
         local brandAsset,brandReason
-        if type(VortexionLogoAssetFactory)=="function" then
-            brandAsset,brandReason = VortexionLogoAssetFactory()
-        else
-            brandReason = "logo factory unavailable"
+        if type(VortexionLogoAssetFactory)=='function' then
+            brandAsset,brandReason=VortexionLogoAssetFactory()
         end
-        bridge.BrandMode = brandReason
-        -- Actual second uploaded PNG is embedded; only unsupported executors use the legacy Roblox asset.
-        local native=Neverlose:Window({Name="VORTEXION",SubName="VORTEXION · NEVERLOSE",Logo=brandAsset or "120959262762131"})
-        root=native.Items.MainFrame.Instance
-        -- One UIScale. Neverlose's original mobile fixed 0.7 scale was removed.
-        scale=Instance.new("UIScale");scale.Name="VortexionViewportScale";scale.Scale=1;scale.Parent=root
+        self.BrandMode=brandReason or '默认 Roblox 图标'
+        local native=Neverlose:Window({Title='VORTEXION',CFG='Vortexion',Key=Enum.KeyCode.RightControl,
+            External={KeySystem=false,Key={}}})
+        root=Neverlose.MainFrame
+        assert(root,'Neverlose native MainFrame unavailable')
+        scale=Instance.new('UIScale');scale.Name='VortexionMobileScale';scale.Scale=1;scale.Parent=root
+        self.GUI=Neverlose.Root
+        if brandAsset and Neverlose.Root then
+            local image=Neverlose.Root:FindFirstChild('PlayerImage',true)
+            if image and image:IsA('ImageLabel') then image.Image=brandAsset end
+        end
         window={Native=native,Root=root,GameTabs=bridge.GameTabs}
-        local gameCategoryInserted=false
         function window:AddTab(data)
-            if not gameCategoryInserted then native:Category("VORTEXION · GAMES"); gameCategoryInserted=true end
             data=data or {}
-            local tab=createTab(tostring(data.Title or "功能"),nil)
-            bridge.GameTabs[#bridge.GameTabs+1]=tab
-            lastViewport=""; bridge:FitViewport()
-            return tab
+            local page=createTab(tostring(data.Title or '功能'))
+            bridge.GameTabs[#bridge.GameTabs+1]=page
+            return page
         end
-        local selectRevision=0
         function window:SelectTab(i)
             local tab=bridge.GameTabs[i]
             if not bridge.Active or not tab then return end
             selectedPage=tab.Title
-            selectRevision=selectRevision+1
-            local revision=selectRevision
-            local function apply()
-                if not bridge.Active or selectRevision~=revision then return end
-                for _,page in ipairs(native.Pages) do
-                    local shouldOpen=page==tab.Native
-                    if page.Active~=shouldOpen then page:Turn(shouldOpen) end
+            tab.Native:Select()
+        end
+        function window:Minimize()Neverlose:VisMain(false)end
+        function window:Destroy()bridge:Destroy()end
+        function window:InstallSettings()end
+        -- Header-only drag: touching sliders, tabs and the content itself never
+        -- moves the window. Works even if the user chooses a zoomed native layout.
+        local title=root:FindFirstChild('TitleMain',true)
+        if title then
+            title.Active=true
+            local dragStart,basePosition,dragInput
+            local function start(input)
+                if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
+                    dragInput=input;dragStart=input.Position;basePosition=root.Position
                 end
             end
-            apply()
-            -- Neverlose's first page is still fading when a game initializes.
-            -- Reconcile once after the vendor debounce to avoid stacked pages.
-            task.delay(0.8,apply)
+            connections[#connections+1]=title.InputBegan:Connect(start)
+            connections[#connections+1]=UIS.InputChanged:Connect(function(input)
+                if not dragInput then return end
+                if input~=dragInput and not (dragInput.UserInputType==Enum.UserInputType.MouseButton1 and input.UserInputType==Enum.UserInputType.MouseMovement) then return end
+                local delta=input.Position-dragStart
+                root.Position=UDim2.fromOffset(basePosition.X.Offset+delta.X,basePosition.Y.Offset+delta.Y)
+            end)
+            connections[#connections+1]=UIS.InputEnded:Connect(function(input)
+                if input==dragInput or dragInput and dragInput.UserInputType==Enum.UserInputType.MouseButton1 and input.UserInputType==Enum.UserInputType.MouseButton1 then dragInput=nil end
+            end)
         end
-        function window:Minimize() native:SetOpen(false) end
-        function window:Destroy() bridge:Destroy() end
-        function window:InstallSettings() end
-        native:Category("VORTEXION · GENERAL")
-        local common=createTab("低延迟切服")
+        -- Fixed-position reopening affordance when native menu is hidden.
+        local reopen=Instance.new('TextButton')
+        reopen.Name='VortexionReopen';reopen.Text='V';reopen.TextSize=22
+        reopen.Font=Enum.Font.GothamBold
+        reopen.BackgroundColor3=Color3.fromRGB(14,39,61)
+        reopen.TextColor3=Color3.fromRGB(145,207,234)
+        reopen.Size=UDim2.fromOffset(46,46)
+        reopen.Position=UDim2.fromOffset(24,80)
+        reopen.Parent=Neverlose.Root
+        connections[#connections+1]=reopen.MouseButton1Click:Connect(function()
+            root.Visible=not root.Visible
+        end)
+        -- All common modules use identical AddTab and Add* controls.
+        local common=createTab('低延迟切服',nil,'VORTEXION · COMMON')
         local serverFactory=config.ServerSwitchFactory or ServerSwitchFactory
-        if type(serverFactory)=="function" then
-            local ok,result=pcall(serverFactory,common,function(msg)bridge:Notify("低延迟切服",msg)end)
-            if ok then bridge.ServerSwitch=result else bridge.LastError="ServerSwitch: "..tostring(result) end
-        else common:AddParagraph({Title="切服模块不可用",Content="请检查构建文件"}) end
-        local perf=createTab("性能诊断")
-        if type(RuntimeMonitorFactory)=="function" then
-            local ok,result=pcall(RuntimeMonitorFactory,perf,bridge)
-            if ok then bridge.RuntimeMonitor=result else bridge.LastError="RuntimeMonitor: "..tostring(result) end
+        if type(serverFactory)=='function' then
+            local ok,v=pcall(serverFactory,common,function(msg)bridge:Notify('低延迟切服',msg)end)
+            if ok then bridge.ServerSwitch=v else bridge.LastError=tostring(v) end
+        end
+        local perf=createTab('性能诊断')
+        if type(RuntimeMonitorFactory)=='function' then
+            local ok,v=pcall(RuntimeMonitorFactory,perf,bridge)
+            if ok then bridge.RuntimeMonitor=v else bridge.LastError=tostring(v) end
         end
         installSettings()
         bridge:RefreshDiagnostics()
-        connections[#connections+1]=Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(bindCamera)
+        connections[#connections+1]=Workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(bindCamera)
         bindCamera()
-        task.defer(function() if bridge.Active and native then pcall(function() native:Init() end) end end)
-        -- Official topbar inset changes without viewport changes (mobile safe area).
-        local ok,insetSignal=pcall(function()return GuiService:GetPropertyChangedSignal("TopbarInset") end)
-        if ok and insetSignal then
-            connections[#connections+1]=insetSignal:Connect(function()lastViewport="";bridge:FitViewport() end)
-        end
+        local ok,inset=pcall(function()return GuiService:GetPropertyChangedSignal('TopbarInset')end)
+        if ok and inset then connections[#connections+1]=inset:Connect(function()lastViewport='';bridge:FitViewport()end) end
         return window
     end
     return bridge

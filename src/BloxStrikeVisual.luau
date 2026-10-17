@@ -437,6 +437,11 @@ return function(c)
     local function startESP()
         espAccum = 0
         c.Guard("Visual.ESP", updateESP)
+        -- Show a diagnostic when a requested ESP cannot find any enemy. This
+        -- prevents a silent no-op on an unsupported map/round.
+        if espStats.scanned > 0 and espStats.eligible == 0 and c.Notify then
+            c.Notify("BloxStrike ESP", "未找到有效敌方目标；请检查阵营、对局状态与距离。")
+        end
     end
 
     --=========================================================================
@@ -811,6 +816,10 @@ return function(c)
                 status.noHumanoid, status.markers, status.refreshes, status.error))
         print(("[Vortexion/BloxESP] 渲染=%s 2D创建=%d 2D绘制=%d 2D容器=%s")
             :format(status.renderer, status.overlayCreates, status.overlayDraws, tostring(status.overlayParent)))
+        if c.Notify then
+            c.Notify("ESP 诊断", ("扫描 %d / 合格 %d / 标记 %d / 绘制 %d / %s"):
+                format(status.scanned, status.eligible, status.markers, status.overlayDraws, tostring(status.error)))
+        end
     end})
     tab:AddParagraph({ Title = "视觉刷新节流",
         Content = "默认将目标投影到不拦截触控的 2D ScreenGui（独立于 3D Highlight 的可见性）；保留可切换的 BillboardGui 作为兼容兜底。2D 投影约 12Hz、目标文字约 3Hz，最多 24 个，关闭立即清理。" })

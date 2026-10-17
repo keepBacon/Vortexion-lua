@@ -100,6 +100,9 @@ return function(c)
         cost = 0,
         scans = 0,
         candidatesSeen = 0,
+        rosterSeen = 0,
+        liveSeen = 0,
+        enemySeen = 0,
     }
 
     --=========================================================================
@@ -113,7 +116,11 @@ return function(c)
         local diff = toPos - fromPos
         local dist = diff.Magnitude
         if dist < 0.1 then return false end
-        rayParams.FilterDescendantsInstances = character and { character } or {}
+        local filter = {}
+        if character then filter[#filter + 1] = character end
+        local actors = Workspace:FindFirstChild("Characters")
+        if actors then filter[#filter + 1] = actors end
+        rayParams.FilterDescendantsInstances = filter
         local result = Workspace:Raycast(fromPos, diff, rayParams)
         return result ~= nil and not (target and result.Instance and result.Instance:IsDescendantOf(target))
     end
@@ -133,16 +140,24 @@ return function(c)
 
         local searchDistance = Config.RageEnabled and math.max(Config.RageDistance, Config.MaxDistance) or Config.MaxDistance
         local searchFov = Config.RageEnabled and math.max(Config.RageFOV, Config.FOV) or Config.FOV
+        state.rosterSeen, state.liveSeen, state.enemySeen = 0, 0, 0
         for _, player in ipairs(type(c.Targets) == "function" and c.Targets() or Players:GetPlayers()) do
+            state.rosterSeen += 1
             if player ~= LocalPlayer then
                 local model, humanoid = c.Living(player)
                 if model and humanoid and humanoid.Health > 0 then
+                    state.liveSeen += 1
                     if (not Config.TeamCheck) or c.Enemy(player, true) then
+                        state.enemySeen += 1
                         local root = model:FindFirstChild("HumanoidRootPart")
                             or model:FindFirstChild("Torso")
-                            or model:FindFirstChildWhichIsA("BasePart")
+                            or model:FindFirstChild("Head")
+                            or model.PrimaryPart
+                            or model:FindFirstChildWhichIsA("BasePart", true)
                         if root then
-                            local pos = root.Position
+                            local head = model:FindFirstChild("Head")
+                            if head and not head:IsA("BasePart") then head = nil end
+                            local pos = (head or root).Position
                             local worldDist = (pos - camPos).Magnitude
                             if worldDist <= searchDistance then
                                 local screen, onScreen = camera:WorldToViewportPoint(pos)
@@ -163,7 +178,7 @@ return function(c)
                                             model = model,
                                             humanoid = humanoid,
                                             root = root,
-                                            head = model:FindFirstChild("Head"),
+                                            head = head,
                                             screenDist = screenDist,
                                             worldDist = worldDist,
                                             screen = screenVec,
@@ -397,24 +412,34 @@ return function(c)
             state.fireOwner = owner
             return true
         else
-            local user = c.Services.VirtualUser
-            if user and camera then
-                state.fireBackend = "VirtualUser"
-                releaseFire = function() user:Button1Up(position, camera.CFrame) end
-                if not pcall(function() user:Button1Down(position, camera.CFrame) end) then finishFire(); return false end
-            else
-                -- VirtualInputManager is unavailable on many Roblox clients;
-                -- a failed probe is visible in diagnostics, never called a hit.
-                local ok, vim = pcall(function() return game:GetService("VirtualInputManager") end)
-                if not ok or not vim then
-                    state.fireBackend = "unavailable"
-                    return false
-                end
-                state.fireBackend = "VirtualInputManager"
-                releaseFire = function() vim:SendMouseButtonEvent(position.X, position.Y, 0, false, game, 0) end
-                if not pcall(function()
+            -- BloxStrike uses InputBegan semantics for the weapon controller.
+            -- VirtualUser may not reach them on Android; try VIM first.
+            local vimOK, vim = pcall(function() return game:GetService("VirtualInputManager") end)
+            local delivered = false
+            if vimOK and vim then
+                delivered = pcall(function()
                     vim:SendMouseButtonEvent(position.X, position.Y, 0, true, game, 0)
-                end) then finishFire(); return false end
+                end)
+                if delivered then
+                    state.fireBackend = "VirtualInputManager"
+                    releaseFire = function()
+                        vim:SendMouseButtonEvent(position.X, position.Y, 0, false, game, 0)
+                    end
+                end
+            end
+            if not delivered then
+                local user = c.Services.VirtualUser
+                if user and camera then
+                    delivered = pcall(function() user:Button1Down(position, camera.CFrame) end)
+                    if delivered then
+                        state.fireBackend = "VirtualUser (unverified)"
+                        releaseFire = function() user:Button1Up(position, camera.CFrame) end
+                    end
+                end
+            end
+            if not delivered then
+                state.fireBackend = "unavailable: no supported mouse input"
+                return false
             end
         end
         state.firing = true
@@ -992,6 +1017,9 @@ return function(c)
             rageMouseError = state.rageLastMouseError,
             fireBackend = state.fireBackend,
             candidates = #state.candidates,
+            rosterSeen = state.rosterSeen,
+            liveSeen = state.liveSeen,
+            enemySeen = state.enemySeen,
             hitEntries = (function() local n = 0; for _ in pairs(state.hitEntries) do n += 1 end; return n end)(),
             hitboxScope = Config.HitboxMode, hitboxEnabled = Config.HitboxEnabled,
             firing = state.firing,
@@ -1065,9 +1093,10 @@ return function(c)
         Callback=function(v) Config.RageLead=v end})
     tab:AddButton({Title="RageBot 状态诊断", Callback=function()
         local d=Combat:DebugSnapshot()
-        print(("[Vortexion/Rage] enabled=%s target=%s scans=%d candidates=%d attempts=%d sent=%d aim=%s camera_misses=%d mouse_moves=%d mouse_error=%.1f fire=%s reason=%s")
-            :format(tostring(d.rageEnabled),d.rageLocked,d.scans,d.candidates,d.rageAttempts,d.rageSent,
-                d.rageAimBackend,d.rageCameraMisses,d.rageMouseMoves,d.rageMouseError,d.fireBackend,d.rageReason))
+        print(("[Vortexion/Rage] enabled=%s roster=%d alive=%d enemy=%d candidates=%d target=%s attempts=%d sent=%d aim=%s fire=%s reason=%s")
+            :format(tostring(d.rageEnabled), d.rosterSeen, d.liveSeen, d.enemySeen,
+                d.candidates, d.rageLocked, d.rageAttempts, d.rageSent,
+                d.rageAimBackend, d.fireBackend, d.rageReason))
     end})
     tab:AddToggle("BloxAimEnabled", { Title = "自瞄辅助", Default = false, Callback = function(v)
         Config.Enabled = v

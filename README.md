@@ -1,3 +1,15 @@
+# R227 原版 Neverlose UI 迁移说明
+
+本版本已更换为用户上传的 `Neverlose-UI-main(1).zip` 原生 UI 库，保留原始**左侧栏 + 双列 Section** 结构，**不启用竖屏单列重排**。既有功能选项 ID、注册顺序、回调和其他游戏业务源码保持与 R226 相同；UI 通过 `src/NeverloseAdapter.luau` 桥接。移动端只调整整体视口比例、安全区域、导航滚动和触控命中区域。详情见 `docs/R227_NATIVE_NEVERLOSE_MIGRATION.md`。
+
+构建：`python3 build.py`；校验：`python3 verify_release.py`。当前尚未进行安卓 Roblox 实机验证。
+
+---
+
+# R226 — SCP: Roleplay 重构
+
+本版新增 SCP 3D/2D 原生碰撞框 ESP、敌对阵营/职位/名称/收容体颜色设置、自瞄和碰撞箱解耦及事件驱动秒交互。详细见 `docs/R226_SCP_REWRITE.md`；尚需安卓 Roblox 实机验证。
+
 # R223 · AOTR 自动换刃 / 自动补给修复（Neverlose）
 
 此版在 R222 的基础上修复 AOTR 战斗分支：刀刃装备与储备补给分离、补给站识别扩展、GET/POST 受控回退、HUD 修正、Heartbeat 独立调度与真实资源变化确认。R222 的 BloxStrike ESP/RageBot 与 R221 Neverlose UI 原有构建链保留。

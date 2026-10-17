@@ -27,23 +27,24 @@ return function(common)
 	local Config = {
 		Enabled = false,
 		Mode = "Camera",          -- Camera | Mouse | Both
-		FOV = 120,
-		MaxDistance = 300,
+		FOV = 240,
+		MaxDistance = 700,
 		WallCheck = true,
-		TeamCheck = false,       -- SCP roleplay has no factions by default
+		TeamCheck = true,        -- R226: game has FOUNDATION / HOSTILE / NEUTRAL
 		Smoothness = 0.85,        -- alpha = 1 - smoothness (0.15 -> gradual)
 		Hitbox = "Head",          -- Head | Torso | Arms | Legs | Random
 		Prediction = 0.12,        -- seconds of velocity extrapolation
 		MaxAngle = 30,            -- degrees cone around look vector
-		HitChance = 0.9,          -- per-acquisition roll
+		HitChance = 1,          -- per-acquisition roll
 		FOVCircle = true,
-		TriggerKey = common.Touch.Enabled and "Touch" or "Right",     -- None | Left | Right | Touch | Always
+		TriggerKey = common.Touch.Enabled and "Always" or "Right",     -- None | Left | Right | Touch | Always
 		Attraction = 0.6,         -- mouse-mode pull multiplier
 		Dampening = true,         -- ease off inside the dampening threshold
 		TargetNPCs = true,
 		TouchMode = "Hold",
 	}
 	Camera.Config = Config
+    Camera.Stats={ Candidates=0, Rejected=0, Locked="", Reason="disabled" }
 
 	local cam = Workspace.CurrentCamera
 	local lockedChar = nil
@@ -164,10 +165,10 @@ return function(common)
 	local function candidateEligible(cand, fovFactor, distanceFactor)
 		if not (cand.Character.Parent and cand.Humanoid.Health > 0 and cand.Anchor.Parent) then return nil end
 		if cand.Player and cand.Player.Character ~= cand.Character then return nil end
-		if Config.TeamCheck and cand.Player and cand.Player.Team ~= nil
-			and cand.Player.Team == LocalPlayer.Team then
-			return nil
-		end
+		if Config.TeamCheck and common.Candidates.IsHostile
+            and not common.Candidates:IsHostile(cand) then
+            return nil
+        end
 		if not Config.TargetNPCs and not cand.Player then return nil end
 		local distance = screenDistance(cand)
 		if distance >= Config.FOV * (fovFactor or 1) then return nil end
@@ -305,15 +306,17 @@ return function(common)
 		cam = Workspace.CurrentCamera
 		updateFovCircle()
 
-		if not Config.Enabled or not cam then
-			Camera:ResetTrigger()
+        if not Config.Enabled or not cam then
+            Camera.Stats.Reason="disabled or no camera"
+            Camera:ResetTrigger()
 			clearHighlight()
 			lockedChar, lockedPlayer, lockedRegion = nil, nil, nil
 			return nil
 		end
 
-		if not triggerHeld() then
-			clearHighlight()
+        if not triggerHeld() then
+            Camera.Stats.Reason="trigger not held"
+            clearHighlight()
 			lockedChar, lockedPlayer, lockedRegion = nil, nil, nil
 			smoothedVelocity = Vector3.zero
 			hitRoll = 1
@@ -321,10 +324,11 @@ return function(common)
 		end
 
 		local cand = Camera:ResolveTarget()
-		if not cand then
-			clearHighlight()
-			return nil
-		end
+        if not cand then
+            Camera.Stats.Reason="no valid enemy in FOV / distance / visibility"
+            clearHighlight()
+            return nil
+        end
 
 		local region = resolveRegion(cand.Character)
 		local aimPart = common.Candidates.pickPartFromRegion(cand.Character, region)
@@ -362,8 +366,10 @@ return function(common)
 			end
 		end
 
-		lockedPlayer = cand.Player
-		Camera.CurrentTarget = cand
+        lockedPlayer = cand.Player
+        Camera.CurrentTarget = cand
+        Camera.Stats.Locked=cand.Player and cand.Player.Name or "SCP收容体"
+        Camera.Stats.Reason="locked"
 
 		local highlight = ensureHighlight()
 		if highlight then
