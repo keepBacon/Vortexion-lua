@@ -1,41 +1,41 @@
 {
-  "build_tag": "neverlose-mobile-r230",
+  "build_tag": "neverlose-mobile-r231",
   "bundles": {
     "Vortexion_AOTR_Battle.lua": {
-      "bytes": 576373,
-      "sha256": "560cfb23eeba8e49b46e2999b35b7937f806e21620c91f218f2bc4735653e5a8"
+      "bytes": 576636,
+      "sha256": "f34611e4f4e33aafe9edbd34558062416d06b1031c8207444f88aad2cff763ce"
     },
     "Vortexion_AOTR_Lobby.lua": {
-      "bytes": 494902,
-      "sha256": "5da613d87a6a838f0e460f4197f0817977117bc9a54069080659442fa51b5048"
+      "bytes": 495165,
+      "sha256": "44702971a35b8daacfbc099fe0cca8d800583671dea48b652bbdc3338421415a"
     },
     "Vortexion_BloxStrike.lua": {
-      "bytes": 692406,
-      "sha256": "d07d79d7b8e0856efce70dd227a665231e8a30af826acd6756dfb7f4ee060ea0"
+      "bytes": 692669,
+      "sha256": "588734ba59122b9316e4726a56683e3c3ae36ab5fec3efc90bfbb543ba764f5f"
     },
     "Vortexion_Forsaken.lua": {
-      "bytes": 562194,
-      "sha256": "0fe9836351a03992de00b90f7812797ee34e65e35a5bb428a7d4c1264dbcbc82"
+      "bytes": 562457,
+      "sha256": "a66a778d61bbac131e07d2134a0d227f0f1133734c2903aaebfe3de92391d179"
     },
     "Vortexion_Neverlose.lua": {
-      "bytes": 1047894,
-      "sha256": "4adc9af0fc3ab2ef71b2a90511d441cebdf3aa3c9d52ec847f20da5706b979ab"
+      "bytes": 1048157,
+      "sha256": "69b1a669e4797d33b2e9c0b6152d363fabbfb89a2087caef0af2f43189fcaa29"
     },
     "Vortexion_SCP.lua": {
-      "bytes": 601015,
-      "sha256": "5c290868a0107bfd2dfeb25818d95121c60e29188406ad45e3e2752b7a0bb1a7"
+      "bytes": 601278,
+      "sha256": "54729c33148c32f686cad3ebe1ef2fa5996a20d678dc01379103bf8fdeddbdd9"
     },
     "Vortexion_Wind.lua": {
-      "bytes": 1047894,
-      "sha256": "4adc9af0fc3ab2ef71b2a90511d441cebdf3aa3c9d52ec847f20da5706b979ab"
+      "bytes": 1048157,
+      "sha256": "69b1a669e4797d33b2e9c0b6152d363fabbfb89a2087caef0af2f43189fcaa29"
     }
   },
   "luau_compiler_tested": false,
   "modular_bundles": {
     "Vortexion_Core.lua": {
-      "bytes": 469825,
+      "bytes": 470088,
       "path": "dist/Vortexion_Core.lua",
-      "sha256": "14dcfc3dc65d4160cb4237cad0a2fd15003a7dd9c910afd0ceeec83580fb9962"
+      "sha256": "17573d6eb5694aff7997800bad096ccf64eb7824d8663a062d94a58e806ec78d"
     },
     "Vortexion_Module_AOTR_Battle.lua": {
       "bytes": 107201,
@@ -63,7 +63,7 @@
       "sha256": "db0f4dad6184b00004f13db6fbbdce39d673446ed14cbd9f59be9a0e6aef6c42"
     }
   },
-  "neverlose_source_sha256": "04144f1d8e4512f08ee420fc2d450048be4848c9812e186cd8d902b537cf7619",
+  "neverlose_source_sha256": "839954d5e98f935b8e0b344ff40ea566a9fcbbc78ad825ad94fcc371f8a7d580",
   "notice": "Offline build only; no upload or Roblox Android runtime verification.",
   "old_repo_touched": false,
   "outputs": [
@@ -117,10 +117,10 @@
     "src/ServerSwitch.luau": "f5569973815af65392956ef811ea07b9bad4877af28d98a3566fa085973b994f",
     "src/VortexionLogoEmbedded.lua": "dd7bdae5eb2c7172cac944782a7b004d4a10594b8416f96e529e247668470487",
     "src/loader_routes.json": "4a4a09fab17048ea5ffaea6c06333e8d67ec221fde5e230bbb468189e6764ee9",
-    "vendor/Neverlose/Source.lua": "04144f1d8e4512f08ee420fc2d450048be4848c9812e186cd8d902b537cf7619"
+    "vendor/Neverlose/Source.lua": "839954d5e98f935b8e0b344ff40ea566a9fcbbc78ad825ad94fcc371f8a7d580"
   },
   "status": "local_build_unpublished",
   "unified_entry": "dist/Vortexion_Neverlose.lua",
   "vendor_path": "vendor/Neverlose/Source.lua",
-  "vendor_sha256": "04144f1d8e4512f08ee420fc2d450048be4848c9812e186cd8d902b537cf7619"
+  "vendor_sha256": "839954d5e98f935b8e0b344ff40ea566a9fcbbc78ad825ad94fcc371f8a7d580"
 }

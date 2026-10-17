@@ -1,9 +1,9 @@
 {
-  "build_tag": "r2.30-loader-v2-modular-r230-bloxstrike-contracts",
+  "build_tag": "r231-loader-v2-native-neverlose-startup-fix",
   "core": {
-    "bytes": 469825,
+    "bytes": 470088,
     "path": "dist/Vortexion_Core.lua",
-    "sha256": "14dcfc3dc65d4160cb4237cad0a2fd15003a7dd9c910afd0ceeec83580fb9962"
+    "sha256": "17573d6eb5694aff7997800bad096ccf64eb7824d8663a062d94a58e806ec78d"
   },
   "fallback": "standalone-bundle-manual-only",
   "modules": {

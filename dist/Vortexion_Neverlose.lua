@@ -509,6 +509,10 @@ function Neverlose_Main:Window(config)
         end
     end
 
+    -- R231: Do not construct hidden key-system UI when Vortexion disables it.
+    -- Its controls are unrelated to the game window and previously crashed
+    -- every route before MainFrame could be created.
+    if Allow_KeySystem then
     local KeyFrame = Instance.new("Frame")
     local KeyTitle = Instance.new("TextLabel")
     local KeyFrameCorner = Instance.new("UICorner")
@@ -599,7 +603,7 @@ function Neverlose_Main:Window(config)
         SetupSystemToggleTitle.Size = UDim2.new(0, 194, 0, 20)
         SetupSystemToggleTitle.Font = Enum.Font.Gotham
         SetupSystemToggleTitle.Text = title
-                    ToggleTitle.TextTruncate = Enum.TextTruncate.AtEnd
+        SetupSystemToggleTitle.TextTruncate = Enum.TextTruncate.AtEnd
         SetupSystemToggleTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
         SetupSystemToggleTitle.TextSize = 14.000
         SetupSystemToggleTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -873,6 +877,7 @@ function Neverlose_Main:Window(config)
 
     repeat task.wait() until Allow_KeySystem == false
     KeyFrame:Destroy()
+    end -- Allow_KeySystem
 
     local MainFrame = Instance.new("Frame")
     local LeftFrame = Instance.new("Frame")

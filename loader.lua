@@ -1,6 +1,6 @@
 -- Vortexion Loader V2.1 / modular routing and diagnostic bootstrap.
 -- Keep V1 standalone fallback available for controlled compatibility tests.
-local VERSION = "2.19.0-r229-startup-recovery"
+local VERSION = "2.20.0-r231-native-window-fix"
 local DEFAULT_BASE = "https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/"
 local LEGACY_BUNDLE = "dist/Vortexion_Wind.lua"
 local MANIFEST_PATH = "dist/runtime-manifest.json"
