@@ -1,14 +1,23 @@
 local PlayersService = game:GetService("Players")
-local screenParent
-local okGui, hiddenGui = pcall(function() return type(gethui)=="function" and gethui() or nil end)
-if okGui and hiddenGui then screenParent = hiddenGui end
-if not screenParent then
-    local okCore, core = pcall(function() return game:GetService("CoreGui") end)
-    if okCore and core then screenParent = core end
+-- R229: Some Android executors expose CoreGui/gethui for reads but reject
+-- ScreenGui parenting. Try all supported roots and record the real failure.
+local screenParents = {}
+local function addScreenParent(candidate)
+    if not candidate then return end
+    for _,known in ipairs(screenParents) do if known == candidate then return end end
+    screenParents[#screenParents+1] = candidate
 end
-if not screenParent then screenParent = PlayersService.LocalPlayer:WaitForChild("PlayerGui") end
-local existing = screenParent:FindFirstChild("Neverlose1")
-if existing then existing:Destroy() end
+local okGui, hiddenGui = pcall(function() return type(gethui)=="function" and gethui() or nil end)
+if okGui then addScreenParent(hiddenGui) end
+local okCore, coreGui = pcall(function() return game:GetService("CoreGui") end)
+if okCore then addScreenParent(coreGui) end
+local user = PlayersService.LocalPlayer
+if user then
+    local okPlayer, playerGui = pcall(function()
+        return user:FindFirstChildOfClass("PlayerGui") or user:WaitForChild("PlayerGui",5)
+    end)
+    if okPlayer then addScreenParent(playerGui) end
+end
 
 -- Removed executor-specific anti-idle connection changes; UI must not alter gameplay.
 
@@ -155,7 +164,22 @@ local function MakeDraggable(topbarobject, object)
 
 local Neverlose = Instance.new("ScreenGui")
 Neverlose.Name = "Neverlose1"
-Neverlose.Parent = screenParent
+local mounted, mountError = false, "no accessible GUI parent"
+for _,candidate in ipairs(screenParents) do
+    local ok, err = pcall(function()
+        local existing = candidate:FindFirstChild("Neverlose1")
+        if existing then existing:Destroy() end
+        Neverlose.Parent = candidate
+    end)
+    if ok and Neverlose.Parent == candidate then
+        mounted = true
+        break
+    end
+    if not ok then mountError = tostring(err) end
+end
+if not mounted then
+    error("Neverlose ScreenGui mount failed: " .. mountError)
+end
 Neverlose.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 Neverlose.ResetOnSpawn = false
 

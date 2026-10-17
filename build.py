@@ -145,7 +145,16 @@ def build(root=ROOT):
     brand_source = read("src/VortexionLogoEmbedded.lua") if brand_file.is_file() else (
         'local VortexionLogoAssetFactory = function() return nil,"asset unavailable" end\n'
     )
+    # Historical fixture builders omit the production emergency GUI. Preserve
+    # their minimal compilation contract without weakening production builds.
+    emergency_file = root / "src/NeverloseEmergency.luau"
+    if root == ROOT and not emergency_file.is_file():
+        raise FileNotFoundError("Production emergency GUI missing")
+    emergency_source = read("src/NeverloseEmergency.luau") if emergency_file.is_file() else (
+        "return function() error('Emergency GUI was not included in this test fixture') end\n"
+    )
     shared = HEADER + PRELOAD + embed("WindUI", vendor_source) + brand_source + "\n"
+    shared += embed("EmergencyWindowFactory", emergency_source)
     # Adapter closures must capture the already-declared server controller factory.
     for name, path in (("ServerSwitchFactory", SERVER_SWITCH), ("RuntimeMonitorFactory", MONITOR), ("WindBridgeFactory", BRIDGE)):
         source = read(path)
@@ -241,7 +250,7 @@ def build(root=ROOT):
         raise ValueError("AOTR universe mismatch")
     runtime_manifest = {
         "schema": 2,
-        "build_tag": "loader-v2-modular-r224-neverlose-mobile",
+        "build_tag": "r2.30-loader-v2-modular-r230-bloxstrike-contracts",
         "core": modular_bundles["Vortexion_Core.lua"],
         "modules": {name: modular_bundles["Vortexion_Module_" + name + ".lua"] for name in GAMES},
         "routes": routes,
@@ -253,7 +262,7 @@ def build(root=ROOT):
 
     manifest = {
         "project_name": "Vortexion Neverlose",
-        "build_tag": "neverlose-mobile-r224",
+        "build_tag": "neverlose-mobile-r230",
         "status": "local_build_unpublished",
         "publication": "not_published_to_github",
         "repository": "keepBacon/Vortexion-lua",

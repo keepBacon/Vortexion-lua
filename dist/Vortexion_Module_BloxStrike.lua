@@ -492,6 +492,7 @@ return function(c)
         fireOwner = nil,
         lastLocked = nil,
         candidates = {},
+        spatialTargets = {}, -- full nearby live roster; NOT restricted by aim FOV
         velEMA = {},
         scanAccum = 0,
         aimSmooth = Vector3.zero,
@@ -539,6 +540,7 @@ return function(c)
     local function scan()
         state.scans += 1
         state.candidates = {}
+        state.spatialTargets = {}
         local camera = Workspace.CurrentCamera
         if not camera then return end
         local camPos = camera.CFrame.Position
@@ -566,32 +568,26 @@ return function(c)
                             if head and not head:IsA("BasePart") then head = nil end
                             local pos = (head or root).Position
                             local worldDist = (pos - camPos).Magnitude
-                            if worldDist <= searchDistance then
+                            if worldDist <= math.max(searchDistance, Config.HitboxEnabled and 600 or 0) then
                                 local screen, onScreen = camera:WorldToViewportPoint(pos)
-                                if screen.Z > 0 then
-                                    local screenVec = Vector2.new(screen.X, screen.Y)
-                                    local screenDist = onScreen and (screenVec - center).Magnitude or math.huge
-                                    if screenDist <= searchFov then
-                                        local vel = root.AssemblyLinearVelocity or Vector3.zero
-                                        local ema = state.velEMA[player]
-                                        if not ema then
-                                            state.velEMA[player] = vel
-                                        else
-                                            ema = ema:Lerp(vel, 0.15)
-                                            state.velEMA[player] = ema
-                                        end
-                                        table.insert(state.candidates, {
-                                            player = player,
-                                            model = model,
-                                            humanoid = humanoid,
-                                            root = root,
-                                            head = head,
-                                            screenDist = screenDist,
-                                            worldDist = worldDist,
-                                            screen = screenVec,
-                                            onScreen = onScreen,
-                                        })
-                                    end
+                                local screenVec = Vector2.new(screen.X, screen.Y)
+                                local screenDist = (onScreen and screen.Z > 0)
+                                    and (screenVec - center).Magnitude or math.huge
+                                local candidate = {
+                                    player = player, model = model, humanoid = humanoid,
+                                    root = root, head = head, screenDist = screenDist,
+                                    worldDist = worldDist, screen = screenVec, onScreen = onScreen,
+                                }
+                                -- Hitbox uses an independent spatial set.
+                                -- A target outside the aim circle is still a nearby target.
+                                if Config.HitboxEnabled and worldDist <= 600 then
+                                    state.spatialTargets[#state.spatialTargets + 1] = candidate
+                                end
+                                if worldDist <= searchDistance and screen.Z > 0 and screenDist <= searchFov then
+                                    local vel = root.AssemblyLinearVelocity or Vector3.zero
+                                    local ema = state.velEMA[player]
+                                    state.velEMA[player] = ema and ema:Lerp(vel, 0.15) or vel
+                                    state.candidates[#state.candidates + 1] = candidate
                                 end
                             end
                         end
@@ -915,8 +911,14 @@ return function(c)
     end
 
     local function hitboxEligible(entry)
-        if not entryValid(entry) then return false end
-        if entry.worldDist > math.min(Config.MaxDistance, 600) then return false end
+        -- Do not re-use entryValid: it checks crosshair FOV and screen
+        -- visibility, which caused fullBody hitboxes to never activate.
+        if not entry or not entry.player or not entry.model or not entry.root then return false end
+        if not entry.model.Parent or not entry.root.Parent then return false end
+        local fresh, vitals = c.Living(entry.player)
+        if fresh ~= entry.model or not vitals or vitals.Health <= 0 then return false end
+        if Config.TeamCheck and not c.Enemy(entry.player, true) then return false end
+        if entry.worldDist > 600 then return false end
         -- Full-body visual target envelopes are not limited to the central 120 pixels.
         -- The server retains authority over hit validation.
         return true
@@ -984,8 +986,8 @@ return function(c)
                 table.insert(wanted, entry)
             end
         else
-            for i = 1, math.min(Config.HitboxMaxActive, #state.candidates) do
-                local entry = state.candidates[i]
+            for i = 1, math.min(Config.HitboxMaxActive * 3, #state.spatialTargets) do
+                local entry = state.spatialTargets[i]
                 if hitboxEligible(entry) then
                     table.insert(wanted, entry)
                     if #wanted >= Config.HitboxMaxActive then break end
@@ -1309,6 +1311,7 @@ return function(c)
         if not active then
             state.locked = nil
             state.candidates = {}
+            state.spatialTargets = {}
             hitboxTick(dt)
             fovTick()
             return
@@ -1428,6 +1431,7 @@ return function(c)
             liveSeen = state.liveSeen,
             enemySeen = state.enemySeen,
             hitEntries = (function() local n = 0; for _ in pairs(state.hitEntries) do n += 1 end; return n end)(),
+            spatialTargets = #state.spatialTargets,
             hitboxScope = Config.HitboxMode, hitboxEnabled = Config.HitboxEnabled,
             firing = state.firing,
             costMs = math.floor(state.cost * 100000) / 100,
@@ -1447,7 +1451,7 @@ return function(c)
         finishFire()
         state.locked, state.lastLocked, state.rageTarget = nil, nil, nil
         state.rageExpectedLook = nil
-        state.candidates, state.velEMA, state.rollCache, state.rollAt = {}, {}, {}, {}
+        state.candidates, state.spatialTargets, state.velEMA, state.rollCache, state.rollAt = {}, {}, {}, {}, {}
         Config.Enabled = false
         Config.RageEnabled = false
         Config.TriggerEnabled = false
@@ -1568,7 +1572,7 @@ return function(c)
     tab:AddSlider("BloxHitboxSize", { Title = "碰撞箱倍率", Min = 1.1, Max = 3, Default = 1.6, Rounding = 1,
         Callback = function(v) Config.HitboxSize = v end })
     tab:AddParagraph({ Title = "碰撞箱说明",
-        Content = "默认对视距内最多 8 个目标显示本地碰撞包络；服务器命中范围不会随 Size 扩大。子弹目标仍以原始部件大小约束，避免虚假命中。" })
+        Content = "R230：空间目标池独立于自瞄 FOV，附近敌人即使不在屏幕中心也可触发。此功能只修改客户端显示的部件尺寸，不能保证服务端命中范围变化。" })
 
     return Combat
 end
@@ -1755,19 +1759,15 @@ return function(c)
             mods.status = "disabled"
             return
         end
-        -- Install once; wrappers read current flags. This avoids churn and
-        -- avoids leaking closures cached by the game's own controller.
-        if #mods.patches > 0 then
-            mods.status = "hooks=" .. tostring(mods.nativeHooks)
-                .. " table=" .. tostring(mods.tablePatches)
-                .. " calls=" .. tostring(mods.calls)
-            return
-        end
+        -- Idempotent per owner/method. Do NOT early-return when any patch exists:
+        -- enabling Spread after Recoil previously reused only Recoil hooks.
+        -- recordPatch checks individual owner/key pairs and will not double-hook.
+
         local tables = findWeaponTables()
         local patched = 0
         for _, owner in ipairs(tables) do
-            do
-                for _, key in ipairs({"weaponKick", "setWeaponRecoil", "getWeaponKickRotation"}) do
+            if mods.recoil then
+                for _, key in ipairs({"setWeaponRecoil", "getWeaponKickRotation"}) do
                     local name = key
                     if recordPatch(owner, name, function(original)
                         return function(...)
@@ -1775,14 +1775,17 @@ return function(c)
                                 mods.calls += 1
                                 mods.lastCallAt = os.clock()
                                 if name == "getWeaponKickRotation" then return Vector3.zero end
-                                return nil
+                                -- This setter is side-effect-only in the current
+                                -- CameraController; do not suppress generic
+                                -- weaponKick methods with unknown contracts.
+                                if name == "setWeaponRecoil" then return nil end
                             end
                             return original(...)
                         end
                     end) then patched += 1 end
                 end
             end
-            do
+            if mods.spread then
                 for _, key in ipairs({"getTrueSpread", "getSpreadForConfig", "getMovementSpreadForConfig",
                     "getBaseSpreadForConfig", "getBaseSpread"}) do
                     if recordPatch(owner, key, function(original)
@@ -1806,9 +1809,10 @@ return function(c)
                 end
             end
         end
-        mods.status = patched > 0
+        mods.status = #mods.patches > 0
             and ("hooks=" .. tostring(mods.nativeHooks) .. " table=" .. tostring(mods.tablePatches)
-                .. " observed calls=" .. tostring(mods.calls))
+                .. " observed calls=" .. tostring(mods.calls)
+                .. (mods.calls == 0 and " (unverified)" or ""))
             or "unsupported: weapon methods not located"
     end
     local function setWeaponMod(kind, enabled)
@@ -1825,9 +1829,9 @@ return function(c)
             for attempt = 1, 8 do
                 task.wait(2.5)
                 if not (mods.recoil or mods.spread) or not c.IsCurrent() then break end
-                if #mods.patches == 0 then
+                if #mods.patches == 0 or (mods.calls == 0 and attempt % 3 == 0) then
                     mods.retries += 1
-                    installWeaponMods()
+                    installWeaponMods() -- new modules may appear after round start
                 end
             end
             mods.workerRunning = false
@@ -2568,7 +2572,12 @@ return function(c)
         -- BillboardGui survives as a fallback when viewport projection fails.
         if not camera or not camera.WorldToViewportPoint then return end
         makeOverlay(entry)
-        if not entry.overlay then return end
+        if not entry.overlay then
+            -- Without a writable ScreenGui parent, never hide the billboard.
+            entry.gui.Enabled = Config.ESPEnabled
+            espStats.lastError = "2D overlay unavailable; fallback to billboard"
+            return
+        end
         local root = entry.root
         if not root or not root.Parent then
             entry.overlay.Visible = false
@@ -3229,6 +3238,7 @@ return function(c)
             renderer = Config.ESPOverlay and "Viewport2D+BillboardFallback" or "NativeBillboard",
             overlayCreates = overlayCreates, overlayDraws = overlayDraws,
             overlayParent = overlayGui ~= nil and overlayGui.Parent ~= nil,
+            guiMode = Config.ESPEnabled and (Config.ESPOverlay and "2D" or "Billboard") or "Off",
             thirdPerson = thirdPerson.enabled, thirdOverrides = thirdPerson.overrides,
         }
     end
@@ -4356,8 +4366,18 @@ local function rebuildFolderMap()
             if container:IsA("Model") then
                 visit(container, root)
             elseif container:IsA("Folder") then
-                for _, model in ipairs(container:GetChildren()) do
-                    visit(model, container)
+                -- Map variations may insert team/round folders. Descend only
+                -- known folder nodes; never traverse every Workspace part.
+                local pending = {{folder=container, depth=1}}
+                while #pending > 0 do
+                    local current = table.remove(pending)
+                    for _, model in ipairs(current.folder:GetChildren()) do
+                        if model:IsA("Model") then
+                            visit(model, current.folder)
+                        elseif model:IsA("Folder") and current.depth < 4 then
+                            pending[#pending + 1] = {folder=model, depth=current.depth + 1}
+                        end
+                    end
                 end
             end
         end
@@ -4595,7 +4615,7 @@ local budgets = { Combat = 1.2, Bullet = 0.6 }
 local costs = { Combat = 0, Bullet = 0 }
 local slowLoops = 0
 local frameName = "VortexionBloxFrame_" .. tostring(generation)
-RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, function(dt)
+local function bloxFrame(dt)
     if not isCurrent() then return end
     if dt < 0.004 then return end
     -- Idle load is deliberately zero: off means no combat/projectile scans.
@@ -4618,8 +4638,19 @@ RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, function(
     for name, cost in pairs(costs) do
         if cost * 1000 > budgets[name] then slowLoops += 1 end
     end
+end
+local frameAttached = false
+local okFrame, frameError = pcall(function()
+    RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, bloxFrame)
 end)
-ownCleanup(function() RunService:UnbindFromRenderStep(frameName) end)
+if okFrame then
+    frameAttached = true
+    ownCleanup(function() pcall(RunService.UnbindFromRenderStep, RunService, frameName) end)
+else
+    reportBootFailure("RenderStep", frameError)
+    local conn = RunService.RenderStepped:Connect(bloxFrame)
+    ownConnection(conn)
+end
 
 task.spawn(function()
     while isCurrent() do
@@ -4677,6 +4708,19 @@ tabs.Settings:AddButton({Title="检查运行状态",Callback=function()
         .." / 角色=" .. tostring(#folderCache.roster) .." 敌人="..tostring(enemies)
         .." / 样本="..table.concat(sample, ",")
         .." / 追踪路径 "..tostring(status.path or "-"))
+end})
+tabs.Settings:AddButton({Title="战斗 / ESP / 武器关键路径",Callback=function()
+    local d = ctx.Combat and ctx.Combat:DebugSnapshot() or {}
+    local v = ctx.Visual and ctx.Visual:Status() or {}
+    local w = ctx.Bullet and ctx.Bullet:Status() or {}
+    local message = ("roster=%d enemy=%d aim=%d spatial=%d esp=%d drew=%d rage=%s/%s weapon=%s calls=%d")
+        :format(tonumber(d.rosterSeen) or 0, tonumber(d.enemySeen) or 0,
+            tonumber(d.candidates) or 0, tonumber(d.spatialTargets) or 0,
+            tonumber(v.markers) or 0, tonumber(v.overlayDraws) or 0,
+            tostring(d.rageReason or "off"), tostring(d.fireBackend or "-"),
+            tostring(w.weaponMods or w.path or "unknown"), tonumber(w.weaponCalls) or 0)
+    print("[Vortexion/R230/Diagnostics] " .. message)
+    notify("BloxStrike 关键路径", message)
 end})
 tabs.Settings:AddButton({Title="性能状态",Callback=function()
     notify("性能状态",("战斗 %.2fms / 子弹 %.2fms，超预算帧 %d"):format(

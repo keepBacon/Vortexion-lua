@@ -88,7 +88,7 @@ local cleanup
 local c={OnCleanup=function(fn)cleanup=fn end}
 '''+lower(code)+r'''
 setWeaponMod('recoil',true)
-assert(modsTable.weaponKick() == nil and modsTable.getWeaponKickRotation()=='ZERO')
+assert(modsTable.weaponKick() == 'kick' and modsTable.getWeaponKickRotation()=='ZERO', 'preserve unknown weaponKick return contract')
 assert(modsTable.getTrueSpread()==8)
 setWeaponMod('spread',true)
 assert(modsTable.getTrueSpread()==0 and modsTable.getSpreadForConfig()==0)

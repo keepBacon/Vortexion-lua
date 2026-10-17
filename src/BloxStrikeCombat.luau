@@ -85,6 +85,7 @@ return function(c)
         fireOwner = nil,
         lastLocked = nil,
         candidates = {},
+        spatialTargets = {}, -- full nearby live roster; NOT restricted by aim FOV
         velEMA = {},
         scanAccum = 0,
         aimSmooth = Vector3.zero,
@@ -132,6 +133,7 @@ return function(c)
     local function scan()
         state.scans += 1
         state.candidates = {}
+        state.spatialTargets = {}
         local camera = Workspace.CurrentCamera
         if not camera then return end
         local camPos = camera.CFrame.Position
@@ -159,32 +161,26 @@ return function(c)
                             if head and not head:IsA("BasePart") then head = nil end
                             local pos = (head or root).Position
                             local worldDist = (pos - camPos).Magnitude
-                            if worldDist <= searchDistance then
+                            if worldDist <= math.max(searchDistance, Config.HitboxEnabled and 600 or 0) then
                                 local screen, onScreen = camera:WorldToViewportPoint(pos)
-                                if screen.Z > 0 then
-                                    local screenVec = Vector2.new(screen.X, screen.Y)
-                                    local screenDist = onScreen and (screenVec - center).Magnitude or math.huge
-                                    if screenDist <= searchFov then
-                                        local vel = root.AssemblyLinearVelocity or Vector3.zero
-                                        local ema = state.velEMA[player]
-                                        if not ema then
-                                            state.velEMA[player] = vel
-                                        else
-                                            ema = ema:Lerp(vel, 0.15)
-                                            state.velEMA[player] = ema
-                                        end
-                                        table.insert(state.candidates, {
-                                            player = player,
-                                            model = model,
-                                            humanoid = humanoid,
-                                            root = root,
-                                            head = head,
-                                            screenDist = screenDist,
-                                            worldDist = worldDist,
-                                            screen = screenVec,
-                                            onScreen = onScreen,
-                                        })
-                                    end
+                                local screenVec = Vector2.new(screen.X, screen.Y)
+                                local screenDist = (onScreen and screen.Z > 0)
+                                    and (screenVec - center).Magnitude or math.huge
+                                local candidate = {
+                                    player = player, model = model, humanoid = humanoid,
+                                    root = root, head = head, screenDist = screenDist,
+                                    worldDist = worldDist, screen = screenVec, onScreen = onScreen,
+                                }
+                                -- Hitbox uses an independent spatial set.
+                                -- A target outside the aim circle is still a nearby target.
+                                if Config.HitboxEnabled and worldDist <= 600 then
+                                    state.spatialTargets[#state.spatialTargets + 1] = candidate
+                                end
+                                if worldDist <= searchDistance and screen.Z > 0 and screenDist <= searchFov then
+                                    local vel = root.AssemblyLinearVelocity or Vector3.zero
+                                    local ema = state.velEMA[player]
+                                    state.velEMA[player] = ema and ema:Lerp(vel, 0.15) or vel
+                                    state.candidates[#state.candidates + 1] = candidate
                                 end
                             end
                         end
@@ -508,8 +504,14 @@ return function(c)
     end
 
     local function hitboxEligible(entry)
-        if not entryValid(entry) then return false end
-        if entry.worldDist > math.min(Config.MaxDistance, 600) then return false end
+        -- Do not re-use entryValid: it checks crosshair FOV and screen
+        -- visibility, which caused fullBody hitboxes to never activate.
+        if not entry or not entry.player or not entry.model or not entry.root then return false end
+        if not entry.model.Parent or not entry.root.Parent then return false end
+        local fresh, vitals = c.Living(entry.player)
+        if fresh ~= entry.model or not vitals or vitals.Health <= 0 then return false end
+        if Config.TeamCheck and not c.Enemy(entry.player, true) then return false end
+        if entry.worldDist > 600 then return false end
         -- Full-body visual target envelopes are not limited to the central 120 pixels.
         -- The server retains authority over hit validation.
         return true
@@ -577,8 +579,8 @@ return function(c)
                 table.insert(wanted, entry)
             end
         else
-            for i = 1, math.min(Config.HitboxMaxActive, #state.candidates) do
-                local entry = state.candidates[i]
+            for i = 1, math.min(Config.HitboxMaxActive * 3, #state.spatialTargets) do
+                local entry = state.spatialTargets[i]
                 if hitboxEligible(entry) then
                     table.insert(wanted, entry)
                     if #wanted >= Config.HitboxMaxActive then break end
@@ -902,6 +904,7 @@ return function(c)
         if not active then
             state.locked = nil
             state.candidates = {}
+            state.spatialTargets = {}
             hitboxTick(dt)
             fovTick()
             return
@@ -1021,6 +1024,7 @@ return function(c)
             liveSeen = state.liveSeen,
             enemySeen = state.enemySeen,
             hitEntries = (function() local n = 0; for _ in pairs(state.hitEntries) do n += 1 end; return n end)(),
+            spatialTargets = #state.spatialTargets,
             hitboxScope = Config.HitboxMode, hitboxEnabled = Config.HitboxEnabled,
             firing = state.firing,
             costMs = math.floor(state.cost * 100000) / 100,
@@ -1040,7 +1044,7 @@ return function(c)
         finishFire()
         state.locked, state.lastLocked, state.rageTarget = nil, nil, nil
         state.rageExpectedLook = nil
-        state.candidates, state.velEMA, state.rollCache, state.rollAt = {}, {}, {}, {}
+        state.candidates, state.spatialTargets, state.velEMA, state.rollCache, state.rollAt = {}, {}, {}, {}, {}
         Config.Enabled = false
         Config.RageEnabled = false
         Config.TriggerEnabled = false
@@ -1161,7 +1165,7 @@ return function(c)
     tab:AddSlider("BloxHitboxSize", { Title = "碰撞箱倍率", Min = 1.1, Max = 3, Default = 1.6, Rounding = 1,
         Callback = function(v) Config.HitboxSize = v end })
     tab:AddParagraph({ Title = "碰撞箱说明",
-        Content = "默认对视距内最多 8 个目标显示本地碰撞包络；服务器命中范围不会随 Size 扩大。子弹目标仍以原始部件大小约束，避免虚假命中。" })
+        Content = "R230：空间目标池独立于自瞄 FOV，附近敌人即使不在屏幕中心也可触发。此功能只修改客户端显示的部件尺寸，不能保证服务端命中范围变化。" })
 
     return Combat
 end

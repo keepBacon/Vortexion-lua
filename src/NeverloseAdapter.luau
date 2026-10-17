@@ -404,8 +404,8 @@ return function(Neverlose, config)
         end})
         bridge.GetDiagnostics=function()
             local n=0;for _ in pairs(bridge.Options)do n=n+1 end
-            return ('%s | %s | %d 个控件 | %d 回调 | %d 错误 | %s')
-                :format(bridge.TouchMode,bridge.LastViewport or '等待视口',n,stats.callbacks,stats.errors,bridge.LastError or '无')
+            return ('%s | %s | %s | %d 个控件 | %d 回调 | %d 错误 | %s')
+                :format(bridge.UIBackend or '未初始化',bridge.TouchMode,bridge.LastViewport or '等待视口',n,stats.callbacks,stats.errors,bridge.LastError or '无')
         end
         local configName=configuration:AddInput('nl_config_name',{Title='配置名称',Default='default'})
         local function configPath()
@@ -446,15 +446,51 @@ return function(Neverlose, config)
         assert(Workspace.CurrentCamera,'Neverlose requires CurrentCamera')
         local brandAsset,brandReason
         if type(VortexionLogoAssetFactory)=='function' then
-            brandAsset,brandReason=VortexionLogoAssetFactory()
+            local okLogo, logoOrError, reason = pcall(VortexionLogoAssetFactory)
+            if okLogo then brandAsset,brandReason=logoOrError,reason
+            else brandAsset=nil;brandReason='图标不可用: '..tostring(logoOrError) end
         end
         self.BrandMode=brandReason or '默认 Roblox 图标'
-        local native=Neverlose:Window({Title='VORTEXION',CFG='Vortexion',Key=Enum.KeyCode.RightControl,
-            External={KeySystem=false,Key={}}})
+        -- R229: keep the original visual library as the preferred path. Its
+        -- constructor can throw on Android before returning a window handle.
+        -- Capture that error, then create a separate functional dual-column UI.
+        local okNative, nativeOrError = xpcall(function()
+            return Neverlose:Window({Title='VORTEXION',CFG='Vortexion',Key=Enum.KeyCode.RightControl,
+                External={KeySystem=false,Key={}}})
+        end, function(error)
+            if type(debug)=='table' and type(debug.traceback)=='function' then
+                return debug.traceback(tostring(error),2)
+            end
+            return tostring(error)
+        end)
+        local native
+        if okNative and nativeOrError and Neverlose.MainFrame and Neverlose.Root then
+            native = nativeOrError
+            self.UIBackend = 'Neverlose'
+        else
+            local reason = okNative and 'Native UI returned an incomplete window/root' or tostring(nativeOrError)
+            self.NativeError = reason:sub(1,1800)
+            self.LastError = self.NativeError
+            env.VortexionNativeUIError = self.NativeError
+            warn('[Vortexion/Neverlose] Native UI failed, entering dual-column fallback: '..self.NativeError)
+            -- The failed vendor may have left partially constructed GUI objects.
+            pcall(function() if Neverlose.Root then Neverlose.Root:Destroy() end end)
+            local okFallback, result = pcall(EmergencyWindowFactory, Neverlose, self.NativeError)
+            if not okFallback or not result then
+                error('Both native and emergency UI failed. Native: '..self.NativeError
+                    ..'; fallback: '..tostring(result))
+            end
+            native=result
+            self.UIBackend='EmergencyNeverlose'
+            self.BootStatus='partial'
+            self.BootError='原生 Neverlose 创建失败，已启用双列兼容 UI: '..self.NativeError
+            self.NativeNoticesEnabled=false
+        end
         root=Neverlose.MainFrame
         assert(root,'Neverlose native MainFrame unavailable')
         scale=Instance.new('UIScale');scale.Name='VortexionMobileScale';scale.Scale=1;scale.Parent=root
         self.GUI=Neverlose.Root
+        if not self.UIBackend then self.UIBackend='Neverlose' end
         if brandAsset and Neverlose.Root then
             local image=Neverlose.Root:FindFirstChild('PlayerImage',true)
             if image and image:IsA('ImageLabel') then image.Image=brandAsset end
@@ -475,6 +511,7 @@ return function(Neverlose, config)
         function window:Minimize()Neverlose:VisMain(false)end
         function window:Destroy()bridge:Destroy()end
         function window:InstallSettings()end
+        local decorationsOk, decorationsError = pcall(function()
         -- Header-only drag: touching sliders, tabs and the content itself never
         -- moves the window. Works even if the user chooses a zoomed native layout.
         local title=root:FindFirstChild('TitleMain',true)
@@ -509,6 +546,13 @@ return function(Neverlose, config)
         connections[#connections+1]=reopen.MouseButton1Click:Connect(function()
             root.Visible=not root.Visible
         end)
+        end) -- optional window drag and re-open controls
+        if not decorationsOk then
+            self.LastError='Window decorations: '..tostring(decorationsError)
+            self.BootStatus='partial'; self.BootError=self.LastError
+            warn('[Vortexion/Neverlose] '..self.LastError)
+        end
+        local commonOk, commonError = pcall(function()
         -- All common modules use identical AddTab and Add* controls.
         local common=createTab('低延迟切服',nil,'VORTEXION · COMMON')
         local serverFactory=config.ServerSwitchFactory or ServerSwitchFactory
@@ -523,6 +567,13 @@ return function(Neverlose, config)
         end
         installSettings()
         bridge:RefreshDiagnostics()
+        end) -- optional shared settings and performance pages
+        if not commonOk then
+            self.LastError='Common UI settings: '..tostring(commonError)
+            self.BootStatus='partial'
+            self.BootError=(self.BootError and (self.BootError..'; ') or '')..self.LastError
+            warn('[Vortexion/Neverlose] '..self.LastError)
+        end
         connections[#connections+1]=Workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(bindCamera)
         bindCamera()
         local ok,inset=pcall(function()return GuiService:GetPropertyChangedSignal('TopbarInset')end)

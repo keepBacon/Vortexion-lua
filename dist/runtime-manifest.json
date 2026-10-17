@@ -1,9 +1,9 @@
 {
-  "build_tag": "loader-v2-modular-r224-neverlose-mobile",
+  "build_tag": "r2.30-loader-v2-modular-r230-bloxstrike-contracts",
   "core": {
-    "bytes": 452008,
+    "bytes": 469825,
     "path": "dist/Vortexion_Core.lua",
-    "sha256": "1febb9b60ab3dc95b2a88d82478b29fe528a6d43faa7aa59832017d12c18fc62"
+    "sha256": "14dcfc3dc65d4160cb4237cad0a2fd15003a7dd9c910afd0ceeec83580fb9962"
   },
   "fallback": "standalone-bundle-manual-only",
   "modules": {
@@ -18,9 +18,9 @@
       "sha256": "ac816cabf202ec3062c3d0dac599613b990d8ab8cfad2cb2012ec0c3453e77d1"
     },
     "BloxStrike": {
-      "bytes": 220175,
+      "bytes": 223234,
       "path": "dist/Vortexion_Module_BloxStrike.lua",
-      "sha256": "2b30c51673d03327dc89ca8ef1a556bd24ac41b37cabace0230297525a899be4"
+      "sha256": "58496d5e925b9a29f0620897fcf7dc542bf5064075b31edf59674743a25a2c2c"
     },
     "Forsaken": {
       "bytes": 93022,

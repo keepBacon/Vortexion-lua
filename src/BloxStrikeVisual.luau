@@ -108,7 +108,12 @@ return function(c)
         -- BillboardGui survives as a fallback when viewport projection fails.
         if not camera or not camera.WorldToViewportPoint then return end
         makeOverlay(entry)
-        if not entry.overlay then return end
+        if not entry.overlay then
+            -- Without a writable ScreenGui parent, never hide the billboard.
+            entry.gui.Enabled = Config.ESPEnabled
+            espStats.lastError = "2D overlay unavailable; fallback to billboard"
+            return
+        end
         local root = entry.root
         if not root or not root.Parent then
             entry.overlay.Visible = false
@@ -769,6 +774,7 @@ return function(c)
             renderer = Config.ESPOverlay and "Viewport2D+BillboardFallback" or "NativeBillboard",
             overlayCreates = overlayCreates, overlayDraws = overlayDraws,
             overlayParent = overlayGui ~= nil and overlayGui.Parent ~= nil,
+            guiMode = Config.ESPEnabled and (Config.ESPOverlay and "2D" or "Billboard") or "Off",
             thirdPerson = thirdPerson.enabled, thirdOverrides = thirdPerson.overrides,
         }
     end

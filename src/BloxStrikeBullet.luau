@@ -178,19 +178,15 @@ return function(c)
             mods.status = "disabled"
             return
         end
-        -- Install once; wrappers read current flags. This avoids churn and
-        -- avoids leaking closures cached by the game's own controller.
-        if #mods.patches > 0 then
-            mods.status = "hooks=" .. tostring(mods.nativeHooks)
-                .. " table=" .. tostring(mods.tablePatches)
-                .. " calls=" .. tostring(mods.calls)
-            return
-        end
+        -- Idempotent per owner/method. Do NOT early-return when any patch exists:
+        -- enabling Spread after Recoil previously reused only Recoil hooks.
+        -- recordPatch checks individual owner/key pairs and will not double-hook.
+
         local tables = findWeaponTables()
         local patched = 0
         for _, owner in ipairs(tables) do
-            do
-                for _, key in ipairs({"weaponKick", "setWeaponRecoil", "getWeaponKickRotation"}) do
+            if mods.recoil then
+                for _, key in ipairs({"setWeaponRecoil", "getWeaponKickRotation"}) do
                     local name = key
                     if recordPatch(owner, name, function(original)
                         return function(...)
@@ -198,14 +194,17 @@ return function(c)
                                 mods.calls += 1
                                 mods.lastCallAt = os.clock()
                                 if name == "getWeaponKickRotation" then return Vector3.zero end
-                                return nil
+                                -- This setter is side-effect-only in the current
+                                -- CameraController; do not suppress generic
+                                -- weaponKick methods with unknown contracts.
+                                if name == "setWeaponRecoil" then return nil end
                             end
                             return original(...)
                         end
                     end) then patched += 1 end
                 end
             end
-            do
+            if mods.spread then
                 for _, key in ipairs({"getTrueSpread", "getSpreadForConfig", "getMovementSpreadForConfig",
                     "getBaseSpreadForConfig", "getBaseSpread"}) do
                     if recordPatch(owner, key, function(original)
@@ -229,9 +228,10 @@ return function(c)
                 end
             end
         end
-        mods.status = patched > 0
+        mods.status = #mods.patches > 0
             and ("hooks=" .. tostring(mods.nativeHooks) .. " table=" .. tostring(mods.tablePatches)
-                .. " observed calls=" .. tostring(mods.calls))
+                .. " observed calls=" .. tostring(mods.calls)
+                .. (mods.calls == 0 and " (unverified)" or ""))
             or "unsupported: weapon methods not located"
     end
     local function setWeaponMod(kind, enabled)
@@ -248,9 +248,9 @@ return function(c)
             for attempt = 1, 8 do
                 task.wait(2.5)
                 if not (mods.recoil or mods.spread) or not c.IsCurrent() then break end
-                if #mods.patches == 0 then
+                if #mods.patches == 0 or (mods.calls == 0 and attempt % 3 == 0) then
                     mods.retries += 1
-                    installWeaponMods()
+                    installWeaponMods() -- new modules may appear after round start
                 end
             end
             mods.workerRunning = false

@@ -71,12 +71,13 @@ local typeof=function(v)return type(v)end
 local c={Caps={hookfunction=true},IsCurrent=function()return true end,OnCleanup=function(fn) _G.cleanup=fn end}
 '''+lower(code)+r'''
 setWeaponMod('recoil',true)
-assert(mods.nativeHooks>=1,'native hook should be preferred')
-assert(invoke(recoil)==nil,'cached original recoil closure must be hooked')
+assert(mods.nativeHooks==0,'unknown recoil method must remain unmodified')
+assert(invoke(recoil)=='kick','weaponKick original return contract must be preserved')
 assert(invoke(spread)==7)
 setWeaponMod('spread',true)
+assert(mods.nativeHooks>=1,'known spread getter uses native hook')
 assert(invoke(spread)==0,'cached original spread closure must be hooked')
-assert(mods.calls>=2)
+assert(mods.calls>=1)
 setWeaponMod('recoil',false)
 assert(invoke(recoil)=='kick','toggle off forwards original')
 assert(invoke(spread)==0)

@@ -1,3 +1,7 @@
+## R229 启动兼容修复（2026-10-17）
+
+Neverlose 原生窗口创建失败时自动尝试双列兼容界面，记录完整原生异常；Loader 和路由保留原始失败原因，不会把部分 UI 初始化误判为功能正常。详见 `docs/R229_STARTUP_RECOVERY.md`。未完成 Android Roblox 实机验证。
+
 # R227 原版 Neverlose UI 迁移说明
 
 本版本已更换为用户上传的 `Neverlose-UI-main(1).zip` 原生 UI 库，保留原始**左侧栏 + 双列 Section** 结构，**不启用竖屏单列重排**。既有功能选项 ID、注册顺序、回调和其他游戏业务源码保持与 R226 相同；UI 通过 `src/NeverloseAdapter.luau` 桥接。移动端只调整整体视口比例、安全区域、导航滚动和触控命中区域。详情见 `docs/R227_NATIVE_NEVERLOSE_MIGRATION.md`。

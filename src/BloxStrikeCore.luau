@@ -164,8 +164,18 @@ local function rebuildFolderMap()
             if container:IsA("Model") then
                 visit(container, root)
             elseif container:IsA("Folder") then
-                for _, model in ipairs(container:GetChildren()) do
-                    visit(model, container)
+                -- Map variations may insert team/round folders. Descend only
+                -- known folder nodes; never traverse every Workspace part.
+                local pending = {{folder=container, depth=1}}
+                while #pending > 0 do
+                    local current = table.remove(pending)
+                    for _, model in ipairs(current.folder:GetChildren()) do
+                        if model:IsA("Model") then
+                            visit(model, current.folder)
+                        elseif model:IsA("Folder") and current.depth < 4 then
+                            pending[#pending + 1] = {folder=model, depth=current.depth + 1}
+                        end
+                    end
                 end
             end
         end
@@ -403,7 +413,7 @@ local budgets = { Combat = 1.2, Bullet = 0.6 }
 local costs = { Combat = 0, Bullet = 0 }
 local slowLoops = 0
 local frameName = "VortexionBloxFrame_" .. tostring(generation)
-RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, function(dt)
+local function bloxFrame(dt)
     if not isCurrent() then return end
     if dt < 0.004 then return end
     -- Idle load is deliberately zero: off means no combat/projectile scans.
@@ -426,8 +436,19 @@ RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, function(
     for name, cost in pairs(costs) do
         if cost * 1000 > budgets[name] then slowLoops += 1 end
     end
+end
+local frameAttached = false
+local okFrame, frameError = pcall(function()
+    RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, bloxFrame)
 end)
-ownCleanup(function() RunService:UnbindFromRenderStep(frameName) end)
+if okFrame then
+    frameAttached = true
+    ownCleanup(function() pcall(RunService.UnbindFromRenderStep, RunService, frameName) end)
+else
+    reportBootFailure("RenderStep", frameError)
+    local conn = RunService.RenderStepped:Connect(bloxFrame)
+    ownConnection(conn)
+end
 
 task.spawn(function()
     while isCurrent() do
@@ -485,6 +506,19 @@ tabs.Settings:AddButton({Title="检查运行状态",Callback=function()
         .." / 角色=" .. tostring(#folderCache.roster) .." 敌人="..tostring(enemies)
         .." / 样本="..table.concat(sample, ",")
         .." / 追踪路径 "..tostring(status.path or "-"))
+end})
+tabs.Settings:AddButton({Title="战斗 / ESP / 武器关键路径",Callback=function()
+    local d = ctx.Combat and ctx.Combat:DebugSnapshot() or {}
+    local v = ctx.Visual and ctx.Visual:Status() or {}
+    local w = ctx.Bullet and ctx.Bullet:Status() or {}
+    local message = ("roster=%d enemy=%d aim=%d spatial=%d esp=%d drew=%d rage=%s/%s weapon=%s calls=%d")
+        :format(tonumber(d.rosterSeen) or 0, tonumber(d.enemySeen) or 0,
+            tonumber(d.candidates) or 0, tonumber(d.spatialTargets) or 0,
+            tonumber(v.markers) or 0, tonumber(v.overlayDraws) or 0,
+            tostring(d.rageReason or "off"), tostring(d.fireBackend or "-"),
+            tostring(w.weaponMods or w.path or "unknown"), tonumber(w.weaponCalls) or 0)
+    print("[Vortexion/R230/Diagnostics] " .. message)
+    notify("BloxStrike 关键路径", message)
 end})
 tabs.Settings:AddButton({Title="性能状态",Callback=function()
     notify("性能状态",("战斗 %.2fms / 子弹 %.2fms，超预算帧 %d"):format(

@@ -12,16 +12,25 @@ if type(previousBridge) == "table" and type(previousBridge.Destroy) == "function
 end
 local WindUI = (function()
 local PlayersService = game:GetService("Players")
-local screenParent
-local okGui, hiddenGui = pcall(function() return type(gethui)=="function" and gethui() or nil end)
-if okGui and hiddenGui then screenParent = hiddenGui end
-if not screenParent then
-    local okCore, core = pcall(function() return game:GetService("CoreGui") end)
-    if okCore and core then screenParent = core end
+-- R229: Some Android executors expose CoreGui/gethui for reads but reject
+-- ScreenGui parenting. Try all supported roots and record the real failure.
+local screenParents = {}
+local function addScreenParent(candidate)
+    if not candidate then return end
+    for _,known in ipairs(screenParents) do if known == candidate then return end end
+    screenParents[#screenParents+1] = candidate
 end
-if not screenParent then screenParent = PlayersService.LocalPlayer:WaitForChild("PlayerGui") end
-local existing = screenParent:FindFirstChild("Neverlose1")
-if existing then existing:Destroy() end
+local okGui, hiddenGui = pcall(function() return type(gethui)=="function" and gethui() or nil end)
+if okGui then addScreenParent(hiddenGui) end
+local okCore, coreGui = pcall(function() return game:GetService("CoreGui") end)
+if okCore then addScreenParent(coreGui) end
+local user = PlayersService.LocalPlayer
+if user then
+    local okPlayer, playerGui = pcall(function()
+        return user:FindFirstChildOfClass("PlayerGui") or user:WaitForChild("PlayerGui",5)
+    end)
+    if okPlayer then addScreenParent(playerGui) end
+end
 
 -- Removed executor-specific anti-idle connection changes; UI must not alter gameplay.
 
@@ -168,7 +177,22 @@ local function MakeDraggable(topbarobject, object)
 
 local Neverlose = Instance.new("ScreenGui")
 Neverlose.Name = "Neverlose1"
-Neverlose.Parent = screenParent
+local mounted, mountError = false, "no accessible GUI parent"
+for _,candidate in ipairs(screenParents) do
+    local ok, err = pcall(function()
+        local existing = candidate:FindFirstChild("Neverlose1")
+        if existing then existing:Destroy() end
+        Neverlose.Parent = candidate
+    end)
+    if ok and Neverlose.Parent == candidate then
+        mounted = true
+        break
+    end
+    if not ok then mountError = tostring(err) end
+end
+if not mounted then
+    error("Neverlose ScreenGui mount failed: " .. mountError)
+end
 Neverlose.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 Neverlose.ResetOnSpawn = false
 
@@ -6390,6 +6414,234 @@ local VortexionLogoAssetFactory = (function()
     end
 end)()
 
+local EmergencyWindowFactory = (function()
+-- R229: last-resort Neverlose-compatible dual-column shell.
+-- Only used if the uploaded UI library cannot construct its Window on an executor.
+-- It does not replace the normal Neverlose interface when that interface works.
+return function(library, cause)
+    local Players = game:GetService('Players')
+    local UIS = game:GetService('UserInputService')
+    local function rgb(r,g,b) return Color3.fromRGB(r,g,b) end
+    local background, sectionColor, textColor, accent = rgb(15,19,21),rgb(23,29,32),rgb(234,240,244),rgb(103,181,191)
+    local function ui(kind,parent,name,size,position)
+        local object=Instance.new(kind)
+        object.Name=name or kind
+        if size then object.Size=size end
+        if position then object.Position=position end
+        if parent then object.Parent=parent end
+        return object
+    end
+    local function corner(object,r)
+        local c=ui('UICorner',object,'Corners'); c.CornerRadius=UDim.new(0,r or 5)
+    end
+    local function text(parent,content,size,position,fontSize,color)
+        local l=ui('TextLabel',parent,'Label',size,position)
+        l.BackgroundTransparency=1; l.Text=tostring(content or '');l.TextColor3=color or textColor
+        l.Font=Enum.Font.Gotham; l.TextSize=fontSize or 14
+        l.TextXAlignment=Enum.TextXAlignment.Left;l.TextTruncate=Enum.TextTruncate.AtEnd
+        return l
+    end
+    local screen=ui('ScreenGui',nil,'VortexionEmergencyNeverlose')
+    screen.IgnoreGuiInset=true;screen.ResetOnSpawn=false;screen.DisplayOrder=200
+    local targets={}
+    if type(gethui)=='function' then local ok,hidden=pcall(gethui);if ok and hidden then targets[#targets+1]=hidden end end
+    local ok,core=pcall(function()return game:GetService('CoreGui')end)
+    if ok and core then targets[#targets+1]=core end
+    local player=Players.LocalPlayer
+    if player then
+        local playerGui=player:FindFirstChildOfClass('PlayerGui') or player:WaitForChild('PlayerGui',5)
+        if playerGui then targets[#targets+1]=playerGui end
+    end
+    local mounted=false
+    for _,target in ipairs(targets) do
+        local placed=pcall(function()screen.Parent=target end)
+        if placed and screen.Parent==target then mounted=true;break end
+    end
+    assert(mounted,'Emergency Neverlose: unable to mount ScreenGui')
+    local root=ui('Frame',screen,'MainFrame',UDim2.fromOffset(643,682))
+    root.BackgroundColor3=background;root.BorderSizePixel=0;corner(root,6)
+    local sidebar=ui('ScrollingFrame',root,'Sidebar',UDim2.fromOffset(203,682),UDim2.fromOffset(-203,0))
+    sidebar.BackgroundColor3=sectionColor;sidebar.BorderSizePixel=0
+    sidebar.ScrollBarThickness=3;sidebar.CanvasSize=UDim2.fromOffset(0,0);sidebar.AutomaticCanvasSize=Enum.AutomaticSize.Y
+    local leftPadding=ui('UIPadding',sidebar,'Padding');leftPadding.PaddingTop=UDim.new(0,16)
+    leftPadding.PaddingLeft=UDim.new(0,12);leftPadding.PaddingRight=UDim.new(0,12)
+    local navLayout=ui('UIListLayout',sidebar,'NavLayout');navLayout.Padding=UDim.new(0,6)
+    navLayout.SortOrder=Enum.SortOrder.LayoutOrder
+    text(root,'VORTEXION · 兼容模式',UDim2.new(1,-32,0,38),UDim2.fromOffset(18,8),19,accent)
+    local warning=text(root,'原生 UI 创建失败，已使用离线兼容界面',UDim2.new(1,-30,0,24),UDim2.fromOffset(18,43),12,rgb(208,183,130))
+    local pages=ui('Frame',root,'Content',UDim2.new(1,-24,1,-87),UDim2.fromOffset(12,78))
+    pages.BackgroundTransparency=1
+    local activeTab=nil
+    local function newButton(parent,label,width,height)
+        local button=ui('TextButton',parent,label,width or UDim2.new(1,0,0,36))
+        button.BackgroundColor3=rgb(39,49,54);button.TextColor3=textColor;button.BorderSizePixel=0
+        button.Font=Enum.Font.GothamMedium;button.TextSize=13;button.Text=tostring(label)
+        button.AutoButtonColor=true;corner(button,5);return button
+    end
+    local function select(page)
+        if activeTab then activeTab.Frame.Visible=false;activeTab.Button.BackgroundColor3=rgb(39,49,54) end
+        activeTab=page;page.Frame.Visible=true;page.Button.BackgroundColor3=rgb(43,86,99)
+    end
+    local groups={}
+    function groups:TSection(label)
+        local title=text(sidebar,label,UDim2.new(1,0,0,29),nil,12,accent)
+        local group={}
+        function group:Tab(label,icon)
+            local button=newButton(sidebar,label)
+            if type(icon)=='string' and icon~='' then
+                local badge=ui('ImageLabel',button,'Icon',UDim2.fromOffset(16,16),UDim2.fromOffset(7,10))
+                badge.BackgroundTransparency=1;badge.Image=icon;badge.ImageColor3=accent
+                button.Text='    '..label
+            end
+            local pane=ui('Frame',pages,'Tab_'..tostring(label),UDim2.fromScale(1,1));pane.BackgroundTransparency=1;pane.Visible=false
+            local holder={Frame=pane,Button=button,Sections={},Left=nil,Right=nil}
+            button.MouseButton1Click:Connect(function()select(holder)end)
+            if activeTab==nil then select(holder)end
+            local function column(index)
+                local x=(index==1) and 0 or 0.51
+                local frame=ui('ScrollingFrame',pane,'Column'..index,UDim2.new(0.49,0,1,0),UDim2.new(x,0,0,0))
+                frame.BackgroundTransparency=1;frame.ScrollBarThickness=3
+                frame.CanvasSize=UDim2.fromOffset(0,0);frame.AutomaticCanvasSize=Enum.AutomaticSize.Y
+                local layout=ui('UIListLayout',frame,'Layout');layout.Padding=UDim.new(0,9)
+                layout.SortOrder=Enum.SortOrder.LayoutOrder
+                return frame
+            end
+            function holder:Select()select(holder)end
+            function holder:Section(title)
+                local index=#self.Sections+1
+                local target=((index%2)==1) and (self.Left or column(1)) or (self.Right or column(2))
+                if index%2==1 then self.Left=target else self.Right=target end
+                local panel=ui('Frame',target,'Section_'..title,UDim2.new(1,-8,0,45))
+                panel.AutomaticSize=Enum.AutomaticSize.Y
+                panel.BackgroundColor3=sectionColor;panel.BorderSizePixel=0;corner(panel,5)
+                local pad=ui('UIPadding',panel,'Padding');pad.PaddingTop=UDim.new(0,10)
+                pad.PaddingBottom=UDim.new(0,9);pad.PaddingLeft=UDim.new(0,11);pad.PaddingRight=UDim.new(0,11)
+                local list=ui('UIListLayout',panel,'Layout');list.Padding=UDim.new(0,7)
+                list.SortOrder=Enum.SortOrder.LayoutOrder
+                text(panel,title,UDim2.new(1,0,0,21),nil,14,accent)
+                local section={Panel=panel}
+                local function row(label)
+                    local f=ui('Frame',panel,'Row',UDim2.new(1,0,0,37));f.BackgroundTransparency=1
+                    text(f,label,UDim2.new(.6,0,1,0),nil,13)
+                    return f
+                end
+                function section:Toggle(label,callback)
+                    local frame=row(label)
+                    local button=newButton(frame,'关闭',UDim2.fromOffset(55,29))
+                    button.AnchorPoint=Vector2.new(1,.5);button.Position=UDim2.new(1,0,.5,0)
+                    local value=false;local control={}
+                    function control:Set(v)
+                        value=v==true;button.Text=value and '开启' or '关闭'
+                        button.BackgroundColor3=value and accent or rgb(39,49,54)
+                        if callback then callback(value) end
+                    end
+                    function control:Get()return value end
+                    button.MouseButton1Click:Connect(function()control:Set(not value)end)
+                    return control
+                end
+                function section:Slider(label,lo,hi,default,callback)
+                    local frame=row(label)
+                    local number=newButton(frame,tostring(default),UDim2.fromOffset(75,29))
+                    number.AnchorPoint=Vector2.new(1,.5);number.Position=UDim2.new(1,0,.5,0)
+                    local current=default;local control={}
+                    function control:Set(v)
+                        current=math.max(lo,math.min(hi,tonumber(v) or lo))
+                        number.Text=tostring(math.floor(current*100+.5)/100)
+                        if callback then callback(current) end
+                    end
+                    function control:Get()return current end
+                    local function update(input)
+                        local x=input.Position.X-number.AbsolutePosition.X
+                        control:Set(lo+(hi-lo)*math.max(0,math.min(1,x/math.max(1,number.AbsoluteSize.X))))
+                    end
+                    number.InputBegan:Connect(function(input)
+                        if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then update(input)end
+                    end)
+                    number.InputChanged:Connect(function(input)
+                        if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseMovement then update(input)end
+                    end)
+                    return control
+                end
+                function section:Dropdown(label,values,callback)
+                    local frame=row(label)
+                    local button=newButton(frame,'选择',UDim2.fromOffset(108,29))
+                    button.AnchorPoint=Vector2.new(1,.5);button.Position=UDim2.new(1,0,.5,0)
+                    local choices=values or {};local chosen=nil;local control={}
+                    function control:Set(v)
+                        chosen=v;button.Text=tostring(v or '无选项')
+                        if callback then callback(v) end
+                    end
+                    function control:Get()return chosen end
+                    function control:Refresh(nextList)choices=nextList or {};control:Set(choices[1])end
+                    button.MouseButton1Click:Connect(function()
+                        if #choices==0 then return end
+                        local nextIdx=1
+                        for i,v in ipairs(choices)do if v==chosen then nextIdx=i%#choices+1;break end end
+                        control:Set(choices[nextIdx])
+                    end)
+                    return control
+                end
+                function section:TextBox(label,callback)
+                    local frame=row(label)
+                    local input=ui('TextBox',frame,'Input',UDim2.fromOffset(100,29))
+                    input.AnchorPoint=Vector2.new(1,.5);input.Position=UDim2.new(1,0,.5,0)
+                    input.BackgroundColor3=rgb(39,49,54);input.TextColor3=textColor
+                    input.PlaceholderText='输入';input.Text='';input.TextSize=13;input.BorderSizePixel=0;corner(input,5)
+                    local control={}
+                    function control:Set(value)
+                        input.Text=tostring(value or '');if callback then callback(input.Text)end
+                    end
+                    function control:Get()return input.Text end
+                    input.FocusLost:Connect(function()if callback then callback(input.Text)end end)
+                    return control
+                end
+                function section:Colorpicker(label,default,callback)
+                    local frame=row(label)
+                    local button=newButton(frame,'颜色',UDim2.fromOffset(66,29))
+                    button.AnchorPoint=Vector2.new(1,.5);button.Position=UDim2.new(1,0,.5,0)
+                    local colors={default or accent,rgb(103,181,191),rgb(255,83,83),rgb(42,42,42),rgb(255,255,255)}
+                    local current=colors[1];local control={}
+                    function control:Set(c)
+                        current=c;button.BackgroundColor3=c
+                        if callback then callback(c) end
+                    end
+                    function control:Get()return current end
+                    button.MouseButton1Click:Connect(function()
+                        local nextIndex=1
+                        for i,c in ipairs(colors) do if c==current then nextIndex=i%#colors+1;break end end
+                        control:Set(colors[nextIndex])
+                    end)
+                    return control
+                end
+                function section:Button(label,callback)
+                    local b=newButton(panel,label)
+                    b.MouseButton1Click:Connect(function()if callback then callback()end end)
+                    return b
+                end
+                function section:Paragraph(label,description)
+                    local f=ui('Frame',panel,'Paragraph',UDim2.new(1,0,0,66))
+                    f.BackgroundTransparency=1
+                    text(f,label,UDim2.new(1,0,0,20),nil,13,accent)
+                    local desc=text(f,description,UDim2.new(1,0,0,45),UDim2.fromOffset(0,21),12)
+                    desc.TextWrapped=true;desc.TextTruncate=Enum.TextTruncate.None
+                    return {SetDesc=function(_,value)desc.Text=tostring(value) end}
+                end
+                self.Sections[index]=section
+                return section
+            end
+            return holder
+        end
+        return group
+    end
+    library.Root=screen;library.MainFrame=root
+    library.VisMain=function(_,visible)root.Visible=visible end
+    library.Window=function()return groups end
+    library.EmergencyReason=tostring(cause or 'Neverlose Window returned no handle'):sub(1,800)
+    warning.Text='原生 UI 不可用，双列兼容模式已启动；查看启动诊断'
+    return groups
+end
+
+end)()
 local ServerSwitchFactory = (function()
 -- Standalone factory; controller methods use colon syntax.
 return function(tab, notify)
@@ -7438,8 +7690,8 @@ return function(Neverlose, config)
         end})
         bridge.GetDiagnostics=function()
             local n=0;for _ in pairs(bridge.Options)do n=n+1 end
-            return ('%s | %s | %d 个控件 | %d 回调 | %d 错误 | %s')
-                :format(bridge.TouchMode,bridge.LastViewport or '等待视口',n,stats.callbacks,stats.errors,bridge.LastError or '无')
+            return ('%s | %s | %s | %d 个控件 | %d 回调 | %d 错误 | %s')
+                :format(bridge.UIBackend or '未初始化',bridge.TouchMode,bridge.LastViewport or '等待视口',n,stats.callbacks,stats.errors,bridge.LastError or '无')
         end
         local configName=configuration:AddInput('nl_config_name',{Title='配置名称',Default='default'})
         local function configPath()
@@ -7480,15 +7732,51 @@ return function(Neverlose, config)
         assert(Workspace.CurrentCamera,'Neverlose requires CurrentCamera')
         local brandAsset,brandReason
         if type(VortexionLogoAssetFactory)=='function' then
-            brandAsset,brandReason=VortexionLogoAssetFactory()
+            local okLogo, logoOrError, reason = pcall(VortexionLogoAssetFactory)
+            if okLogo then brandAsset,brandReason=logoOrError,reason
+            else brandAsset=nil;brandReason='图标不可用: '..tostring(logoOrError) end
         end
         self.BrandMode=brandReason or '默认 Roblox 图标'
-        local native=Neverlose:Window({Title='VORTEXION',CFG='Vortexion',Key=Enum.KeyCode.RightControl,
-            External={KeySystem=false,Key={}}})
+        -- R229: keep the original visual library as the preferred path. Its
+        -- constructor can throw on Android before returning a window handle.
+        -- Capture that error, then create a separate functional dual-column UI.
+        local okNative, nativeOrError = xpcall(function()
+            return Neverlose:Window({Title='VORTEXION',CFG='Vortexion',Key=Enum.KeyCode.RightControl,
+                External={KeySystem=false,Key={}}})
+        end, function(error)
+            if type(debug)=='table' and type(debug.traceback)=='function' then
+                return debug.traceback(tostring(error),2)
+            end
+            return tostring(error)
+        end)
+        local native
+        if okNative and nativeOrError and Neverlose.MainFrame and Neverlose.Root then
+            native = nativeOrError
+            self.UIBackend = 'Neverlose'
+        else
+            local reason = okNative and 'Native UI returned an incomplete window/root' or tostring(nativeOrError)
+            self.NativeError = reason:sub(1,1800)
+            self.LastError = self.NativeError
+            env.VortexionNativeUIError = self.NativeError
+            warn('[Vortexion/Neverlose] Native UI failed, entering dual-column fallback: '..self.NativeError)
+            -- The failed vendor may have left partially constructed GUI objects.
+            pcall(function() if Neverlose.Root then Neverlose.Root:Destroy() end end)
+            local okFallback, result = pcall(EmergencyWindowFactory, Neverlose, self.NativeError)
+            if not okFallback or not result then
+                error('Both native and emergency UI failed. Native: '..self.NativeError
+                    ..'; fallback: '..tostring(result))
+            end
+            native=result
+            self.UIBackend='EmergencyNeverlose'
+            self.BootStatus='partial'
+            self.BootError='原生 Neverlose 创建失败，已启用双列兼容 UI: '..self.NativeError
+            self.NativeNoticesEnabled=false
+        end
         root=Neverlose.MainFrame
         assert(root,'Neverlose native MainFrame unavailable')
         scale=Instance.new('UIScale');scale.Name='VortexionMobileScale';scale.Scale=1;scale.Parent=root
         self.GUI=Neverlose.Root
+        if not self.UIBackend then self.UIBackend='Neverlose' end
         if brandAsset and Neverlose.Root then
             local image=Neverlose.Root:FindFirstChild('PlayerImage',true)
             if image and image:IsA('ImageLabel') then image.Image=brandAsset end
@@ -7509,6 +7797,7 @@ return function(Neverlose, config)
         function window:Minimize()Neverlose:VisMain(false)end
         function window:Destroy()bridge:Destroy()end
         function window:InstallSettings()end
+        local decorationsOk, decorationsError = pcall(function()
         -- Header-only drag: touching sliders, tabs and the content itself never
         -- moves the window. Works even if the user chooses a zoomed native layout.
         local title=root:FindFirstChild('TitleMain',true)
@@ -7543,6 +7832,13 @@ return function(Neverlose, config)
         connections[#connections+1]=reopen.MouseButton1Click:Connect(function()
             root.Visible=not root.Visible
         end)
+        end) -- optional window drag and re-open controls
+        if not decorationsOk then
+            self.LastError='Window decorations: '..tostring(decorationsError)
+            self.BootStatus='partial'; self.BootError=self.LastError
+            warn('[Vortexion/Neverlose] '..self.LastError)
+        end
+        local commonOk, commonError = pcall(function()
         -- All common modules use identical AddTab and Add* controls.
         local common=createTab('低延迟切服',nil,'VORTEXION · COMMON')
         local serverFactory=config.ServerSwitchFactory or ServerSwitchFactory
@@ -7557,6 +7853,13 @@ return function(Neverlose, config)
         end
         installSettings()
         bridge:RefreshDiagnostics()
+        end) -- optional shared settings and performance pages
+        if not commonOk then
+            self.LastError='Common UI settings: '..tostring(commonError)
+            self.BootStatus='partial'
+            self.BootError=(self.BootError and (self.BootError..'; ') or '')..self.LastError
+            warn('[Vortexion/Neverlose] '..self.LastError)
+        end
         connections[#connections+1]=Workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(bindCamera)
         bindCamera()
         local ok,inset=pcall(function()return GuiService:GetPropertyChangedSignal('TopbarInset')end)
@@ -7626,15 +7929,23 @@ end
 
 -- Keep the generic interface visible when a game exits before creating its UI.
 function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
-    local ok, result = true, nil
-    if entry then ok, result = pcall(entry) end
     local client = (getgenv and getgenv()) or _G
+    client.VortexionBootError = nil -- errors from previous loads must not taint this route
+    local ok, result = true, nil
+    if entry then ok, result = xpcall(entry, function(err)
+        local message = tostring(err)
+        if type(debug)=="table" and type(debug.traceback)=="function" then
+            return debug.traceback(message,2)
+        end
+        return message
+    end) end
     local bridge = client.VortexionWindBridge
-    local summary = not ok and tostring(result):sub(1, 500) or nil
+    local summary = not ok and tostring(result):sub(1, 1400) or nil
     local failure = client.VortexionBootError
     -- Prefer the actual constructor error over the caller's abbreviated Lua location.
     -- Entry points often rethrow at CreateWindow({...}), losing the vendor frame.
-    if type(failure) == "string" and failure:find("WindUI/CreateWindow", 1, true) then
+    if type(failure) == "string" and (failure:find("WindUI/CreateWindow", 1, true)
+        or failure:find("Window:", 1, true) or failure:find("CreateWindow:", 1, true)) then
         summary = failure:sub(1, 1400)
     elseif failure and not summary then
         summary = tostring(failure):sub(1, 800)
@@ -10108,6 +10419,7 @@ return function(c)
         fireOwner = nil,
         lastLocked = nil,
         candidates = {},
+        spatialTargets = {}, -- full nearby live roster; NOT restricted by aim FOV
         velEMA = {},
         scanAccum = 0,
         aimSmooth = Vector3.zero,
@@ -10155,6 +10467,7 @@ return function(c)
     local function scan()
         state.scans += 1
         state.candidates = {}
+        state.spatialTargets = {}
         local camera = Workspace.CurrentCamera
         if not camera then return end
         local camPos = camera.CFrame.Position
@@ -10182,32 +10495,26 @@ return function(c)
                             if head and not head:IsA("BasePart") then head = nil end
                             local pos = (head or root).Position
                             local worldDist = (pos - camPos).Magnitude
-                            if worldDist <= searchDistance then
+                            if worldDist <= math.max(searchDistance, Config.HitboxEnabled and 600 or 0) then
                                 local screen, onScreen = camera:WorldToViewportPoint(pos)
-                                if screen.Z > 0 then
-                                    local screenVec = Vector2.new(screen.X, screen.Y)
-                                    local screenDist = onScreen and (screenVec - center).Magnitude or math.huge
-                                    if screenDist <= searchFov then
-                                        local vel = root.AssemblyLinearVelocity or Vector3.zero
-                                        local ema = state.velEMA[player]
-                                        if not ema then
-                                            state.velEMA[player] = vel
-                                        else
-                                            ema = ema:Lerp(vel, 0.15)
-                                            state.velEMA[player] = ema
-                                        end
-                                        table.insert(state.candidates, {
-                                            player = player,
-                                            model = model,
-                                            humanoid = humanoid,
-                                            root = root,
-                                            head = head,
-                                            screenDist = screenDist,
-                                            worldDist = worldDist,
-                                            screen = screenVec,
-                                            onScreen = onScreen,
-                                        })
-                                    end
+                                local screenVec = Vector2.new(screen.X, screen.Y)
+                                local screenDist = (onScreen and screen.Z > 0)
+                                    and (screenVec - center).Magnitude or math.huge
+                                local candidate = {
+                                    player = player, model = model, humanoid = humanoid,
+                                    root = root, head = head, screenDist = screenDist,
+                                    worldDist = worldDist, screen = screenVec, onScreen = onScreen,
+                                }
+                                -- Hitbox uses an independent spatial set.
+                                -- A target outside the aim circle is still a nearby target.
+                                if Config.HitboxEnabled and worldDist <= 600 then
+                                    state.spatialTargets[#state.spatialTargets + 1] = candidate
+                                end
+                                if worldDist <= searchDistance and screen.Z > 0 and screenDist <= searchFov then
+                                    local vel = root.AssemblyLinearVelocity or Vector3.zero
+                                    local ema = state.velEMA[player]
+                                    state.velEMA[player] = ema and ema:Lerp(vel, 0.15) or vel
+                                    state.candidates[#state.candidates + 1] = candidate
                                 end
                             end
                         end
@@ -10531,8 +10838,14 @@ return function(c)
     end
 
     local function hitboxEligible(entry)
-        if not entryValid(entry) then return false end
-        if entry.worldDist > math.min(Config.MaxDistance, 600) then return false end
+        -- Do not re-use entryValid: it checks crosshair FOV and screen
+        -- visibility, which caused fullBody hitboxes to never activate.
+        if not entry or not entry.player or not entry.model or not entry.root then return false end
+        if not entry.model.Parent or not entry.root.Parent then return false end
+        local fresh, vitals = c.Living(entry.player)
+        if fresh ~= entry.model or not vitals or vitals.Health <= 0 then return false end
+        if Config.TeamCheck and not c.Enemy(entry.player, true) then return false end
+        if entry.worldDist > 600 then return false end
         -- Full-body visual target envelopes are not limited to the central 120 pixels.
         -- The server retains authority over hit validation.
         return true
@@ -10600,8 +10913,8 @@ return function(c)
                 table.insert(wanted, entry)
             end
         else
-            for i = 1, math.min(Config.HitboxMaxActive, #state.candidates) do
-                local entry = state.candidates[i]
+            for i = 1, math.min(Config.HitboxMaxActive * 3, #state.spatialTargets) do
+                local entry = state.spatialTargets[i]
                 if hitboxEligible(entry) then
                     table.insert(wanted, entry)
                     if #wanted >= Config.HitboxMaxActive then break end
@@ -10925,6 +11238,7 @@ return function(c)
         if not active then
             state.locked = nil
             state.candidates = {}
+            state.spatialTargets = {}
             hitboxTick(dt)
             fovTick()
             return
@@ -11044,6 +11358,7 @@ return function(c)
             liveSeen = state.liveSeen,
             enemySeen = state.enemySeen,
             hitEntries = (function() local n = 0; for _ in pairs(state.hitEntries) do n += 1 end; return n end)(),
+            spatialTargets = #state.spatialTargets,
             hitboxScope = Config.HitboxMode, hitboxEnabled = Config.HitboxEnabled,
             firing = state.firing,
             costMs = math.floor(state.cost * 100000) / 100,
@@ -11063,7 +11378,7 @@ return function(c)
         finishFire()
         state.locked, state.lastLocked, state.rageTarget = nil, nil, nil
         state.rageExpectedLook = nil
-        state.candidates, state.velEMA, state.rollCache, state.rollAt = {}, {}, {}, {}
+        state.candidates, state.spatialTargets, state.velEMA, state.rollCache, state.rollAt = {}, {}, {}, {}, {}
         Config.Enabled = false
         Config.RageEnabled = false
         Config.TriggerEnabled = false
@@ -11184,7 +11499,7 @@ return function(c)
     tab:AddSlider("BloxHitboxSize", { Title = "碰撞箱倍率", Min = 1.1, Max = 3, Default = 1.6, Rounding = 1,
         Callback = function(v) Config.HitboxSize = v end })
     tab:AddParagraph({ Title = "碰撞箱说明",
-        Content = "默认对视距内最多 8 个目标显示本地碰撞包络；服务器命中范围不会随 Size 扩大。子弹目标仍以原始部件大小约束，避免虚假命中。" })
+        Content = "R230：空间目标池独立于自瞄 FOV，附近敌人即使不在屏幕中心也可触发。此功能只修改客户端显示的部件尺寸，不能保证服务端命中范围变化。" })
 
     return Combat
 end
@@ -11371,19 +11686,15 @@ return function(c)
             mods.status = "disabled"
             return
         end
-        -- Install once; wrappers read current flags. This avoids churn and
-        -- avoids leaking closures cached by the game's own controller.
-        if #mods.patches > 0 then
-            mods.status = "hooks=" .. tostring(mods.nativeHooks)
-                .. " table=" .. tostring(mods.tablePatches)
-                .. " calls=" .. tostring(mods.calls)
-            return
-        end
+        -- Idempotent per owner/method. Do NOT early-return when any patch exists:
+        -- enabling Spread after Recoil previously reused only Recoil hooks.
+        -- recordPatch checks individual owner/key pairs and will not double-hook.
+
         local tables = findWeaponTables()
         local patched = 0
         for _, owner in ipairs(tables) do
-            do
-                for _, key in ipairs({"weaponKick", "setWeaponRecoil", "getWeaponKickRotation"}) do
+            if mods.recoil then
+                for _, key in ipairs({"setWeaponRecoil", "getWeaponKickRotation"}) do
                     local name = key
                     if recordPatch(owner, name, function(original)
                         return function(...)
@@ -11391,14 +11702,17 @@ return function(c)
                                 mods.calls += 1
                                 mods.lastCallAt = os.clock()
                                 if name == "getWeaponKickRotation" then return Vector3.zero end
-                                return nil
+                                -- This setter is side-effect-only in the current
+                                -- CameraController; do not suppress generic
+                                -- weaponKick methods with unknown contracts.
+                                if name == "setWeaponRecoil" then return nil end
                             end
                             return original(...)
                         end
                     end) then patched += 1 end
                 end
             end
-            do
+            if mods.spread then
                 for _, key in ipairs({"getTrueSpread", "getSpreadForConfig", "getMovementSpreadForConfig",
                     "getBaseSpreadForConfig", "getBaseSpread"}) do
                     if recordPatch(owner, key, function(original)
@@ -11422,9 +11736,10 @@ return function(c)
                 end
             end
         end
-        mods.status = patched > 0
+        mods.status = #mods.patches > 0
             and ("hooks=" .. tostring(mods.nativeHooks) .. " table=" .. tostring(mods.tablePatches)
-                .. " observed calls=" .. tostring(mods.calls))
+                .. " observed calls=" .. tostring(mods.calls)
+                .. (mods.calls == 0 and " (unverified)" or ""))
             or "unsupported: weapon methods not located"
     end
     local function setWeaponMod(kind, enabled)
@@ -11441,9 +11756,9 @@ return function(c)
             for attempt = 1, 8 do
                 task.wait(2.5)
                 if not (mods.recoil or mods.spread) or not c.IsCurrent() then break end
-                if #mods.patches == 0 then
+                if #mods.patches == 0 or (mods.calls == 0 and attempt % 3 == 0) then
                     mods.retries += 1
-                    installWeaponMods()
+                    installWeaponMods() -- new modules may appear after round start
                 end
             end
             mods.workerRunning = false
@@ -12184,7 +12499,12 @@ return function(c)
         -- BillboardGui survives as a fallback when viewport projection fails.
         if not camera or not camera.WorldToViewportPoint then return end
         makeOverlay(entry)
-        if not entry.overlay then return end
+        if not entry.overlay then
+            -- Without a writable ScreenGui parent, never hide the billboard.
+            entry.gui.Enabled = Config.ESPEnabled
+            espStats.lastError = "2D overlay unavailable; fallback to billboard"
+            return
+        end
         local root = entry.root
         if not root or not root.Parent then
             entry.overlay.Visible = false
@@ -12845,6 +13165,7 @@ return function(c)
             renderer = Config.ESPOverlay and "Viewport2D+BillboardFallback" or "NativeBillboard",
             overlayCreates = overlayCreates, overlayDraws = overlayDraws,
             overlayParent = overlayGui ~= nil and overlayGui.Parent ~= nil,
+            guiMode = Config.ESPEnabled and (Config.ESPOverlay and "2D" or "Billboard") or "Off",
             thirdPerson = thirdPerson.enabled, thirdOverrides = thirdPerson.overrides,
         }
     end
@@ -13972,8 +14293,18 @@ local function rebuildFolderMap()
             if container:IsA("Model") then
                 visit(container, root)
             elseif container:IsA("Folder") then
-                for _, model in ipairs(container:GetChildren()) do
-                    visit(model, container)
+                -- Map variations may insert team/round folders. Descend only
+                -- known folder nodes; never traverse every Workspace part.
+                local pending = {{folder=container, depth=1}}
+                while #pending > 0 do
+                    local current = table.remove(pending)
+                    for _, model in ipairs(current.folder:GetChildren()) do
+                        if model:IsA("Model") then
+                            visit(model, current.folder)
+                        elseif model:IsA("Folder") and current.depth < 4 then
+                            pending[#pending + 1] = {folder=model, depth=current.depth + 1}
+                        end
+                    end
                 end
             end
         end
@@ -14211,7 +14542,7 @@ local budgets = { Combat = 1.2, Bullet = 0.6 }
 local costs = { Combat = 0, Bullet = 0 }
 local slowLoops = 0
 local frameName = "VortexionBloxFrame_" .. tostring(generation)
-RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, function(dt)
+local function bloxFrame(dt)
     if not isCurrent() then return end
     if dt < 0.004 then return end
     -- Idle load is deliberately zero: off means no combat/projectile scans.
@@ -14234,8 +14565,19 @@ RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, function(
     for name, cost in pairs(costs) do
         if cost * 1000 > budgets[name] then slowLoops += 1 end
     end
+end
+local frameAttached = false
+local okFrame, frameError = pcall(function()
+    RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, bloxFrame)
 end)
-ownCleanup(function() RunService:UnbindFromRenderStep(frameName) end)
+if okFrame then
+    frameAttached = true
+    ownCleanup(function() pcall(RunService.UnbindFromRenderStep, RunService, frameName) end)
+else
+    reportBootFailure("RenderStep", frameError)
+    local conn = RunService.RenderStepped:Connect(bloxFrame)
+    ownConnection(conn)
+end
 
 task.spawn(function()
     while isCurrent() do
@@ -14293,6 +14635,19 @@ tabs.Settings:AddButton({Title="检查运行状态",Callback=function()
         .." / 角色=" .. tostring(#folderCache.roster) .." 敌人="..tostring(enemies)
         .." / 样本="..table.concat(sample, ",")
         .." / 追踪路径 "..tostring(status.path or "-"))
+end})
+tabs.Settings:AddButton({Title="战斗 / ESP / 武器关键路径",Callback=function()
+    local d = ctx.Combat and ctx.Combat:DebugSnapshot() or {}
+    local v = ctx.Visual and ctx.Visual:Status() or {}
+    local w = ctx.Bullet and ctx.Bullet:Status() or {}
+    local message = ("roster=%d enemy=%d aim=%d spatial=%d esp=%d drew=%d rage=%s/%s weapon=%s calls=%d")
+        :format(tonumber(d.rosterSeen) or 0, tonumber(d.enemySeen) or 0,
+            tonumber(d.candidates) or 0, tonumber(d.spatialTargets) or 0,
+            tonumber(v.markers) or 0, tonumber(v.overlayDraws) or 0,
+            tostring(d.rageReason or "off"), tostring(d.fireBackend or "-"),
+            tostring(w.weaponMods or w.path or "unknown"), tonumber(w.weaponCalls) or 0)
+    print("[Vortexion/R230/Diagnostics] " .. message)
+    notify("BloxStrike 关键路径", message)
 end})
 tabs.Settings:AddButton({Title="性能状态",Callback=function()
     notify("性能状态",("战斗 %.2fms / 子弹 %.2fms，超预算帧 %d"):format(

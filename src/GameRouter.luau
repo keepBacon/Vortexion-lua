@@ -56,15 +56,23 @@ end
 
 -- Keep the generic interface visible when a game exits before creating its UI.
 function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
-    local ok, result = true, nil
-    if entry then ok, result = pcall(entry) end
     local client = (getgenv and getgenv()) or _G
+    client.VortexionBootError = nil -- errors from previous loads must not taint this route
+    local ok, result = true, nil
+    if entry then ok, result = xpcall(entry, function(err)
+        local message = tostring(err)
+        if type(debug)=="table" and type(debug.traceback)=="function" then
+            return debug.traceback(message,2)
+        end
+        return message
+    end) end
     local bridge = client.VortexionWindBridge
-    local summary = not ok and tostring(result):sub(1, 500) or nil
+    local summary = not ok and tostring(result):sub(1, 1400) or nil
     local failure = client.VortexionBootError
     -- Prefer the actual constructor error over the caller's abbreviated Lua location.
     -- Entry points often rethrow at CreateWindow({...}), losing the vendor frame.
-    if type(failure) == "string" and failure:find("WindUI/CreateWindow", 1, true) then
+    if type(failure) == "string" and (failure:find("WindUI/CreateWindow", 1, true)
+        or failure:find("Window:", 1, true) or failure:find("CreateWindow:", 1, true)) then
         summary = failure:sub(1, 1400)
     elseif failure and not summary then
         summary = tostring(failure):sub(1, 800)
