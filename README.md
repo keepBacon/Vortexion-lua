@@ -119,3 +119,11 @@ WindUI 原始发行库与 MIT 许可证保留在 `vendor/WindUI/`，未修改附
 ## R2.11 本地变更（远程提交前不代表已上线）
 
 跨游戏回调轨迹与 Forsaken 目标发现统一，详见 `docs/R211_CALLBACK_TRACE_AND_GENERATORS.md`；离线构建测试不等于 Roblox 真机功能成功。
+
+## R2.13 触控/ESP/移动/发电机诊断（本地源码）
+
+- 触屏默认禁用 WindUI 的交互式通知 GUI，通知转成控制台记录；用户可在 UI 调试分页显式恢复。
+- Forsaken 角色移动优先使用 `SpeedMultipliers/VortexionMoveMultiplier` NumberValue；缺少容器才回退 WalkSpeed。
+- ESP 加入遮挡与无遮挡透明度滑块（0–100%）、相机射线遮挡判断、切换滞回和暂时失联宽限。
+- 发电机不再发送无参数 `Remotes.RE:FireServer()`；仅尝试已有 ProximityPrompt 交互。连线谜题尚未自动求解，**完整自动修理仍不可用**。
+- 以上均为 Roblox 客户端 Luau 修改，离线 Mock 不能证明真机或服务器接受操作。

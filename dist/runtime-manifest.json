@@ -1,9 +1,9 @@
 {
-  "build_tag": "loader-v2-modular-r2.12-runtime-evidence",
+  "build_tag": "loader-v2-modular-r2.13-touch-esp-speed",
   "core": {
-    "bytes": 1473105,
+    "bytes": 1475143,
     "path": "dist/Vortexion_Core.lua",
-    "sha256": "191a3c273747ce5552b03ecdc2690a88adf59b3935703d28172f62ea1cc8ee54"
+    "sha256": "064aab008030c69b92ffc89184d46d64fd9c3d34a3b839a4ed1e4e22d228cfbc"
   },
   "fallback": "standalone-bundle-manual-only",
   "modules": {
@@ -23,9 +23,9 @@
       "sha256": "151fb4fae930a1c902ad452657709433de9a96b7fb3451f68d58480733a1cbdb"
     },
     "Forsaken": {
-      "bytes": 40332,
+      "bytes": 49764,
       "path": "dist/Vortexion_Module_Forsaken.lua",
-      "sha256": "18e3375371c8167b8a0ab0e5f95f9048ecb04fd1eca66472717c2234cfd16566"
+      "sha256": "3e0bc6822da1bca8d756249b79c5deee432087219f93a25913a7363998f7c3f3"
     },
     "SCP": {
       "bytes": 127959,

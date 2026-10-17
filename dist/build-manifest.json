@@ -2,36 +2,36 @@
   "build_tag": "wind-unified-v1",
   "bundles": {
     "Vortexion_AOTR_Battle.lua": {
-      "bytes": 1563620,
-      "sha256": "d92efc927bcb0f2ebfc801fc1a3f39d28e557ff320b031dcb421467a4211cc64"
+      "bytes": 1565658,
+      "sha256": "78b420e835e77b71a753daac4571360ce1600e5dc1668e8524cc5cb617c847a9"
     },
     "Vortexion_AOTR_Lobby.lua": {
-      "bytes": 1497834,
-      "sha256": "e00b42a591d24c755f205f550ae96d1f2977394b9380189347360acab7ca14b0"
+      "bytes": 1499872,
+      "sha256": "51cac7817b546a08e55e379f054d15ace6f9aaaa2c8459eb6444b6b7818473ae"
     },
     "Vortexion_BloxStrike.lua": {
-      "bytes": 1632728,
-      "sha256": "de24de674ec6e0b443d59fec07dde3b66beb2d595706fc9037190b836b0e400e"
+      "bytes": 1634766,
+      "sha256": "e7b040131a4afd34fa62c7101db5a87d4dc6e13df0ceffacd6f586655a1a2b87"
     },
     "Vortexion_Forsaken.lua": {
-      "bytes": 1512789,
-      "sha256": "651e274d1fc7729838333dcea2865ea0e0312c1d3860baaa9c28103f9c435dd6"
+      "bytes": 1524259,
+      "sha256": "7c5bccb5f449ca839f21906b6dec15f665b2a3367dcf0e873ff5317692678891"
     },
     "Vortexion_SCP.lua": {
-      "bytes": 1600416,
-      "sha256": "6b00e440c802a57166c29f1d38ff9e83445aa32b8089a412f8f5f409fca9e0fc"
+      "bytes": 1602454,
+      "sha256": "efbde39ba5bb4d00e837acd95d3700f36698300552c5eb395add98bc6ed68e2d"
     },
     "Vortexion_Wind.lua": {
-      "bytes": 1915271,
-      "sha256": "0ce221046ba3541f57b03ea77da15c16b1b01aaa3448931bfc296e929aee070a"
+      "bytes": 1926741,
+      "sha256": "d50482b2c0c4198c1bb2f91d459bceb5c0d02c7c129a50b6f13b33c06118e932"
     }
   },
   "luau_compiler_tested": false,
   "modular_bundles": {
     "Vortexion_Core.lua": {
-      "bytes": 1473105,
+      "bytes": 1475143,
       "path": "dist/Vortexion_Core.lua",
-      "sha256": "191a3c273747ce5552b03ecdc2690a88adf59b3935703d28172f62ea1cc8ee54"
+      "sha256": "064aab008030c69b92ffc89184d46d64fd9c3d34a3b839a4ed1e4e22d228cfbc"
     },
     "Vortexion_Module_AOTR_Battle.lua": {
       "bytes": 91163,
@@ -49,9 +49,9 @@
       "sha256": "151fb4fae930a1c902ad452657709433de9a96b7fb3451f68d58480733a1cbdb"
     },
     "Vortexion_Module_Forsaken.lua": {
-      "bytes": 40332,
+      "bytes": 49764,
       "path": "dist/Vortexion_Module_Forsaken.lua",
-      "sha256": "18e3375371c8167b8a0ab0e5f95f9048ecb04fd1eca66472717c2234cfd16566"
+      "sha256": "3e0bc6822da1bca8d756249b79c5deee432087219f93a25913a7363998f7c3f3"
     },
     "Vortexion_Module_SCP.lua": {
       "bytes": 127959,
@@ -90,8 +90,8 @@
     "src/BloxStrikeCore.luau": "3257faf491d47594d2cc3e4b405b0844308a6da3f7dbeb7dcbf89eb2ca2fd907",
     "src/BloxStrikeCosmetic.luau": "1e7cb2fd71a0983b1a14276fc2b5ba80df7b88ba190f7cf69ee610c2f82a81d5",
     "src/BloxStrikeVisual.luau": "2e2cd42cf3e737bc636e73b2ced1fc11ab8e09ad6a0b38f4272412f8d3c9025d",
-    "src/ForsakenCore.luau": "7176529459ff5e213f312748828f5b3a5e8567d5d8d76cc6849889e4939b4fbb",
-    "src/ForsakenEnhancements.luau": "0680ca470bdb434078ddd3ae0b1a58be1fcb55d440bf058ece5473f0c77be8d6",
+    "src/ForsakenCore.luau": "66782cbf11a7c3233d9b3597b6b90b737a3f7f210e6ee922caa91be8e2399065",
+    "src/ForsakenEnhancements.luau": "2836a567b8b8267bd891d4b3a612d8e6da31a1b0ccc93bbdb6ce3665a4d22265",
     "src/GameRouter.luau": "12cd8b7e44ca5396b0ddbea315b96f4e70b18a61dc265ab4514b74e036a50651",
     "src/RuntimeMonitor.luau": "2a42420421a3467b9a6395dfcba15f23933babc381851e4bb3103ab92b9df1b3",
     "src/SCPCamera.luau": "dcb1afda4dc974a315a4a278e5e894c756b5e72aa9d5a71052e3780417a90274",
@@ -104,7 +104,7 @@
     "src/SCPMovement.luau": "ae97afebe8523a9063e1598b455c0088bc2ebaf2573118264504e98fd152d47d",
     "src/SCPSilentAim.luau": "c26edcc01c5506ff058daeec8b72c102be02a185c9401213efd676d721de544f",
     "src/ServerSwitch.luau": "f5569973815af65392956ef811ea07b9bad4877af28d98a3566fa085973b994f",
-    "src/WindAdapter.luau": "7d2771c5e0d776dd9921eb177588a8985ac9e986e248bd7e0d601fc1ff745a60",
+    "src/WindAdapter.luau": "fc415893141f196b3e58c14873a9f23d254ce32bd902833d687bcfc3841c249f",
     "src/loader_routes.json": "4a4a09fab17048ea5ffaea6c06333e8d67ec221fde5e230bbb468189e6764ee9",
     "vendor/WindUI/Source.lua": "e29ebad6907d6293731d1de042d6aec4a9428fcddbed8a8f19ef5f4ce05c6d05"
   },

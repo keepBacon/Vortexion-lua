@@ -40762,11 +40762,35 @@ return function(WindUI, config)
         warn("[Vortexion/Wind/BOOT] " .. message)
     end
 
+    -- WindUI native notifications own a large ScreenGui and interactive close
+    -- button. On touch clients, even transparent UI can intercept game gestures.
+    -- All game notifications use this bridge; preserve diagnostics without
+    -- creating any notification GUI unless the player explicitly opts in.
+    bridge.NativeNoticesEnabled = not input.TouchEnabled
+    bridge.NoticeHistory = {}
+    local function setNativeNotices(enabled)
+        bridge.NativeNoticesEnabled = enabled == true
+        local notifications = WindUI.NotificationGui
+        if notifications then
+            pcall(function() notifications.Enabled = bridge.NativeNoticesEnabled end)
+        end
+    end
+    setNativeNotices(bridge.NativeNoticesEnabled)
     function bridge:Notify(info, content, duration)
         if not self.Active then return end
         local c = type(info) == "table" and info or {Title = info, Content = content, Duration = duration}
+        local title = tostring(c.Title or appName)
+        local body = tostring(c.Content or "")
+        self.LastNotice = title .. ": " .. body
+        local notices = self.NoticeHistory
+        notices[#notices + 1] = self.LastNotice:sub(1, 1500)
+        if #notices > 12 then table.remove(notices, 1) end
+        if not self.NativeNoticesEnabled then
+            print("[Vortexion/Notice] " .. self.LastNotice)
+            return
+        end
         local ok, result = pcall(function()
-            return WindUI:Notify({Title = c.Title or appName, Content = c.Content or "", Duration = c.Duration or 4})
+            return WindUI:Notify({Title = title, Content = body, Duration = c.Duration or 4})
         end)
         if not self.Active then return end
         if ok then return result end
@@ -41348,7 +41372,7 @@ return function(WindUI, config)
         local function probeClientRuntime()
             if runtimeProbeBusy or not bridge.Active then return end
             runtimeProbeBusy = true
-            local lines = {"Vortexion R2.12 / CLIENT PROBE", "Route-PlaceId=" .. tostring(game.PlaceId)}
+            local lines = {"Vortexion R2.13 / CLIENT PROBE", "Route-PlaceId=" .. tostring(game.PlaceId)}
             local function put(key, value) lines[#lines + 1] = key .. "=" .. tostring(value) end
             local heartbeatProbe = nil
             local cameraProbe, cameraOriginal, cameraTarget = nil, nil, nil
@@ -41474,7 +41498,19 @@ return function(WindUI, config)
             local ok = pcall(clipboard, bridge:FeatureTrace())
             bridge:Notify({Title = "回调轨迹", Content = ok and "已复制最近 24 条控件回调" or "复制失败"})
         end})
-        debugPage:AddButton({Title = "测试通知", Callback = function() bridge:Notify("WindUI", "原生通知正常。") end})
+        debugPage:AddToggle("wind_native_notifications", {Title = "允许弹出 WindUI 通知（触屏可能遮挡操作）",
+            Default = not input.TouchEnabled, Callback = function(v) setNativeNotices(v) end})
+        debugPage:AddButton({Title = "打印最近通知（无触控遮挡）", Callback = function()
+            print("[Vortexion/Notices] " .. table.concat(bridge.NoticeHistory, "\n"))
+        end})
+        debugPage:AddButton({Title = "复制最近通知（无弹窗）", Callback = function()
+            local clipboard = setclipboard or toclipboard or env.setclipboard or env.toclipboard
+            if type(clipboard) == "function" then
+                local ok, err = pcall(clipboard, table.concat(bridge.NoticeHistory, "\n"))
+                if not ok then bridge.LastError = tostring(err) end
+            end
+        end})
+        debugPage:AddButton({Title = "测试通知", Callback = function() bridge:Notify("WindUI", "通知已经记录；触屏默认不弹出。") end})
         debugPage:AddButton({Title = "清除最近异常", Callback = function() bridge.LastError = nil; refreshDiagnostic() end})
         local status = configs:AddParagraph({Title = "原生配置", Content = "配置按 PlaceId 隔离；仅手动加载。"})
         if #missingFileApi > 0 or not native.ConfigManager then

@@ -71,7 +71,7 @@ assert(syncSamples==4 and syncRepairs==2 and syncFailures==0)
     def test_modules_and_source_integrity(self):
         manifest=json.loads(read('dist/build-manifest.json'))
         runtime=json.loads(read('dist/runtime-manifest.json'))
-        self.assertRegex(runtime['build_tag'], r'r2\.(10|11|12)')
+        self.assertRegex(runtime['build_tag'], r'r2\.\d+')
         for path,sha in manifest['sources'].items():
             self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(),sha,path)
         for filename in ('Forsaken','BloxStrike','AOTR_Lobby','AOTR_Battle','SCP'):

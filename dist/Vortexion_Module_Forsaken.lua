@@ -31,13 +31,22 @@ return function(options)
     local slowSnapshot = setmetatable({}, {__mode = "k"})
     local hiddenSnapshot = setmetatable({}, {__mode = "k"})
     local walkSnapshot = setmetatable({}, {__mode = "k"})
+    local speedMultiplierValue
+    local speedMultiplierFolder
+    state.speedMode = "inactive"
+    state.speedObserved = 0
+    state.measuredSpeed = 0
+    state.repairPhase = "idle"
     local links = {}
     local heartbeat
     local elapsed = 0
     local lastTarget, lastProgress, stagnant = nil, nil, 0
     local awaitingProgress = false
+    local promptToken = 0
+    local promptInFlight = false
     local lastClick = setmetatable({}, {__mode = "k"})
     local savedPosition
+    local lastSpeedRoot, lastSpeedPos, lastSpeedAt
 
     local function report(label, err)
         state.lastError = (tostring(label) .. ": " .. tostring(err)):sub(1, 320)
@@ -161,21 +170,72 @@ return function(options)
             walkSnapshot[hum] = nil
         end
     end
+    local function clearSpeedMultiplier()
+        if speedMultiplierValue then
+            local owned = speedMultiplierValue
+            speedMultiplierValue = nil
+            speedMultiplierFolder = nil
+            safe("remove speed multiplier", function() if owned.Parent then owned:Destroy() end end)
+        end
+    end
     local function applyWalk()
-        if state.moveMultiplier <= 1.001 then return end
-        local _, hum = character()
-        if not hum or hum.Health <= 0 then return end
+        local _, _, measuredRoot = character()
+        if measuredRoot and measuredRoot.Position then
+            local now = os.clock()
+            if lastSpeedRoot == measuredRoot and lastSpeedPos and lastSpeedAt and now > lastSpeedAt then
+                local traveled = (measuredRoot.Position - lastSpeedPos).Magnitude
+                local observed = traveled / (now - lastSpeedAt)
+                if observed <= 100 then state.measuredSpeed = observed end
+            end
+            lastSpeedRoot, lastSpeedPos, lastSpeedAt = measuredRoot, measuredRoot.Position, now
+        else
+            lastSpeedRoot, lastSpeedPos, lastSpeedAt = nil, nil, nil
+            state.measuredSpeed = 0
+        end
+        if state.moveMultiplier <= 1.001 then
+            state.speedMode = "inactive"
+            clearSpeedMultiplier()
+            return
+        end
+        local characterModel, hum = character()
+        if not hum or hum.Health <= 0 then
+            state.speedMode = "waiting-character"
+            return
+        end
+        -- Forsaken's own speed composition consumes SpeedMultipliers/NumberValues
+        -- (confirmed by uploaded Terio_Survivor and statusModule references).
+        -- Updating only Humanoid.WalkSpeed gets overwritten by its movement system.
+        local folder = characterModel and characterModel:FindFirstChild("SpeedMultipliers")
+        if folder then
+            if speedMultiplierFolder ~= folder or not speedMultiplierValue
+                or speedMultiplierValue.Parent ~= folder then
+                clearSpeedMultiplier()
+                local obj = Instance.new("NumberValue")
+                obj.Name = "VortexionMoveMultiplier"
+                obj.Value = state.moveMultiplier
+                obj.Parent = folder
+                speedMultiplierFolder, speedMultiplierValue = folder, obj
+            elseif math.abs(speedMultiplierValue.Value - state.moveMultiplier) > 0.001 then
+                speedMultiplierValue.Value = state.moveMultiplier
+            end
+            restoreWalk()
+            state.speedMode = "game-SpeedMultipliers"
+            state.speedObserved = hum.WalkSpeed
+            return
+        end
+        clearSpeedMultiplier()
+        state.speedMode = "WalkSpeed-fallback"
         local rec = walkSnapshot[hum]
         local current = hum.WalkSpeed
         if not rec then
             rec = {base=current, applied=current}
             walkSnapshot[hum] = rec
         elseif math.abs(current - rec.applied) > 0.15 then
-            -- The game changed its base speed; do not compound multipliers.
             rec.base = current
         end
         rec.applied = math.clamp(rec.base * state.moveMultiplier, 0, 200)
         if math.abs(current - rec.applied) >= 0.05 then hum.WalkSpeed = rec.applied end
+        state.speedObserved = hum.WalkSpeed
     end
     local function hide(obj, property)
         if not obj or not obj.Parent then return end
@@ -214,24 +274,7 @@ return function(options)
         if not popup:IsA("GuiObject") or not popup.Parent then return end
         if lastClick[popup] and os.clock() - lastClick[popup] < 0.25 then return end
         lastClick[popup] = os.clock()
-        -- Mouse synthesis is optional on Android. Visibility fallback is always local.
-        local okVim, vim = pcall(function() return game:GetService("VirtualInputManager") end)
-        if not okVim then vim = nil end
-        if vim then
-            local target = popup
-            for _, child in ipairs(popup:GetDescendants()) do
-                if child:IsA("GuiButton") and child.Visible then
-                    target = child
-                    if child.Name:lower():find("close") or child.Name:lower() == "x" then break end
-                end
-            end
-            safe("popup click", function()
-                local pos, size = target.AbsolutePosition, target.AbsoluteSize
-                local x, y = pos.X + size.X / 2, pos.Y + size.Y / 2
-                vim:SendMouseButtonEvent(x, y, 0, true, game, 0)
-                vim:SendMouseButtonEvent(x, y, 0, false, game, 0)
-            end)
-        end
+        -- Only hide the local popup; synthetic mouse events can steal mobile touches.
         hide(popup, "Visible")
         state.popupsClosed += 1
     end
@@ -300,8 +343,14 @@ return function(options)
                 local main = gen:FindFirstChild("Main")
                 local part = main and (main:IsA("BasePart") and main or main:FindFirstChildWhichIsA("BasePart"))
                 part = part or gen.PrimaryPart or gen:FindFirstChildWhichIsA("BasePart")
-                if progress and (progress:IsA("IntValue") or progress:IsA("NumberValue"))
-                    and progress.Value < 100 and part then
+                -- Current game versions can expose generator completion as an
+                -- attribute rather than Progress NumberValue. Do not reject a
+                -- valid interactable model solely because the old field moved.
+                local value = progress and (progress:IsA("IntValue") or progress:IsA("NumberValue"))
+                    and progress.Value or nil
+                local complete = gen:FindFirstChild("Completed")
+                local done = complete and complete:IsA("BoolValue") and complete.Value
+                if part and not done and (value == nil or value < 100) then
                     local distance = (root.Position - part.Position).Magnitude
                     if not closest or distance < closest then
                         selected, closest, position = gen, distance, part
@@ -320,62 +369,114 @@ return function(options)
             safe("restore position", function() root.CFrame = rec.cf end)
         end
     end
+    -- A Forsaken generator is not a single FireServer call: after interaction,
+    -- the game presents a multi-layer wire puzzle. Bare RE:FireServer() with no
+    -- proven protocol is not a repair and is intentionally never issued.
+    local function findGeneratorPrompt(gen)
+        local count = 0
+        for _, item in ipairs(gen:GetDescendants()) do
+            count += 1
+            if count > 128 then break end
+            if item:IsA("ProximityPrompt") and item.Enabled then return item end
+        end
+        return nil
+    end
+    local function puzzleIsOpen()
+        local pg = player:FindFirstChildOfClass("PlayerGui")
+        if not pg then return false end
+        local inspected = 0
+        for _, item in ipairs(pg:GetDescendants()) do
+            inspected += 1
+            if inspected > 300 then break end
+            local name = item.Name:lower()
+            if (name:find("generator", 1, true) or name:find("puzzle", 1, true)
+                or name:find("wire", 1, true))
+                and (item:IsA("ScreenGui") and item.Enabled
+                    or item:IsA("GuiObject") and item.Visible) then
+                return true
+            end
+        end
+        return false
+    end
     local function repairOnce()
-        if not state.autoRepair then return end
-        local gen, distance, part, root = nearestGenerator()
-        if not gen then state.lastAction = "未找到未完成发电机/角色未就绪"; return end
+        if not state.autoRepair or promptInFlight then return end
+        local gen, distance, part = nearestGenerator()
+        if not gen then
+            state.repairPhase = "no-target"
+            state.lastAction = "未找到未完成发电机或角色不可用"
+            return
+        end
         local progress = gen:FindFirstChild("Progress")
         if gen ~= lastTarget then
-            lastTarget, lastProgress, stagnant = gen, progress.Value, 0
+            lastTarget, lastProgress, stagnant = gen, progress and progress.Value or nil, 0
             awaitingProgress = false
         end
         if distance > 16 then
+            state.repairPhase = "out-of-range"
             if not state.approach then
-                state.lastAction = ("发电机距离 %.0f，需靠近或启用自动前往"):format(distance)
+                state.lastAction = ("距离 %.0f studs；请靠近或开启自动寻路"):format(distance)
                 return
             end
-            if not savedPosition then savedPosition = {root=root, cf=root.CFrame} end
             safe("approach generator", function()
-                local pos = part.Position - part.CFrame.LookVector * 5 + Vector3.new(0, 2, 0)
-                root.CFrame = CFrame.new(pos, part.Position)
+                local _, humanoid = character()
+                if humanoid then humanoid:MoveTo(part.Position - part.CFrame.LookVector * 5) end
             end)
-            state.lastAction = "已尝试接近发电机，等待下一轮确认距离"
+            state.lastAction = "正在尝试使用 Humanoid:MoveTo 接近发电机"
             return
         end
-        local remotes = gen:FindFirstChild("Remotes")
-        local re = remotes and remotes:FindFirstChild("RE")
-        if not re or not re:IsA("RemoteEvent") then
-            state.lastAction = "找不到已知的 Generator.Remotes.RE"
+        if stagnant >= 3 then
+            state.repairPhase = "interaction-unconfirmed"
+            state.repairPaused = true
+            state.lastAction = "连续 3 次尝试交互仍未观察到拼图；已停止重试"
             return
         end
-        -- Count stagnation only after real requests, never while traveling.
-        if awaitingProgress then
-            if progress.Value > (lastProgress or -1) then
-                state.progressSeen += 1
-                stagnant = 0
-            else
-                stagnant += 1
+        if puzzleIsOpen() then
+            state.repairPhase = "puzzle-open"
+            state.repairPaused = true
+            state.lastAction = "已出现发电机拼图；未适配拼图节点与连线协议，不能谎报自动完成"
+            return
+        end
+        local prompt = findGeneratorPrompt(gen)
+        if not prompt then
+            state.repairPhase = "no-prompt"
+            state.repairPaused = true
+            state.lastAction = "未找到可交互 ProximityPrompt；旧版无参数 RE 协议不可用"
+            return
+        end
+        local maxDistance = tonumber(prompt.MaxActivationDistance) or 10
+        if distance > maxDistance then
+            state.repairPhase = "prompt-out-of-range"
+            state.lastAction = ("靠近至 %.1f studs 内才能触发交互"):format(maxDistance)
+            return
+        end
+        promptToken += 1
+        local thisToken = promptToken
+        promptInFlight = true
+        state.repairPhase = "prompt-hold"
+        state.lastAction = "尝试触发游戏自带交互提示，等待拼图界面"
+        task.spawn(function()
+            local ok = safe("generator InputHoldBegin", function()
+                prompt:InputHoldBegin()
+            end)
+            if ok then
+                task.wait(math.clamp((tonumber(prompt.HoldDuration) or 0) + 0.12, 0.15, 6))
             end
-            if stagnant >= 4 then
-                state.repairPaused = true
-                state.lastAction = "进度连续未变化，已暂停自动修理（关闭再开启可重试）"
-                notify("发电机已暂停", "连续多次请求后没有进度变化，请检查地图或服务器接口")
-                restorePosition()
-                return
+            -- Finish a hold even if disabled mid-hold; never synthesize global
+            -- touch/mouse events, which interfere with Android controls.
+            safe("generator InputHoldEnd", function() prompt:InputHoldEnd() end)
+            if state.alive and thisToken == promptToken then
+                promptInFlight = false
+                if ok then
+                    state.repairsSent += 1
+                    stagnant += 1
+                    state.repairPhase = "interaction-attempted"
+                    state.lastAction = "交互已尝试；仍需验证拼图是否出现并实现连线求解"
+                else
+                    state.repairPhase = "prompt-error"
+                    state.repairPaused = true
+                end
             end
-        end
-        lastProgress = progress.Value
-        local main = gen:FindFirstChild("Main")
-        local prompt = main and (main:IsA("ProximityPrompt") and main or main:FindFirstChildWhichIsA("ProximityPrompt", true))
-        if prompt and type(fireproximityprompt) == "function" then
-            safe("generator prompt", function() fireproximityprompt(prompt) end)
-        end
-        local ok = safe("generator RE", function() re:FireServer() end)
-        if ok then
-            awaitingProgress = true
-            state.repairsSent += 1
-            state.lastAction = "已发送一次修理请求；等待服务器确认进度"
-        end
+        end)
     end
     local function stopScheduler()
         if heartbeat then heartbeat:Disconnect(); heartbeat = nil end
@@ -421,6 +522,9 @@ return function(options)
             restoreHidden(function(obj) return obj.Name == "1x1x1x1Popup" end)
         end
         if field == "autoRepair" then
+            promptToken += 1
+            promptInFlight = false
+            state.repairPhase = value and "waiting" or "disabled"
             state.repairPaused = false
             state.nextRepair = os.clock() + (value and 0.25 or 0)
             lastTarget, lastProgress, stagnant = nil, nil, 0
@@ -435,23 +539,30 @@ return function(options)
     local function shutdown()
         if not state.alive then return end
         state.alive = false
+        promptToken += 1
         stopScheduler()
         for _, link in ipairs(links) do safe("disconnect", function() link:Disconnect() end) end
         table.clear(links)
         restoreStamina()
         restoreValues(slowSnapshot)
         restoreWalk()
+        clearSpeedMultiplier()
+        lastSpeedRoot, lastSpeedPos, lastSpeedAt = nil, nil, nil
         restoreHidden()
         restorePosition()
     end
     table.insert(links, player.CharacterAdded:Connect(function()
+        clearSpeedMultiplier()
         restoreWalk()
+        lastSpeedRoot, lastSpeedPos, lastSpeedAt = nil, nil, nil
         restoreValues(slowSnapshot)
         staminaInstance, staminaModule = nil, nil
         lastTarget, lastProgress, stagnant = nil, nil, 0
         awaitingProgress = false
         savedPosition = nil
         state.nextRepair = os.clock() + state.repairDelay
+        promptToken += 1
+        promptInFlight = false
     end))
     local gui = player:FindFirstChildOfClass("PlayerGui")
     if gui then
@@ -473,16 +584,21 @@ return function(options)
     tabs.player:AddSlider("FsMovementMultiplierR28", {Title="移动倍数 (1.0–2.0)", Min=1, Max=2,
         Default=1, Rounding=2, Callback=function(v)
             local mult = math.clamp(tonumber(v) or 1, 1, 2)
-            if mult <= 1.001 then restoreWalk() end
+            if mult <= 1.001 then restoreWalk(); clearSpeedMultiplier() end
             state.moveMultiplier = mult
             manageScheduler()
         end})
+    tabs.player:AddButton({Title="查看移动倍率诊断", Callback=function()
+        notify("Forsaken 移动倍率", ("倍率=%.2f 模式=%s Humanoid.WalkSpeed=%.2f\n估算位移速度=%.2f studs/s（仅供诊断）\n错误：%s")
+            :format(state.moveMultiplier, state.speedMode, state.speedObserved,
+                state.measuredSpeed, state.lastError))
+    end})
     tabs.defense:AddToggle("FsAntiTaphR28", {Title="反塔夫亚空间炸弹（本地视觉效果）", Default=false,
         Callback=function(v) switch("antiTaph", v) end})
     tabs.defense:AddToggle("FsPopupR28", {Title="自动关闭 1x1x1x1 弹窗", Default=false,
         Callback=function(v) switch("autoPopup", v) end})
-    tabs.defense:AddParagraph({Title="防御范围", Content="塔夫处理本地 Subspaced 视觉效果；不声称免疫服务器 Helpless 状态。弹窗先尝试触控，失败时只隐藏本地界面。"})
-    tabs.generators:AddToggle("FsAutoRepairR28", {Title="自动修发电机", Default=false,
+    tabs.defense:AddParagraph({Title="防御范围", Content="塔夫处理本地 Subspaced 视觉效果；不声称免疫服务器 Helpless 状态。弹窗仅在本地隐藏，不模拟鼠标点击以免抢占触控。"})
+    tabs.generators:AddToggle("FsAutoRepairR28", {Title="自动尝试发电机交互（连线解谜待适配）", Default=false,
         Callback=function(v) switch("autoRepair", v) end})
     tabs.generators:AddSlider("FsRepairDelayR28", {Title="修发电机延迟（秒）", Min=2.5, Max=10,
         Default=4, Rounding=1, Callback=function(v)
@@ -492,6 +608,8 @@ return function(options)
         Callback=function(v) state.approach = not not v end})
     tabs.generators:AddButton({Title="重新尝试发电机修理", Callback=function()
         stagnant = 0
+        promptToken += 1
+        promptInFlight = false
         lastTarget, lastProgress = nil, nil
         awaitingProgress = false
         state.repairPaused = false
@@ -500,11 +618,12 @@ return function(options)
         notify("发电机", "已重置失败计数，等待下一次修理")
     end})
     tabs.generators:AddButton({Title="查看修理与防御诊断", Callback=function()
-        notify("Forsaken R2.8", ("请求=%d 进度变化=%d 弹窗=%d\n%s\n错误：%s")
+        notify("Forsaken 修理诊断", ("交互尝试=%d 进度变化=%d 弹窗=%d 交互阶段=%s\n%s\n移动模式=%s 实际WalkSpeed=%.2f\n错误：%s")
             :format(state.repairsSent, state.progressSeen, state.popupsClosed,
-                state.lastAction, state.lastError))
+                state.repairPhase, state.lastAction, state.speedMode,
+                state.speedObserved, state.lastError))
     end})
-    tabs.generators:AddParagraph({Title="修理限制", Content="按已知 Generator.Remotes.RE 请求修理，最短间隔 2.5 秒；服务器拒绝时不会虚报完成。缺少游戏接口会暂停或提示。自动前往默认关闭。"})
+    tabs.generators:AddParagraph({Title="修理限制", Content="现已改为原生 ProximityPrompt 交互；完整自动修理还需要识别 6×6 连线拼图并求解，目前不可用。不会发送无依据的 RE 远程请求。"})
     return {Destroy = shutdown, State = state, EnumerateGenerators = enumerateGenerators}
 end
 
@@ -528,7 +647,7 @@ end
 
 local bridge = WindBridgeFactory(WindUI, {Name = "Forsaken", Folder = "VortexionForsaken"})
 assert(bridge and bridge.Active, "Forsaken: WindUI bridge unavailable")
-local window = bridge:CreateWindow({Title = "Forsaken · R2.11"})
+local window = bridge:CreateWindow({Title = "Forsaken · R2.13"})
 assert(window, "Forsaken: window creation failed")
 local tabs = {
     vision = window:AddTab({Title = "感知", Icon = "lucide-eye"}),
@@ -543,7 +662,12 @@ local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Ta
 
 local state = {alive = true, killers = false, survivors = false,
     generators = false, alert = false, fovEnabled = false, fov = 80,
-    maxDistance = 240, alertDistance = 35, markers = {}, lastAlert = 0,
+    maxDistance = 400, alertDistance = 35, markers = {}, lastAlert = 0,
+    occludedTransparency = 65, visibleTransparency = 20,
+    markerSeen = setmetatable({}, {__mode = "k"}),
+    markerKinds = setmetatable({}, {__mode = "k"}),
+    visibilityCache = setmetatable({}, {__mode = "k"}),
+    blockedCount = 0, clearCount = 0, stalenessGrace = 1.25,
     ticker = nil, originalFov = setmetatable({}, {__mode="k"}),
     scans = 0, objects = 0, lastProblem = "none",
     candidateCount = 0, inRangeCount = 0, markerFailures = 0,
@@ -564,6 +688,9 @@ local function clearMarker(model)
     local marker = state.markers[model]
     if marker then
         state.markers[model] = nil
+        state.markerSeen[model] = nil
+        state.markerKinds[model] = nil
+        state.visibilityCache[model] = nil
         safe("marker cleanup", function() marker:Destroy() end)
     end
 end
@@ -631,28 +758,80 @@ local function candidates()
     end
     return selected
 end
-local function markerFor(model, kind)
+-- Roblox Highlight has one FillTransparency value. It cannot directly assign
+-- separate transparency for occluded and unobstructed pixels simultaneously.
+-- A bounded camera raycast selects the applicable alpha per target (4 Hz),
+-- while DepthMode=AlwaysOnTop allows the occluded highlight to remain visible.
+local function blockedByWorld(model, part, camera)
+    if not camera or not camera.CFrame then return false end
+    local origin = camera.CFrame.Position
+    local direction = part.Position - origin
+    if direction.Magnitude <= 0.25 then return false end
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = user.Character and {user.Character} or {}
+    params.IgnoreWater = true
+    local result = Workspace:Raycast(origin, direction, params)
+    return result ~= nil and not result.Instance:IsDescendantOf(model)
+end
+local function alphaFor(model, part, camera)
+    local now = os.clock()
+    local cache = state.visibilityCache[model]
+    local ok, obstructed = safe("occlusion raycast", function()
+        return blockedByWorld(model, part, camera)
+    end)
+    if not ok then return state.visibleTransparency / 100 end
+    if cache and cache.blocked ~= obstructed then
+        if cache.pending == obstructed then
+            cache.samples = cache.samples + 1
+        else
+            cache.pending, cache.samples = obstructed, 1
+        end
+        if cache.samples >= 2 then
+            cache.blocked, cache.pending, cache.samples = obstructed, nil, 0
+        end
+    elseif not cache then
+        cache = {blocked = obstructed, pending = nil, samples = 0}
+        state.visibilityCache[model] = cache
+    else
+        cache.pending, cache.samples = nil, 0
+    end
+    if cache.blocked then
+        state.blockedCount += 1
+    else
+        state.clearCount += 1
+    end
+    return (cache.blocked and state.occludedTransparency or state.visibleTransparency) / 100
+end
+local function markerFor(model, kind, part, camera)
     local existing = state.markers[model]
-    if existing then return existing end
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "VortexionMarker"
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.FillTransparency = 0.85
-    highlight.OutlineTransparency = 0.08
-    highlight.Adornee = model
-    highlight.FillColor = kind == "Killer" and Color3.fromRGB(235, 78, 78)
-        or kind == "Survivor" and Color3.fromRGB(78, 176, 121)
-        or Color3.fromRGB(245, 191, 85)
-    highlight.OutlineColor = highlight.FillColor
-    -- Parent to the actual target, not PlayerGui. Roblox supports the model-owned
-    -- form directly, while some clients intermittently suppress PlayerGui highlights.
-    highlight.Parent = model
-    state.markers[model] = highlight
+    if existing and not existing.Parent then
+        state.markers[model] = nil
+        existing = nil
+    end
+    local highlight = existing
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.Name = "VortexionMarker"
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Adornee = model
+        highlight.FillColor = kind == "Killer" and Color3.fromRGB(235, 78, 78)
+            or kind == "Survivor" and Color3.fromRGB(78, 176, 121)
+            or Color3.fromRGB(245, 191, 85)
+        highlight.OutlineColor = highlight.FillColor
+        highlight.Parent = model
+        state.markers[model] = highlight
+    end
+    local alpha = alphaFor(model, part, camera)
+    highlight.FillTransparency = alpha
+    highlight.OutlineTransparency = alpha
+    state.markerKinds[model] = kind
     return highlight
 end
 local function tickVisual()
     state.scans += 1
     state.candidateCount, state.inRangeCount = 0, 0
+    state.blockedCount, state.clearCount = 0, 0
     -- The camera is an independent observer during death/spectate. Do not
     -- disable ESP merely because the player's previous character was removed.
     local playerRoot = getRoot(user.Character)
@@ -677,6 +856,7 @@ local function tickVisual()
     end
     local required = candidates()
     local visible = {}
+    local now = os.clock()
     local budget = 32 -- Bound per-refresh allocations on mobile.
     local nearestThreat
     for model, kind in pairs(required) do
@@ -690,19 +870,31 @@ local function tickVisual()
             local show = (kind == "Killer" and state.killers)
                 or (kind == "Survivor" and state.survivors)
                 or (kind == "Generator" and state.generators)
-            if show and distance <= state.maxDistance then
+            local exitHysteresis = state.markers[model] and 40 or 0
+            if show and distance <= state.maxDistance + exitHysteresis then
                 state.inRangeCount += 1
                 if budget > 0 then
                     budget -= 1
-                    local ok = safe("highlight", function() markerFor(model, kind) end)
-                    if ok then visible[model] = true
+                    local ok = safe("highlight", function() markerFor(model, kind, root, camera) end)
+                    if ok then
+                        visible[model] = true
+                        state.markerSeen[model] = now
                     else state.markerFailures = state.markerFailures + 1 end
                 end
             end
         end
     end
     for model in pairs(state.markers) do
-        if not visible[model] or not model.Parent then clearMarker(model) end
+        -- A temporary missing model, camera switch, or distance crossing should
+        -- not destroy/recreate the highlight on every 250 ms scan.
+        local kind = state.markerKinds[model]
+        local enabled = (kind == "Killer" and state.killers)
+            or (kind == "Survivor" and state.survivors)
+            or (kind == "Generator" and state.generators)
+        if not model.Parent or not enabled or
+            (not visible[model] and now - (state.markerSeen[model] or 0) > state.stalenessGrace) then
+            clearMarker(model)
+        end
     end
     local count = 0
     for _ in pairs(state.markers) do count += 1 end
@@ -817,8 +1009,13 @@ state.watchConnection = RunService.Heartbeat:Connect(function(dt)
     synchronizeVisionOptions()
 end)
 
-tabs.vision:AddSlider("FsVisionDistance", {Title="高亮距离", Min=40, Max=600, Default=240, Rounding=0,
+tabs.vision:AddSlider("FsVisionDistance", {Title="高亮距离", Min=40, Max=600, Default=400, Rounding=0,
     Callback=function(v) state.maxDistance=v end})
+tabs.vision:AddSlider("FsOccludedAlphaR213", {Title="ESP 遮挡时透明度 (%)", Min=0, Max=100,
+    Default=65, Rounding=0, Callback=function(v) state.occludedTransparency = math.clamp(v, 0, 100) end})
+tabs.vision:AddSlider("FsVisibleAlphaR213", {Title="ESP 无遮挡时透明度 (%)", Min=0, Max=100,
+    Default=20, Rounding=0, Callback=function(v) state.visibleTransparency = math.clamp(v, 0, 100) end})
+tabs.vision:AddParagraph({Title="ESP 透明度说明", Content="0% 完全不透明，100% 完全透明。通过限频射线检测遮挡，并提供短暂保留以减少闪烁。"})
 tabs.vision:AddToggle("FsKillerWarning", {Title="附近杀手预警", Default=false,
     Callback=function(v) state.alert=v; refreshScheduler() end})
 tabs.vision:AddSlider("FsWarningDistance", {Title="预警距离", Min=10, Max=100, Default=35, Rounding=0,
@@ -857,6 +1054,8 @@ tabs.system:AddButton({Title="检查游戏结构", Callback=function()
             state.scanMode, state.lastScanReason, state.stateRepairs,
             state.characterGeneration, state.spectatorScans,
             state.candidateCount, state.inRangeCount, state.markerFailures)
+    msg = msg .. string.format("\n遮挡检测=%d 无遮挡检测=%d 遮挡透明度=%d%% 无遮挡透明度=%d%%",
+        state.blockedCount, state.clearCount, state.occludedTransparency, state.visibleTransparency)
     bridge:Notify({Title="Forsaken 诊断", Content=msg, Duration=12})
 end})
 tabs.system:AddButton({Title="重进当前游戏", Callback=function()
@@ -868,7 +1067,7 @@ tabs.system:AddButton({Title="卸载 Forsaken 功能", Callback=function()
 end})
 tabs.system:AddParagraph({Title="运行限制", Content="场景结构可能随游戏更新变化。检测不到目标时会保持空状态，不会伪造功能成功；未进行 Roblox 安卓实测。"})
 window:SelectTab(1)
-bridge:Notify({Title="Forsaken", Content="R2.11 已加载；感知功能需手动开启，菜单场景没有角色模型时不会生成标记", Duration=5})
+bridge:Notify({Title="Forsaken", Content="R2.13 已加载；感知功能需手动开启，菜单场景没有角色模型时不会生成标记", Duration=5})
 
 end
 return GameRouter.Run(WindUI, WindBridgeFactory, entry, game.GameId, game.PlaceId, "Forsaken")

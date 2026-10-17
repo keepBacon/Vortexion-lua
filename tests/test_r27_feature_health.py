@@ -62,7 +62,7 @@ assert(try()=='LX63','module stopped before window')
         self.assertIn('partial and "partial" or "success"',loader)
         self.assertIn('bridge.BootStatus == "partial"',loader)
         self.assertNotIn('error("Game module initialization incomplete',loader)
-        self.assertRegex(loader, r'2\.(7|8|10|11|12)\.0-')
+        self.assertRegex(loader, r'2\.\d+\.0-')
 
     def test_built_dist_contains_all_three_fixes(self):
         core=READ('dist/Vortexion_Core.lua')
@@ -71,7 +71,7 @@ assert(try()=='LX63','module stopped before window')
             src=READ('dist/Vortexion_Module_'+name+'.lua')
             self.assertNotIn('executor unsupported:',src)
         data=json.loads(READ('dist/runtime-manifest.json'))
-        self.assertRegex(data['build_tag'], r'r2\.(7|8|10|11|12)')
+        self.assertRegex(data['build_tag'], r'r2\.\d+')
 
     def test_callback_native_filter_no_longer_opaque(self):
         src=READ('src/WindAdapter.luau')

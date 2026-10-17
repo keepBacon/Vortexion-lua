@@ -20,7 +20,7 @@ end
 
 local bridge = WindBridgeFactory(WindUI, {Name = "Forsaken", Folder = "VortexionForsaken"})
 assert(bridge and bridge.Active, "Forsaken: WindUI bridge unavailable")
-local window = bridge:CreateWindow({Title = "Forsaken · R2.11"})
+local window = bridge:CreateWindow({Title = "Forsaken · R2.13"})
 assert(window, "Forsaken: window creation failed")
 local tabs = {
     vision = window:AddTab({Title = "感知", Icon = "lucide-eye"}),
@@ -35,7 +35,12 @@ local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Ta
 
 local state = {alive = true, killers = false, survivors = false,
     generators = false, alert = false, fovEnabled = false, fov = 80,
-    maxDistance = 240, alertDistance = 35, markers = {}, lastAlert = 0,
+    maxDistance = 400, alertDistance = 35, markers = {}, lastAlert = 0,
+    occludedTransparency = 65, visibleTransparency = 20,
+    markerSeen = setmetatable({}, {__mode = "k"}),
+    markerKinds = setmetatable({}, {__mode = "k"}),
+    visibilityCache = setmetatable({}, {__mode = "k"}),
+    blockedCount = 0, clearCount = 0, stalenessGrace = 1.25,
     ticker = nil, originalFov = setmetatable({}, {__mode="k"}),
     scans = 0, objects = 0, lastProblem = "none",
     candidateCount = 0, inRangeCount = 0, markerFailures = 0,
@@ -56,6 +61,9 @@ local function clearMarker(model)
     local marker = state.markers[model]
     if marker then
         state.markers[model] = nil
+        state.markerSeen[model] = nil
+        state.markerKinds[model] = nil
+        state.visibilityCache[model] = nil
         safe("marker cleanup", function() marker:Destroy() end)
     end
 end
@@ -123,28 +131,80 @@ local function candidates()
     end
     return selected
 end
-local function markerFor(model, kind)
+-- Roblox Highlight has one FillTransparency value. It cannot directly assign
+-- separate transparency for occluded and unobstructed pixels simultaneously.
+-- A bounded camera raycast selects the applicable alpha per target (4 Hz),
+-- while DepthMode=AlwaysOnTop allows the occluded highlight to remain visible.
+local function blockedByWorld(model, part, camera)
+    if not camera or not camera.CFrame then return false end
+    local origin = camera.CFrame.Position
+    local direction = part.Position - origin
+    if direction.Magnitude <= 0.25 then return false end
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = user.Character and {user.Character} or {}
+    params.IgnoreWater = true
+    local result = Workspace:Raycast(origin, direction, params)
+    return result ~= nil and not result.Instance:IsDescendantOf(model)
+end
+local function alphaFor(model, part, camera)
+    local now = os.clock()
+    local cache = state.visibilityCache[model]
+    local ok, obstructed = safe("occlusion raycast", function()
+        return blockedByWorld(model, part, camera)
+    end)
+    if not ok then return state.visibleTransparency / 100 end
+    if cache and cache.blocked ~= obstructed then
+        if cache.pending == obstructed then
+            cache.samples = cache.samples + 1
+        else
+            cache.pending, cache.samples = obstructed, 1
+        end
+        if cache.samples >= 2 then
+            cache.blocked, cache.pending, cache.samples = obstructed, nil, 0
+        end
+    elseif not cache then
+        cache = {blocked = obstructed, pending = nil, samples = 0}
+        state.visibilityCache[model] = cache
+    else
+        cache.pending, cache.samples = nil, 0
+    end
+    if cache.blocked then
+        state.blockedCount += 1
+    else
+        state.clearCount += 1
+    end
+    return (cache.blocked and state.occludedTransparency or state.visibleTransparency) / 100
+end
+local function markerFor(model, kind, part, camera)
     local existing = state.markers[model]
-    if existing then return existing end
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "VortexionMarker"
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.FillTransparency = 0.85
-    highlight.OutlineTransparency = 0.08
-    highlight.Adornee = model
-    highlight.FillColor = kind == "Killer" and Color3.fromRGB(235, 78, 78)
-        or kind == "Survivor" and Color3.fromRGB(78, 176, 121)
-        or Color3.fromRGB(245, 191, 85)
-    highlight.OutlineColor = highlight.FillColor
-    -- Parent to the actual target, not PlayerGui. Roblox supports the model-owned
-    -- form directly, while some clients intermittently suppress PlayerGui highlights.
-    highlight.Parent = model
-    state.markers[model] = highlight
+    if existing and not existing.Parent then
+        state.markers[model] = nil
+        existing = nil
+    end
+    local highlight = existing
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.Name = "VortexionMarker"
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Adornee = model
+        highlight.FillColor = kind == "Killer" and Color3.fromRGB(235, 78, 78)
+            or kind == "Survivor" and Color3.fromRGB(78, 176, 121)
+            or Color3.fromRGB(245, 191, 85)
+        highlight.OutlineColor = highlight.FillColor
+        highlight.Parent = model
+        state.markers[model] = highlight
+    end
+    local alpha = alphaFor(model, part, camera)
+    highlight.FillTransparency = alpha
+    highlight.OutlineTransparency = alpha
+    state.markerKinds[model] = kind
     return highlight
 end
 local function tickVisual()
     state.scans += 1
     state.candidateCount, state.inRangeCount = 0, 0
+    state.blockedCount, state.clearCount = 0, 0
     -- The camera is an independent observer during death/spectate. Do not
     -- disable ESP merely because the player's previous character was removed.
     local playerRoot = getRoot(user.Character)
@@ -169,6 +229,7 @@ local function tickVisual()
     end
     local required = candidates()
     local visible = {}
+    local now = os.clock()
     local budget = 32 -- Bound per-refresh allocations on mobile.
     local nearestThreat
     for model, kind in pairs(required) do
@@ -182,19 +243,31 @@ local function tickVisual()
             local show = (kind == "Killer" and state.killers)
                 or (kind == "Survivor" and state.survivors)
                 or (kind == "Generator" and state.generators)
-            if show and distance <= state.maxDistance then
+            local exitHysteresis = state.markers[model] and 40 or 0
+            if show and distance <= state.maxDistance + exitHysteresis then
                 state.inRangeCount += 1
                 if budget > 0 then
                     budget -= 1
-                    local ok = safe("highlight", function() markerFor(model, kind) end)
-                    if ok then visible[model] = true
+                    local ok = safe("highlight", function() markerFor(model, kind, root, camera) end)
+                    if ok then
+                        visible[model] = true
+                        state.markerSeen[model] = now
                     else state.markerFailures = state.markerFailures + 1 end
                 end
             end
         end
     end
     for model in pairs(state.markers) do
-        if not visible[model] or not model.Parent then clearMarker(model) end
+        -- A temporary missing model, camera switch, or distance crossing should
+        -- not destroy/recreate the highlight on every 250 ms scan.
+        local kind = state.markerKinds[model]
+        local enabled = (kind == "Killer" and state.killers)
+            or (kind == "Survivor" and state.survivors)
+            or (kind == "Generator" and state.generators)
+        if not model.Parent or not enabled or
+            (not visible[model] and now - (state.markerSeen[model] or 0) > state.stalenessGrace) then
+            clearMarker(model)
+        end
     end
     local count = 0
     for _ in pairs(state.markers) do count += 1 end
@@ -309,8 +382,13 @@ state.watchConnection = RunService.Heartbeat:Connect(function(dt)
     synchronizeVisionOptions()
 end)
 
-tabs.vision:AddSlider("FsVisionDistance", {Title="高亮距离", Min=40, Max=600, Default=240, Rounding=0,
+tabs.vision:AddSlider("FsVisionDistance", {Title="高亮距离", Min=40, Max=600, Default=400, Rounding=0,
     Callback=function(v) state.maxDistance=v end})
+tabs.vision:AddSlider("FsOccludedAlphaR213", {Title="ESP 遮挡时透明度 (%)", Min=0, Max=100,
+    Default=65, Rounding=0, Callback=function(v) state.occludedTransparency = math.clamp(v, 0, 100) end})
+tabs.vision:AddSlider("FsVisibleAlphaR213", {Title="ESP 无遮挡时透明度 (%)", Min=0, Max=100,
+    Default=20, Rounding=0, Callback=function(v) state.visibleTransparency = math.clamp(v, 0, 100) end})
+tabs.vision:AddParagraph({Title="ESP 透明度说明", Content="0% 完全不透明，100% 完全透明。通过限频射线检测遮挡，并提供短暂保留以减少闪烁。"})
 tabs.vision:AddToggle("FsKillerWarning", {Title="附近杀手预警", Default=false,
     Callback=function(v) state.alert=v; refreshScheduler() end})
 tabs.vision:AddSlider("FsWarningDistance", {Title="预警距离", Min=10, Max=100, Default=35, Rounding=0,
@@ -349,6 +427,8 @@ tabs.system:AddButton({Title="检查游戏结构", Callback=function()
             state.scanMode, state.lastScanReason, state.stateRepairs,
             state.characterGeneration, state.spectatorScans,
             state.candidateCount, state.inRangeCount, state.markerFailures)
+    msg = msg .. string.format("\n遮挡检测=%d 无遮挡检测=%d 遮挡透明度=%d%% 无遮挡透明度=%d%%",
+        state.blockedCount, state.clearCount, state.occludedTransparency, state.visibleTransparency)
     bridge:Notify({Title="Forsaken 诊断", Content=msg, Duration=12})
 end})
 tabs.system:AddButton({Title="重进当前游戏", Callback=function()
@@ -360,4 +440,4 @@ tabs.system:AddButton({Title="卸载 Forsaken 功能", Callback=function()
 end})
 tabs.system:AddParagraph({Title="运行限制", Content="场景结构可能随游戏更新变化。检测不到目标时会保持空状态，不会伪造功能成功；未进行 Roblox 安卓实测。"})
 window:SelectTab(1)
-bridge:Notify({Title="Forsaken", Content="R2.11 已加载；感知功能需手动开启，菜单场景没有角色模型时不会生成标记", Duration=5})
+bridge:Notify({Title="Forsaken", Content="R2.13 已加载；感知功能需手动开启，菜单场景没有角色模型时不会生成标记", Duration=5})

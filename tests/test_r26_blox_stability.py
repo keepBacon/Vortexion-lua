@@ -118,7 +118,7 @@ assert(__cloakHooks==0, 'hook installed during cleanup')
 
     def test_generated_bundles_match_hash_manifest(self):
         mf=json.loads((ROOT/'dist/runtime-manifest.json').read_text())
-        self.assertRegex(mf['build_tag'], r'r2\.(6|7|8|10|11|12)')
+        self.assertRegex(mf['build_tag'], r'r2\.\d+')
         for item in [mf['core'],*mf['modules'].values()]:
             raw=(ROOT/item['path']).read_bytes()
             self.assertEqual(item['bytes'],len(raw))

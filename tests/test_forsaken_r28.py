@@ -54,6 +54,13 @@ local function node(name, typ)
  function o:Add(v) v.Parent=self; self.Children[v.Name]=v;return v end
  return o
 end
+Instance={new=function(kind)
+ assert(kind=='NumberValue')
+ local val={Name='VortexionMoveMultiplier',kind=kind,Parent=nil,Value=1}
+ __newSpeedValue=val
+ function val:Destroy() if self.Parent then self.Parent.Children[self.Name]=nil end;self.Parent=nil end
+ return val
+end}
 local pos=setmetatable({n=0},{__sub=function(a,b)return {Magnitude=math.abs(a.n-b.n)}end})
 __char=node('Character','Model')
 __hum=__char:Add(node('Humanoid','Humanoid'))
@@ -133,11 +140,13 @@ assert(__connected==__disconnected)
     def test_movement_not_compounded_and_restored(self):
         test = r'''
 __callbacks.FsMovementMultiplierR28(1.5)
-__beat_tick();assert(__hum.WalkSpeed==18)
-__beat_tick();assert(__hum.WalkSpeed==18)
+__beat_tick();assert(__hum.WalkSpeed==12)
+assert(__newSpeedValue.Value==1.5)
+__beat_tick();assert(__hum.WalkSpeed==12)
 __callbacks.FsMovementMultiplierR28(2)
-__beat_tick();assert(__hum.WalkSpeed==24)
+__beat_tick();assert(__newSpeedValue.Value==2)
 __callbacks.FsMovementMultiplierR28(1)
+assert(__newSpeedValue.Parent==nil)
 assert(__hum.WalkSpeed==12)
 __enh:Destroy()
 '''
@@ -162,19 +171,38 @@ __enh:Destroy()
         program=(STUB + ENH + END + test).replace('local function node(name, typ)', 'function node(name, typ)',1)
         LuaRuntime().run(lua54(program))
 
-    def test_generator_interval_and_remote_single_fire(self):
+    def test_generator_does_not_send_unverified_empty_remote(self):
         test = r'''
 __callbacks.FsRepairDelayR28(2.5)
 assert(__enh.State.repairDelay==2.5)
 __callbacks.FsAutoRepairR28(true)
 __enh.State.nextRepair=0
 __beat_tick()
-assert(__fires==1,'no RE call ' .. __enh.State.lastAction .. ' / ' .. __enh.State.lastError)
-__beat_tick()
-assert(__fires==1,'unexpected extra RE call')
-__progress.Value=20
+assert(__fires==0,'undocumented empty RE call must not be sent')
+assert(__enh.State.repairPhase=='no-prompt',__enh.State.lastAction)
+assert(__enh.State.repairPaused==true)
 __enh:Destroy()
 assert(__connected==__disconnected)
+'''
+        LuaRuntime().run(lua54(STUB + ENH + END + test))
+
+    def test_generator_native_interaction_attempt(self):
+        test = r'''
+task={spawn=function(fn)fn()end,wait=function()end}
+local prompt={Name='Repair',kind='ProximityPrompt',Enabled=true,
+ MaxActivationDistance=10,HoldDuration=0.5,Parent={}}
+function prompt:IsA(k)return self.kind==k end
+function prompt:InputHoldBegin()self.began=(self.began or 0)+1 end
+function prompt:InputHoldEnd()self.ended=(self.ended or 0)+1 end
+__generator:Add(prompt)
+__callbacks.FsAutoRepairR28(true)
+__enh.State.nextRepair=0
+__beat_tick()
+assert(prompt.began==1 and prompt.ended==1,'native hold missing')
+assert(__enh.State.repairsSent==1,'interaction attempt not recorded')
+assert(__fires==0,'no empty RE protocol')
+assert(__enh.State.repairPhase=='interaction-attempted')
+__enh:Destroy()
 '''
         LuaRuntime().run(lua54(STUB + ENH + END + test))
 
@@ -182,7 +210,7 @@ assert(__connected==__disconnected)
         self.assertIn('ForsakenEnhancementsFactory',CORE)
         self.assertIn('"ForsakenEnhancements.luau"',BUILD)
         r=json.loads((ROOT/'dist/runtime-manifest.json').read_text())
-        self.assertTrue('r2.8' in r['build_tag'] or 'r2.10' in r['build_tag'] or 'r2.11' in r['build_tag'] or 'r2.12' in r['build_tag'])
+        self.assertTrue('r2.8' in r['build_tag'] or 'r2.10' in r['build_tag'] or 'r2.11' in r['build_tag'] or 'r2.12' in r['build_tag'] or 'r2.13' in r['build_tag'])
         for k in ['core',*r['modules'].keys()]:
             d=r[k] if k=='core' else r['modules'][k]
             raw=(ROOT/d['path']).read_bytes()
