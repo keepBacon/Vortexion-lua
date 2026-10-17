@@ -1,6 +1,6 @@
 -- Vortexion Loader V2.1 / modular routing and diagnostic bootstrap.
 -- Keep V1 standalone fallback available for controlled compatibility tests.
-local VERSION = "2.4.0-theme-type-rootfix"
+local VERSION = "2.6.0-blox-startup-guard"
 local DEFAULT_BASE = "https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/"
 local LEGACY_BUNDLE = "dist/Vortexion_Wind.lua"
 local MANIFEST_PATH = "dist/runtime-manifest.json"

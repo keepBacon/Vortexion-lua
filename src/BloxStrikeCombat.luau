@@ -633,6 +633,10 @@ return function(c)
     --=========================================================================
     local Combat = {}
 
+    function Combat:IsActive()
+        return not stopped and (Config.Enabled or Config.TriggerEnabled or Config.HitboxEnabled or state.firing)
+    end
+
     function Combat:Update(dt)
         if stopped then return end
         local t0 = tick()

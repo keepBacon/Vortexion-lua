@@ -27,7 +27,7 @@ return function(c)
 
     local Config = {
         Enabled = false,
-        Mode = "Auto",           -- Auto | LeadOnly | Hitscan | Remote | Projectile
+        Mode = "LeadOnly",      -- safe startup: no metatable or function hooks
         HitChance = 0.72,
         MaxAngle = 15,
         WallCheck = true,
@@ -299,7 +299,7 @@ return function(c)
     end
 
     local function installRemoteHook()
-        if not (c.Caps.hookmetamethod and c.Caps.checkcaller and c.Caps.getnamecallmethod) then
+        if not (c.Caps.hookmetamethod and c.Caps.getrawmetatable and c.Caps.checkcaller and c.Caps.getnamecallmethod) then
             return false
         end
         local ok, err = pcall(function()
@@ -431,11 +431,20 @@ return function(c)
     function Bullet:Start()
         if Config.Enabled then return end
         Config.Enabled = true
-        c.Guard("Bullet.Scan", scanRemotes)
-        c.Guard("Bullet.Hitscan", installHitscanHooks)
-        c.Guard("Bullet.Remote", installRemoteHook)
-        if #bulletConns == 0 then
-            installProjectileWatch()
+        -- On mobile, never attempt native/global hooks merely because the
+        -- user enables the generic toggle. Explicit high-risk modes can be
+        -- selected separately; LeadOnly remains a hook-free safe default.
+        local mode = Config.Mode
+        local mobile = c.Services.UserInputService and c.Services.UserInputService.TouchEnabled
+        if mode == "Hitscan" or (mode == "Auto" and not mobile) then
+            c.Guard("Bullet.Hitscan", installHitscanHooks)
+        end
+        if mode == "Remote" or (mode == "Auto" and not mobile) then
+            c.Guard("Bullet.Scan", scanRemotes)
+            c.Guard("Bullet.Remote", installRemoteHook)
+        end
+        if mode == "Projectile" or mode == "Auto" then
+            if #bulletConns == 0 then installProjectileWatch() end
         end
         state.activePath = resolveMode()
         c.Log("Bullet", "started, path", state.activePath)
@@ -452,6 +461,10 @@ return function(c)
         state.bullets = {}
         state.activePath = "LeadOnly"
         c.Log("Bullet", "stopped")
+    end
+
+    function Bullet:IsActive()
+        return Config.Enabled
     end
 
     function Bullet:Update(dt)
@@ -478,8 +491,14 @@ return function(c)
 
     function Bullet:Rescan()
         for k in pairs(state.watchedRemotes) do state.watchedRemotes[k] = nil end
-        c.Guard("Bullet.Scan", scanRemotes)
-        c.Guard("Bullet.Hitscan", installHitscanHooks)
+        local mode = Config.Mode
+        local mobile = c.Services.UserInputService and c.Services.UserInputService.TouchEnabled
+        if mode == "Remote" or (mode == "Auto" and not mobile) then
+            c.Guard("Bullet.Scan", scanRemotes)
+        end
+        if mode == "Hitscan" or (mode == "Auto" and not mobile) then
+            c.Guard("Bullet.Hitscan", installHitscanHooks)
+        end
         state.activePath = resolveMode()
     end
 
@@ -501,9 +520,13 @@ return function(c)
         if v then Bullet:Start() else Bullet:Stop() end
     end })
     tab:AddDropdown("BloxBulletMode", { Title = "追踪路径", Values = { "Auto", "LeadOnly", "Hitscan", "Remote", "Projectile" },
-        Default = "Auto", Callback = function(v)
+        Default = "LeadOnly", Callback = function(v)
+            -- Switching path while active must release the old hook first.
+            local wasEnabled = Config.Enabled
+            if wasEnabled then Bullet:Stop() end
             Config.Mode = v
             state.activePath = resolveMode()
+            if wasEnabled then Bullet:Start() end
         end })
     tab:AddSlider("BloxBulletHitChance", { Title = "改写命中率（%）", Min = 10, Max = 100, Default = 72, Rounding = 0,
         Callback = function(v) Config.HitChance = v / 100 end })

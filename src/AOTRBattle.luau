@@ -1,6 +1,5 @@
 -- AOTR battle: full combat suite (nape lock, remote registration, spears,
 -- hitbox, follow, ESP, farm) wired through one budgeted render loop.
-local AOTRCloakFactory = nil
 local AOTRTitansFactory = nil
 local AOTRCombatFactory = nil
 local AOTRMovementFactory = nil
@@ -14,8 +13,9 @@ if not window then return end
 --=========================================================================
 -- Environment probe before features: remotes, HUD labels, executor caps.
 --=========================================================================
-app:ProbeRemotes()
-app.ProbeHUD(true)
+-- Remote probe is nonessential for initial window creation.
+task.defer(function() if app:Alive() then app:ProbeRemotes() end end)
+-- HUD discovery is deferred until the user requests readouts or farm needs it.
 local bootFailures = {}
 local function reportBootFailure(name, message)
     local detail = tostring(name) .. ": " .. tostring(message):sub(1, 160)
@@ -26,18 +26,10 @@ local function reportBootFailure(name, message)
     end
     warn("[Vortexion/AOTR] " .. detail)
 end
-local Cloak
-if type(AOTRCloakFactory) == "function" then
-    local ok, value = pcall(AOTRCloakFactory, app)
-    if ok then Cloak = value else reportBootFailure("cloak", value) end
-else
-    reportBootFailure("cloak", "factory missing")
-end
-app.Cloak = Cloak
-if type(Cloak) == "table" and type(Cloak.Start) == "function" then
-    local ok, err = app.Guard("Cloak", Cloak.Start)
-    if not ok then reportBootFailure("cloak start", err) end
-end
+-- R2.5: Do not install a global __namecall hook during battle startup.
+-- Such hooks cannot be safely uninstalled on every Android executor and can
+-- disrupt the game's own method dispatch. ESP degrades to ordinary instances.
+app.Cloak = { Protect = function(instance) return instance end }
 
 local tabs={
     combat=window:AddTab({Title="战斗",Icon="lucide-swords"}),
@@ -85,6 +77,10 @@ app.Services.RunService:BindToRenderStep("VortexionAOTRFrame",Enum.RenderPriorit
     if not app:Alive() then return end
     app.Guard("Frame",function()
         if dt<0.004 then return end
+        local combatOn = Combat and (Combat.Config.Enabled or Combat.Config.HitboxEnabled)
+        local espOn = ESP and ESP.Config.Enabled
+        local movementOn = Movement and Movement.Config.FollowEnabled
+        if not (combatOn or espOn or movementOn or (Farm and (Farm.Config.AutoReload or Farm.Config.AutoRefill))) then return end
         if Titans then
             local t0=tick()
             app.Guard("Titans",function() Titans:Update(dt) end)

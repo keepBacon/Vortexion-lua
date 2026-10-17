@@ -13,12 +13,6 @@ ROUTER = "src/GameRouter.luau"
 MONITOR = "src/RuntimeMonitor.luau"
 ROUTE_CONFIG = "src/loader_routes.json"
 
-FORSAKEN_MODULES = [
-    ("ForsakenCombatFactory", "ForsakenCombat.luau"),
-    ("ForsakenVisualFactory", "ForsakenVisual.luau"),
-    ("ForsakenSurvivalFactory", "ForsakenSurvival.luau"),
-    ("ForsakenGuestFactory", "ForsakenGuest.luau"),
-]
 BLOX_MODULES = [
     ("BloxCommonFactory", "BloxStrikeCommon.luau"),
     ("BloxCloakFactory", "BloxStrikeCloak.lua"),
@@ -28,7 +22,6 @@ BLOX_MODULES = [
     ("BloxCosmeticFactory", "BloxStrikeCosmetic.luau"),
 ]
 AOTR_BATTLE_MODULES = [
-    ("AOTRCloakFactory", "AOTRCloak.lua"),
     ("AOTRTitansFactory", "AOTRTitans.luau"),
     ("AOTRCombatFactory", "AOTRCombat.luau"),
     ("AOTRMovementFactory", "AOTRMovement.luau"),
@@ -46,7 +39,7 @@ SCP_MODULES = [
     ("SCPESPFactory", "SCPESP.luau"),
 ]
 GAMES = {
-    "Forsaken": ("ForsakenCore.luau", FORSAKEN_MODULES),
+    "Forsaken": ("ForsakenCore.luau", []),
     "BloxStrike": ("BloxStrikeCore.luau", BLOX_MODULES),
     "AOTR_Lobby": ("AOTRLobby.luau", [("AOTRCommon", "AOTRCommon.luau")]),
     "AOTR_Battle": ("AOTRBattle.luau", [("AOTRCommon", "AOTRCommon.luau")] + AOTR_BATTLE_MODULES),
@@ -240,7 +233,7 @@ def build(root=ROOT):
         raise ValueError("AOTR universe mismatch")
     runtime_manifest = {
         "schema": 2,
-        "build_tag": "loader-v2-modular-r2.4-theme-type-rootfix",
+        "build_tag": "loader-v2-modular-r2.6-blox-startup-guard",
         "core": modular_bundles["Vortexion_Core.lua"],
         "modules": {name: modular_bundles["Vortexion_Module_" + name + ".lua"] for name in GAMES},
         "routes": routes,

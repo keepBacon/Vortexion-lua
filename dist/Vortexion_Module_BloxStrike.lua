@@ -1039,6 +1039,10 @@ return function(c)
     --=========================================================================
     local Combat = {}
 
+    function Combat:IsActive()
+        return not stopped and (Config.Enabled or Config.TriggerEnabled or Config.HitboxEnabled or state.firing)
+    end
+
     function Combat:Update(dt)
         if stopped then return end
         local t0 = tick()
@@ -1248,7 +1252,7 @@ return function(c)
 
     local Config = {
         Enabled = false,
-        Mode = "Auto",           -- Auto | LeadOnly | Hitscan | Remote | Projectile
+        Mode = "LeadOnly",      -- safe startup: no metatable or function hooks
         HitChance = 0.72,
         MaxAngle = 15,
         WallCheck = true,
@@ -1520,7 +1524,7 @@ return function(c)
     end
 
     local function installRemoteHook()
-        if not (c.Caps.hookmetamethod and c.Caps.checkcaller and c.Caps.getnamecallmethod) then
+        if not (c.Caps.hookmetamethod and c.Caps.getrawmetatable and c.Caps.checkcaller and c.Caps.getnamecallmethod) then
             return false
         end
         local ok, err = pcall(function()
@@ -1652,11 +1656,20 @@ return function(c)
     function Bullet:Start()
         if Config.Enabled then return end
         Config.Enabled = true
-        c.Guard("Bullet.Scan", scanRemotes)
-        c.Guard("Bullet.Hitscan", installHitscanHooks)
-        c.Guard("Bullet.Remote", installRemoteHook)
-        if #bulletConns == 0 then
-            installProjectileWatch()
+        -- On mobile, never attempt native/global hooks merely because the
+        -- user enables the generic toggle. Explicit high-risk modes can be
+        -- selected separately; LeadOnly remains a hook-free safe default.
+        local mode = Config.Mode
+        local mobile = c.Services.UserInputService and c.Services.UserInputService.TouchEnabled
+        if mode == "Hitscan" or (mode == "Auto" and not mobile) then
+            c.Guard("Bullet.Hitscan", installHitscanHooks)
+        end
+        if mode == "Remote" or (mode == "Auto" and not mobile) then
+            c.Guard("Bullet.Scan", scanRemotes)
+            c.Guard("Bullet.Remote", installRemoteHook)
+        end
+        if mode == "Projectile" or mode == "Auto" then
+            if #bulletConns == 0 then installProjectileWatch() end
         end
         state.activePath = resolveMode()
         c.Log("Bullet", "started, path", state.activePath)
@@ -1673,6 +1686,10 @@ return function(c)
         state.bullets = {}
         state.activePath = "LeadOnly"
         c.Log("Bullet", "stopped")
+    end
+
+    function Bullet:IsActive()
+        return Config.Enabled
     end
 
     function Bullet:Update(dt)
@@ -1699,8 +1716,14 @@ return function(c)
 
     function Bullet:Rescan()
         for k in pairs(state.watchedRemotes) do state.watchedRemotes[k] = nil end
-        c.Guard("Bullet.Scan", scanRemotes)
-        c.Guard("Bullet.Hitscan", installHitscanHooks)
+        local mode = Config.Mode
+        local mobile = c.Services.UserInputService and c.Services.UserInputService.TouchEnabled
+        if mode == "Remote" or (mode == "Auto" and not mobile) then
+            c.Guard("Bullet.Scan", scanRemotes)
+        end
+        if mode == "Hitscan" or (mode == "Auto" and not mobile) then
+            c.Guard("Bullet.Hitscan", installHitscanHooks)
+        end
         state.activePath = resolveMode()
     end
 
@@ -1722,9 +1745,13 @@ return function(c)
         if v then Bullet:Start() else Bullet:Stop() end
     end })
     tab:AddDropdown("BloxBulletMode", { Title = "追踪路径", Values = { "Auto", "LeadOnly", "Hitscan", "Remote", "Projectile" },
-        Default = "Auto", Callback = function(v)
+        Default = "LeadOnly", Callback = function(v)
+            -- Switching path while active must release the old hook first.
+            local wasEnabled = Config.Enabled
+            if wasEnabled then Bullet:Stop() end
             Config.Mode = v
             state.activePath = resolveMode()
+            if wasEnabled then Bullet:Start() end
         end })
     tab:AddSlider("BloxBulletHitChance", { Title = "改写命中率（%）", Min = 10, Max = 100, Default = 72, Rounding = 0,
         Callback = function(v) Config.HitChance = v / 100 end })
@@ -2134,6 +2161,12 @@ return function(c)
     local cameraConnection = Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(forceESPTeardown)
     local frameConnection = RunService.Heartbeat:Connect(function(dt)
         if not c.IsCurrent() then return end
+        -- Before enabling any feature, skip ALL camera, raycast, or movement
+        -- calculations. The Heartbeat connection stays lightweight for toggles.
+        if not Config.ESPEnabled and not Config.SpeedEnabled and not Config.FlyEnabled and not Config.Noclip then
+            espAccum, moveAccum = 0, 0
+            return
+        end
         -- Non-critical visual pacing is owned by the shared bridge (ctx.UI),
         -- re-read every frame so a VisualHz switch takes effect immediately.
         -- Movement, input and recovery paths below keep their original cadence.
@@ -2807,10 +2840,18 @@ return function(c)
         local list = skins:GetChildren()
         table.sort(list, function(a, b) return a.Name < b.Name end)
         local createdCount = 0
+        -- Bound startup UI allocation on mobile. Remaining categories can
+        -- still be loaded manually after the current batch completes.
+        local addedThisPass = 0
+        local maxPerPass = manual and 64 or 24
         for _, category in ipairs(list) do
-            if not c.IsCurrent() then break end
-            if addCategory(category) then createdCount += 1 end
-            if createdCount > 0 and createdCount % 8 == 0 then task.wait() end
+            if not c.IsCurrent() or addedThisPass >= maxPerPass then break end
+            if addCategory(category) then
+                createdCount += 1
+                addedThisPass += 1
+                -- Keep each frame below the UI allocation budget.
+                if addedThisPass % 2 == 0 then task.wait() end
+            end
         end
         refreshing = false
         if skinFolderConn then skinFolderConn:Disconnect(); skinFolderConn = nil end
@@ -3046,6 +3087,11 @@ return function(c)
     local elapsed = 0
     knifeFollow = c.RunService.RenderStepped:Connect(function(dt)
         if not c.IsCurrent() then clearTrailPreview(); return end
+        -- Avoid allocations, effects and camera work while appearance is off.
+        if not state.enabled and not state.knife and not knifeModel and next(activeSounds)==nil and anim.mode=="idle" and #trailEntries==0 then
+            elapsed=0
+            return
+        end
         updateTrailPreview()
         if not state.enabled and not state.knife and not knifeModel and next(activeSounds)==nil and anim.mode=="idle" then
             elapsed=0
@@ -3080,7 +3126,11 @@ return function(c)
         destroyButtons()
         restoreParts();restoreKnife()
     end)
-    task.defer(function() createSkinControls(false) end)
+    -- Give the UI and replicated game resources time to settle before the
+    -- first skin category build. Reentrancy and generation guards remain.
+    task.delay(3, function()
+        if c.IsCurrent() then createSkinControls(false) end
+    end)
 end
 
 end)()
@@ -3168,7 +3218,16 @@ local function notify(title, content)
         global.VortexionBloxNotify(title,content)
     end
 end
-local window=ui:CreateWindow({Title="BloxStrike", Size=UDim2.fromOffset(580,460)})
+local okWindow, window = pcall(function()
+    return ui:CreateWindow({Title="BloxStrike", Size=UDim2.fromOffset(580,460)})
+end)
+if not okWindow or not window then
+    global.VortexionBootError = "BloxStrike/CreateWindow: " .. tostring(window)
+    warn("[Vortexion/BloxStrike] " .. global.VortexionBootError)
+    pcall(function() ui:Destroy() end)
+    cleanup()
+    return
+end
 ui:OnDestroy(cleanup)
 ownCleanup(function()
     if global.VortexionBloxCleanup == cleanup then
@@ -3322,11 +3381,11 @@ setup("子弹追踪", BloxBulletFactory, "Bullet")
 setup("视觉", BloxVisualFactory)
 setup("皮肤", BloxCosmeticFactory)
 
--- Cloak must be explicitly started: an unstarted cloak means the enumeration
--- filter is not installed while every module already trusts Protect().
-if type(common.Cloak) == "table" and type(common.Cloak.Start) == "function" then
-    common.Guard("Cloak", common.Cloak.Start)
-end
+-- R2.6: no global __namecall/metatable hook during boot.  Some mobile
+-- executors can terminate the host process inside hookmetamethod, where
+-- pcall cannot recover. Protect() remains an optional weak registry, but
+-- does NOT claim to hide instances from game code in this safe mode.
+common.CloakAutoHookDisabled = true
 
 --=========================================================================
 -- Shared render loop: one BindToRenderStep(Last) drives Combat and Bullet.
@@ -3340,15 +3399,22 @@ local frameName = "VortexionBloxFrame_" .. tostring(generation)
 RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, function(dt)
     if not isCurrent() then return end
     if dt < 0.004 then return end
-    if ctx.Combat then
+    -- Idle load is deliberately zero: off means no combat/projectile scans.
+    local combatActive = ctx.Combat and type(ctx.Combat.IsActive) == "function" and ctx.Combat:IsActive()
+    if combatActive then
         local t0 = tick()
         common.Guard("Frame.Combat", function() ctx.Combat:Update(dt) end)
         costs.Combat = tick() - t0
+    else
+        costs.Combat = 0
     end
-    if ctx.Bullet then
+    local bulletActive = ctx.Bullet and type(ctx.Bullet.IsActive) == "function" and ctx.Bullet:IsActive()
+    if bulletActive then
         local t0 = tick()
         common.Guard("Frame.Bullet", function() ctx.Bullet:Update(dt) end)
         costs.Bullet = tick() - t0
+    else
+        costs.Bullet = 0
     end
     for name, cost in pairs(costs) do
         if cost * 1000 > budgets[name] then slowLoops += 1 end
@@ -3381,7 +3447,7 @@ tabs.Settings:AddToggle("BloxDebug",{Title="调试日志",Default=false,Callback
     common.Debug = v
 end})
 tabs.Settings:AddParagraph({Title="BloxStrike 兼容说明",
-    Content="独立模块；角色优先识别 Workspace.Characters。自瞄带预测与锁定重验；子弹追踪四条路径（预测/武器射线/远程参数/投射物）自动选择；皮肤仅本地预览。"})
+    Content="R2.6 稳定启动模式：默认不安装全局枚举 Hook。战斗/追踪全部关闭时跳过其帧计算；皮肤分类延后限量生成。武器页手动开启的高级追踪仍依赖执行器能力，异常时应关闭。"})
 tabs.Settings:AddButton({Title="子模块初始化诊断",Callback=function()
     notify("BloxStrike 启动诊断",#bootFailures > 0 and table.concat(bootFailures, " / ")
         or "模块工厂未报告失败；功能运行仍需实际测试")

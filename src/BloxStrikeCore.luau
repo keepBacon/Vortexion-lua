@@ -90,7 +90,16 @@ local function notify(title, content)
         global.VortexionBloxNotify(title,content)
     end
 end
-local window=ui:CreateWindow({Title="BloxStrike", Size=UDim2.fromOffset(580,460)})
+local okWindow, window = pcall(function()
+    return ui:CreateWindow({Title="BloxStrike", Size=UDim2.fromOffset(580,460)})
+end)
+if not okWindow or not window then
+    global.VortexionBootError = "BloxStrike/CreateWindow: " .. tostring(window)
+    warn("[Vortexion/BloxStrike] " .. global.VortexionBootError)
+    pcall(function() ui:Destroy() end)
+    cleanup()
+    return
+end
 ui:OnDestroy(cleanup)
 ownCleanup(function()
     if global.VortexionBloxCleanup == cleanup then
@@ -244,11 +253,11 @@ setup("子弹追踪", BloxBulletFactory, "Bullet")
 setup("视觉", BloxVisualFactory)
 setup("皮肤", BloxCosmeticFactory)
 
--- Cloak must be explicitly started: an unstarted cloak means the enumeration
--- filter is not installed while every module already trusts Protect().
-if type(common.Cloak) == "table" and type(common.Cloak.Start) == "function" then
-    common.Guard("Cloak", common.Cloak.Start)
-end
+-- R2.6: no global __namecall/metatable hook during boot.  Some mobile
+-- executors can terminate the host process inside hookmetamethod, where
+-- pcall cannot recover. Protect() remains an optional weak registry, but
+-- does NOT claim to hide instances from game code in this safe mode.
+common.CloakAutoHookDisabled = true
 
 --=========================================================================
 -- Shared render loop: one BindToRenderStep(Last) drives Combat and Bullet.
@@ -262,15 +271,22 @@ local frameName = "VortexionBloxFrame_" .. tostring(generation)
 RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, function(dt)
     if not isCurrent() then return end
     if dt < 0.004 then return end
-    if ctx.Combat then
+    -- Idle load is deliberately zero: off means no combat/projectile scans.
+    local combatActive = ctx.Combat and type(ctx.Combat.IsActive) == "function" and ctx.Combat:IsActive()
+    if combatActive then
         local t0 = tick()
         common.Guard("Frame.Combat", function() ctx.Combat:Update(dt) end)
         costs.Combat = tick() - t0
+    else
+        costs.Combat = 0
     end
-    if ctx.Bullet then
+    local bulletActive = ctx.Bullet and type(ctx.Bullet.IsActive) == "function" and ctx.Bullet:IsActive()
+    if bulletActive then
         local t0 = tick()
         common.Guard("Frame.Bullet", function() ctx.Bullet:Update(dt) end)
         costs.Bullet = tick() - t0
+    else
+        costs.Bullet = 0
     end
     for name, cost in pairs(costs) do
         if cost * 1000 > budgets[name] then slowLoops += 1 end
@@ -303,7 +319,7 @@ tabs.Settings:AddToggle("BloxDebug",{Title="调试日志",Default=false,Callback
     common.Debug = v
 end})
 tabs.Settings:AddParagraph({Title="BloxStrike 兼容说明",
-    Content="独立模块；角色优先识别 Workspace.Characters。自瞄带预测与锁定重验；子弹追踪四条路径（预测/武器射线/远程参数/投射物）自动选择；皮肤仅本地预览。"})
+    Content="R2.6 稳定启动模式：默认不安装全局枚举 Hook。战斗/追踪全部关闭时跳过其帧计算；皮肤分类延后限量生成。武器页手动开启的高级追踪仍依赖执行器能力，异常时应关闭。"})
 tabs.Settings:AddButton({Title="子模块初始化诊断",Callback=function()
     notify("BloxStrike 启动诊断",#bootFailures > 0 and table.concat(bootFailures, " / ")
         or "模块工厂未报告失败；功能运行仍需实际测试")

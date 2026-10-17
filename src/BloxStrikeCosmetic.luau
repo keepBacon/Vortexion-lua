@@ -577,10 +577,18 @@ return function(c)
         local list = skins:GetChildren()
         table.sort(list, function(a, b) return a.Name < b.Name end)
         local createdCount = 0
+        -- Bound startup UI allocation on mobile. Remaining categories can
+        -- still be loaded manually after the current batch completes.
+        local addedThisPass = 0
+        local maxPerPass = manual and 64 or 24
         for _, category in ipairs(list) do
-            if not c.IsCurrent() then break end
-            if addCategory(category) then createdCount += 1 end
-            if createdCount > 0 and createdCount % 8 == 0 then task.wait() end
+            if not c.IsCurrent() or addedThisPass >= maxPerPass then break end
+            if addCategory(category) then
+                createdCount += 1
+                addedThisPass += 1
+                -- Keep each frame below the UI allocation budget.
+                if addedThisPass % 2 == 0 then task.wait() end
+            end
         end
         refreshing = false
         if skinFolderConn then skinFolderConn:Disconnect(); skinFolderConn = nil end
@@ -816,6 +824,11 @@ return function(c)
     local elapsed = 0
     knifeFollow = c.RunService.RenderStepped:Connect(function(dt)
         if not c.IsCurrent() then clearTrailPreview(); return end
+        -- Avoid allocations, effects and camera work while appearance is off.
+        if not state.enabled and not state.knife and not knifeModel and next(activeSounds)==nil and anim.mode=="idle" and #trailEntries==0 then
+            elapsed=0
+            return
+        end
         updateTrailPreview()
         if not state.enabled and not state.knife and not knifeModel and next(activeSounds)==nil and anim.mode=="idle" then
             elapsed=0
@@ -850,5 +863,9 @@ return function(c)
         destroyButtons()
         restoreParts();restoreKnife()
     end)
-    task.defer(function() createSkinControls(false) end)
+    -- Give the UI and replicated game resources time to settle before the
+    -- first skin category build. Reentrancy and generation guards remain.
+    task.delay(3, function()
+        if c.IsCurrent() then createSkinControls(false) end
+    end)
 end

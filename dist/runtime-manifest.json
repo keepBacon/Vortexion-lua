@@ -1,5 +1,5 @@
 {
-  "build_tag": "loader-v2-modular-r2.4-theme-type-rootfix",
+  "build_tag": "loader-v2-modular-r2.6-blox-startup-guard",
   "core": {
     "bytes": 1459373,
     "path": "dist/Vortexion_Core.lua",
@@ -8,9 +8,9 @@
   "fallback": "standalone-bundle-manual-only",
   "modules": {
     "AOTR_Battle": {
-      "bytes": 97242,
+      "bytes": 91027,
       "path": "dist/Vortexion_Module_AOTR_Battle.lua",
-      "sha256": "6b3d95bf72f4eec7676e85ffb9d31adb6e235a3c7f1a26af46d89977268e00b0"
+      "sha256": "9fb12d988971d66dd756ade986484e75b25ba889faee1e0083883ed2af82894a"
     },
     "AOTR_Lobby": {
       "bytes": 25251,
@@ -18,14 +18,14 @@
       "sha256": "53f1c9c8957124ee2a5b4d4b0627ff0b78a7376f2a6df53aad7743008f0c32bf"
     },
     "BloxStrike": {
-      "bytes": 156803,
+      "bytes": 160054,
       "path": "dist/Vortexion_Module_BloxStrike.lua",
-      "sha256": "e5ade51805d1a99f09363802604e0c932c93e1fe19e45c2d8f22cb17a3a7d202"
+      "sha256": "a59fcdc20c47fc34cea00445bfd03cb60324643b41b34720e266ac4555ad6d02"
     },
     "Forsaken": {
-      "bytes": 316585,
+      "bytes": 11297,
       "path": "dist/Vortexion_Module_Forsaken.lua",
-      "sha256": "641d2508fe996e9739d801e3e60bfa524831534ffb8caaf0b1f23c72173a4aca"
+      "sha256": "f09a1ed2221671c31799cf76f7a18df0af4440e49e00604612f2a470a971608d"
     },
     "SCP": {
       "bytes": 127930,

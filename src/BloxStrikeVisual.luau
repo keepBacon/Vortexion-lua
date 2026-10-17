@@ -378,6 +378,12 @@ return function(c)
     local cameraConnection = Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(forceESPTeardown)
     local frameConnection = RunService.Heartbeat:Connect(function(dt)
         if not c.IsCurrent() then return end
+        -- Before enabling any feature, skip ALL camera, raycast, or movement
+        -- calculations. The Heartbeat connection stays lightweight for toggles.
+        if not Config.ESPEnabled and not Config.SpeedEnabled and not Config.FlyEnabled and not Config.Noclip then
+            espAccum, moveAccum = 0, 0
+            return
+        end
         -- Non-critical visual pacing is owned by the shared bridge (ctx.UI),
         -- re-read every frame so a VisualHz switch takes effect immediately.
         -- Movement, input and recovery paths below keep their original cadence.
