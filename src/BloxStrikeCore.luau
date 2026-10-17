@@ -188,7 +188,7 @@ local ctx={
 -- one broken subsystem never takes the UI down.
 --=========================================================================
 local function emptyModule()
-    local empty = {}
+    local empty = {Failed = true}
     function empty:Update() end
     function empty:Start() end
     function empty:Stop() end
@@ -243,6 +243,17 @@ setup("战斗", BloxCombatFactory, "Combat")
 setup("子弹追踪", BloxBulletFactory, "Bullet")
 setup("视觉", BloxVisualFactory)
 setup("皮肤", BloxCosmeticFactory)
+if type(ui.RegisterFeatureHealth) == "function" then
+    ui:RegisterFeatureHealth("BloxStrike", function()
+        local function status(key)
+            local item = common[key]
+            return item == nil and "missing" or (item.Failed and "failed" or "ready")
+        end
+        return ("存活=%s 战斗=%s 子弹=%s 模块失败=%d 阵营缓存=%d")
+            :format(tostring(isCurrent()), status("Combat"), status("Bullet"),
+                #bootFailures, (function() local n=0; for _ in pairs(folderCache.map) do n = n + 1 end; return n end)())
+    end)
+end
 
 -- R2.6: no global __namecall/metatable hook during boot.  Some mobile
 -- executors can terminate the host process inside hookmetamethod, where

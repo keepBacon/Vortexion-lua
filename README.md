@@ -115,3 +115,7 @@ WindUI 原始发行库与 MIT 许可证保留在 `vendor/WindUI/`，未修改附
 
 - 详见 [R2 修复记录](docs/REFACTOR_R2.md)。本轮修复子模块启动错误感知、BloxStrike 动态皮肤 UI、SCP 兼容降级和 AOTR Cloak 异常隔离。
 - 共享性能诊断增加帧耗时/卡顿计数。未经过 Roblox 安卓实机验证。
+
+## R2.11 本地变更（远程提交前不代表已上线）
+
+跨游戏回调轨迹与 Forsaken 目标发现统一，详见 `docs/R211_CALLBACK_TRACE_AND_GENERATORS.md`；离线构建测试不等于 Roblox 真机功能成功。

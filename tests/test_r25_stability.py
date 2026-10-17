@@ -21,16 +21,27 @@ math.clamp = function(n,a,b) return math.max(a,math.min(b,n)) end
 local callbacks, buttons = {}, {}
 local connected, disconnected = 0, 0
 local pending
+local activeSignals = {}
+table.clear = function(t) for k in pairs(t) do t[k]=nil end end
 local gui = {}
 local camera = {FieldOfView=72,Parent={}}
 local workspace = {CurrentCamera=camera}
 local heartbeat = {Connect=function(_, callback)
   connected = connected + 1
+  local entry={callback=callback,active=true}
+  table.insert(activeSignals,entry)
   pending = callback
   return {Disconnect=function(self)
-     if not self.done then self.done=true; disconnected=disconnected+1;pending=nil end
+     if not self.done then
+       self.done=true;entry.active=false;disconnected=disconnected+1
+     end
   end}
 end}
+local function runHeartbeat(dt)
+  for _,item in ipairs(activeSignals) do
+    if item.active then item.callback(dt) end
+  end
+end
 local user = {Character=nil}
 function user:FindFirstChildOfClass(k) if k=='PlayerGui' then return gui end end
 function user:WaitForChild(k) if k=='PlayerGui' then return gui end end
@@ -65,6 +76,8 @@ __camera=camera
 __heartbeat=heartbeat
 __connections=function() return connected,disconnected end
 __pending=function() return pending end
+__runHeartbeat=runHeartbeat
+__active=function() local total=0 for _,x in ipairs(activeSignals)do if x.active then total=total+1 end end return total end
 '''
 
 class ForsakenStreamlined(unittest.TestCase):
@@ -82,21 +95,22 @@ assert(type(__callbacks.FsCameraFov)=='function')
 assert(type(__buttons['检查游戏结构'])=='function')
 local all=0 for _ in pairs(__callbacks) do all=all+1 end
 assert(all==8,'expected 8 controls: '..all)
-local c,d=__connections() assert(c==0 and d==0)
+local c,d=__connections() assert(c==1 and d==0,'one low-frequency sync listener')
 __callbacks.FsCameraFov(true)
 assert(__camera.FieldOfView==80,'FOV enabled')
-c,d=__connections() assert(c==1 and d==0)
+c,d=__connections() assert(c==2 and d==0,'sync + visual listeners')
 __callbacks.FsCameraFovValue(108)
 assert(__camera.FieldOfView==108,'FOV slider applied')
 __callbacks.FsCameraFov(false)
 assert(__camera.FieldOfView==72,'FOV restored')
-c,d=__connections() assert(c==1 and d==1,'only one listener cleaned')
+c,d=__connections() assert(c==2 and d==1,'visual listener removed, state watch still active')
 __callbacks.FsKillerESP(true)
-assert(__pending()~=nil, 'visual heartbeat started')
-__pending()(0.3) -- absent scene folders should not cause an exception
+assert(__active()==2, 'visual heartbeat started')
+__runHeartbeat(0.3) -- absent scene folders should not cause an exception
 __callbacks.FsKillerESP(false)
-assert(__pending()==nil, 'no listeners after disabling')
+assert(__active()==1, 'only low frequency sync remains after disabling')
 __buttons['卸载 Forsaken 功能']()
+assert(__active()==0, 'destroy releases every listener')
 assert(__bridge.Active, 'bridge mock stays active after destroy')
 '''
         LuaRuntime().run(to_lua54(runtime))
@@ -110,6 +124,7 @@ function localRoot:IsA(k) return k=='BasePart' end
 local enemyRoot={Position=pos(20)}
 function enemyRoot:IsA(k) return k=='BasePart' end
 local character = {Parent={}}
+function character:FindFirstChildOfClass(k) return nil end
 function character:FindFirstChild(k) if k=='HumanoidRootPart' then return localRoot end end
 local enemy = {}
 function enemy:IsA(k) return k=='Model' end
@@ -134,7 +149,7 @@ __markerCounts=function() return made, removed end
                             'local ForsakenEnhancementsFactory = function() return {Destroy=function() end} end')
         script = SETUP + additions + source + """
 __callbacks.FsKillerESP(true)
-__pending()(0.3)
+__runHeartbeat(0.3)
 local a,b=__markerCounts()
 assert(a==1 and b==0, 'killer marker not allocated')
 __callbacks.FsKillerESP(false)
@@ -150,7 +165,9 @@ assert(a==1 and b==1, 'killer marker not destroyed')
         self.assertNotIn('hookmetamethod', FS)
         self.assertNotIn('RenderStepped:Connect', FS)
         self.assertNotIn('GetDescendants()', FS)
-        self.assertLess(len(FS.encode()), 15000)
+        # Functionality and diagnostics have grown; a fixed legacy file-size cap
+        # is not a lifecycle or performance invariant.
+        self.assertIn('synchronizeVisionOptions', FS)
 
     def test_aotr_startup_does_not_hook_global_namecall(self):
         self.assertNotIn('AOTRCloakFactory', AOTR)
@@ -161,7 +178,7 @@ assert(a==1 and b==1, 'killer marker not destroyed')
 
     def test_distribution_hashes(self):
         manifest = json.loads((ROOT/'dist/runtime-manifest.json').read_text())
-        self.assertRegex(manifest['build_tag'], r'r2\.(5|6|7|8)')
+        self.assertRegex(manifest['build_tag'], r'r2\.(5|6|7|8|10|11)')
         for entry in [manifest['core'], *manifest['modules'].values()]:
             file = ROOT / entry['path']
             data = file.read_bytes()

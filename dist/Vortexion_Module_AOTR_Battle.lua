@@ -1904,6 +1904,14 @@ setup("esp",AOTRESPFactory,"ESP")
 setup("farm",AOTRFarmFactory,"Farm")
 
 local Titans,Combat,Movement,ESP,Farm=app.Titans,app.Combat,app.Movement,app.ESP,app.Farm
+if app.ui and type(app.ui.RegisterFeatureHealth) == "function" then
+    app.ui:RegisterFeatureHealth("AOTR 战斗", function()
+        return ("存活=%s 巨人池=%s 战斗=%s 移动=%s 感知=%s 农场=%s 子模块错误=%d")
+            :format(tostring(app:Alive()), tostring(Titans ~= nil), tostring(Combat ~= nil),
+                tostring(Movement ~= nil), tostring(ESP ~= nil), tostring(Farm ~= nil), #bootFailures)
+    end)
+end
+
 
 --=========================================================================
 -- Shared render loop: one BindToRenderStep(Last), dt gate, per-subsystem

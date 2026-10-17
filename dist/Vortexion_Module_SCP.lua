@@ -2689,6 +2689,15 @@ local Hitbox = common.Hitbox
 local Movement = common.Movement
 local ESP = common.ESP
 local Candidates = common.Candidates
+if type(ui.RegisterFeatureHealth) == "function" then
+    ui:RegisterFeatureHealth("SCP", function()
+        local frame = Candidates and Candidates.Frame or 0
+        return ("存活=%s 角色=%s 候选扫描=%s 模块失败=%d")
+            :format(tostring(isCurrent()), tostring(LocalPlayer.Character ~= nil),
+                tostring(frame), #bootFailures)
+    end)
+end
+
 
 --=========================================================================
 -- NPC scan: SCP roleplay populates the map with humanoid NPCs; without the

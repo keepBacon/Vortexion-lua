@@ -508,6 +508,14 @@ local camera=workspace.CurrentCamera
 local defaultFov=camera and camera.FieldOfView or 70
 local fov=math.clamp(math.floor(defaultFov),60,110)
 local fovOn=false
+if app.ui and type(app.ui.RegisterFeatureHealth) == "function" then
+    app.ui:RegisterFeatureHealth("AOTR 大厅", function()
+        local character = app.player and app.player.Character
+        return ("存活=%s 角色=%s 视场角开关=%s 当前相机=%s")
+            :format(tostring(app:Alive()), tostring(character ~= nil),
+                tostring(fovOn), tostring(workspace.CurrentCamera ~= nil))
+    end)
+end
 local function restoreCameraFov()
     for cam,original in pairs(cameraDefaults) do
         pcall(function() cam.FieldOfView=original end)

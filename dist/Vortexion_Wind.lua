@@ -40584,6 +40584,7 @@ return function(WindUI, config)
     local env = config.Env or (getgenv and getgenv()) or _G
     local bridge = {Options = {}, Tabs = {}, GameTabs = {}, Library = WindUI, GUI = WindUI.ScreenGui, Active = true, Trace = false}
     local connections, destroyCallbacks = {}, {}
+    local healthProviders = {} -- declared before cleanup, same scope for all lifecycle closures
     local native, windowHandle
     local appName = config.Name or "Vortexion"
     local input = game:GetService("UserInputService")
@@ -40772,10 +40773,31 @@ return function(WindUI, config)
         self.LastError = tostring(result)
     end
     local callbackErrorRevision = 0
-    local callbackCalls, nativeEvents, nativeMismatch, lastNativeEvent = 0, 0, 0, "none"
+    local callbackCalls, nativeEvents, nativeMismatch, nativeReconciled, lastNativeEvent = 0, 0, 0, 0, "none"
+    local featureTrace, featureTraceLimit, featureTraceSequence = {}, 24, 0
+    local function traceFeature(id, origin, value, ok, detail)
+        if not bridge.Active and not bridge.Cleaning then return end
+        featureTraceSequence += 1
+        local event = {Seq = featureTraceSequence, ID = tostring(id), Origin = tostring(origin),
+            Value = tostring(value):sub(1, 80), Status = tostring(ok),
+            Error = ok == "ERROR" and tostring(detail):sub(1, 180) or nil}
+        featureTrace[#featureTrace + 1] = event
+        if #featureTrace > featureTraceLimit then table.remove(featureTrace, 1) end
+    end
+    function bridge:FeatureTrace()
+        local lines = {}
+        for i = #featureTrace, 1, -1 do
+            local event = featureTrace[i]
+            lines[#lines + 1] = ("#%d %s %s=%s Callback=%s%s")
+                :format(event.Seq, event.Origin, event.ID, event.Value,
+                    event.Status,
+                    event.Error and (" " .. event.Error) or "")
+        end
+        return #lines > 0 and table.concat(lines, "\n") or "尚无控件回调记录"
+    end
     local function safeCallback(fn, ...)
         if type(fn) == "function" then callbackCalls += 1 end
-        if type(fn) ~= "function" then return end
+        if type(fn) ~= "function" then return false, "callback missing" end
         local wasActive = bridge.Active
         local ok, err = pcall(fn, ...)
         if not ok then
@@ -40785,6 +40807,7 @@ return function(WindUI, config)
             if native and native.Debug then warn("[" .. appName .. "/WindUI] " .. tostring(err)) end
             bridge:Notify("回调异常", string.sub(tostring(err), 1, 500), 8)
         end
+        return ok, err
     end
     local function colorValue(value)
         assert(typeof(value) == "Color3", "colorpicker requires Color3")
@@ -40833,6 +40856,8 @@ return function(WindUI, config)
             option.RefreshPending, option.SelectPending = nil, nil
             table.clear(option.listeners)
         end
+        table.clear(healthProviders)
+        table.clear(featureTrace)
         if env.VortexionWindBridge == bridge then env.VortexionWindBridge = nil end
     end
     function bridge:OnDestroy(fn)
@@ -40845,6 +40870,58 @@ return function(WindUI, config)
     end
     bridge.Window = function() return windowHandle end
 
+    -- All game branches share this bridge. Register per-game health snapshots
+    -- without forcing any game to expose internal objects to WindUI.
+    function bridge:RegisterFeatureHealth(name, callback)
+        if not self.Active or type(callback) ~= "function" then return false end
+        healthProviders[tostring(name)] = callback
+        return true
+    end
+    function bridge:FeatureHealth()
+        local output = {}
+        for name, callback in pairs(healthProviders) do
+            local ok, detail = pcall(callback)
+            output[#output + 1] = name .. ": " .. (ok and tostring(detail) or "ERROR " .. tostring(detail))
+        end
+        table.sort(output)
+        return #output > 0 and table.concat(output, "\n") or "游戏功能未注册状态提供器"
+    end
+    -- If vendor delivers an event before writing .Value, a deferred read may
+    -- still race. A single bounded one-Hz audit handles missed final writes
+    -- for toggles in ALL games (not just Forsaken).
+    local syncSamples, syncRepairs, syncFailures, syncElapsed = 0, 0, 0, 0
+    function bridge:ReconcileGameplayOptions()
+        if not self.Active then return 0 end
+        local repaired = 0
+        for id, option in pairs(self.Options) do
+            if option.Kind == "Toggle" and type(option.GetNativeValue) == "function" then
+                local value, err = option:GetNativeValue()
+                if err then
+                    syncFailures += 1
+                    self.LastError = "native audit/" .. tostring(id) .. ": " .. tostring(err)
+                elseif type(value) == "boolean" and value ~= option.Value then
+                    local ok, changed = pcall(function() return option:SyncFromNative() end)
+                    if not ok then
+                        syncFailures += 1
+                        self.LastError = "native sync/" .. tostring(id) .. ": " .. tostring(changed)
+                    elseif changed then
+                        repaired += 1
+                    end
+                end
+            end
+        end
+        syncSamples += 1
+        syncRepairs += repaired
+        return repaired
+    end
+    local gameSyncSignal = game:GetService("RunService").Heartbeat:Connect(function(dt)
+        if not bridge.Active then return end
+        syncElapsed += math.min(math.max(tonumber(dt) or 0, 0), 0.5)
+        if syncElapsed < 1 then return end
+        syncElapsed = 0
+        bridge:ReconcileGameplayOptions()
+    end)
+    table.insert(connections, gameSyncSignal)
     local function wrapTab(nativeTab)
         local handle = {Native = nativeTab, Title = nativeTab.Title}
         local function createOption(kind, id, c)
@@ -40873,7 +40950,7 @@ return function(WindUI, config)
                 if c.Multi then return type(v) == "table" and copy(v) or (v ~= nil and {v} or {}) end
                 return v == nil and isDefault and values[1] or v
             end
-            local option = {ID = id, Value = normalize(c.Default, true), Values = values, listeners = {}}
+            local option = {ID = id, Kind = kind, Value = normalize(c.Default, true), Values = values, listeners = {}}
             bridge.Options[id] = option
             local ready, revision, dispatchRevision = false, 0, 0
             local refreshBusy, refreshQueued, refreshTarget, refreshDirty = false, false, nil, false
@@ -40893,35 +40970,66 @@ return function(WindUI, config)
                 end
                 return normalize(value, false)
             end
-            local function emit(value)
+            local function emit(value, origin)
                 if not bridge.Active and not bridge.Cleaning then return end
                 dispatchRevision += 1
                 local dispatch, listenerCount = dispatchRevision, #option.listeners
                 local cleanupDispatch = not bridge.Active and bridge.Cleaning
                 option.Value = copy(value)
                 if bridge.Trace then print("[WindUI] " .. tostring(id) .. " = " .. tostring(value)) end
-                safeCallback(c.Callback, copy(value))
+                local callbackStatus, callbackError = "NO_CALLBACK", nil
+                if type(c.Callback) == "function" then
+                    local ok, err = safeCallback(c.Callback, copy(value))
+                    callbackStatus, callbackError = ok and "OK" or "ERROR", err
+                end
+                traceFeature(id, origin or "internal", value, callbackStatus, callbackError)
                 -- Bound fanout and fence nested dispatch, including same-value ABA reentry.
                 for index = 1, listenerCount do
                     if dispatch ~= dispatchRevision or (not bridge.Active and not (cleanupDispatch and bridge.Cleaning)) then break end
                     safeCallback(option.listeners[index], copy(value))
                 end
             end
+            -- Vendor callbacks can precede the native option's final Value write.
+            -- Never trust a stale event, but also do not drop a genuine touch
+            -- forever when the native value catches up on the next scheduler turn.
+            local function reconcileNative()
+                if not bridge.Active or not ready then return false end
+                local ok, accepted = pcall(nativeValue)
+                if not ok then
+                    bridge.LastError = 'native state/' .. tostring(id) .. ': ' .. tostring(accepted)
+                    return false
+                end
+                if not equal(accepted, option.Value) then
+                    revision += 1
+                    option.Pending = nil
+                    nativeReconciled += 1
+                    emit(accepted, "reconcile")
+                    return true
+                end
+                return false
+            end
             local function changed(value)
                 if not bridge.Active or not ready then return end
                 value = normalize(value, false)
                 nativeEvents += 1
                 lastNativeEvent = tostring(id) .. "=" .. tostring(value)
-                -- Native asynchronous callbacks can arrive after another SetValue.
                 local current = nativeValue()
                 if not equal(value, current) then
                     nativeMismatch += 1
+                    -- A later user action / SetValue invalidates this deferred check.
+                    local expectedRevision = revision
+                    if task and type(task.defer) == 'function' then
+                        task.defer(function()
+                            if revision ~= expectedRevision or not bridge.Active then return end
+                            reconcileNative()
+                        end)
+                    end
                     return
                 end
                 if not equal(value, option.Value) then
                     revision += 1
                     option.Pending = nil
-                    emit(value)
+                    emit(value, "native")
                 end
             end
             local settings = {Title = c.Title or tostring(id), Desc = c.Description or c.Desc, Flag = id, Callback = changed}
@@ -40974,7 +41082,7 @@ return function(WindUI, config)
                             option.Native:Select(copy(target.Value))
                             if bridge.Active and selectionRevision == revision then
                                 local accepted = nativeValue()
-                                if not equal(option.Value, accepted) then emit(accepted) end
+                                if not equal(option.Value, accepted) then emit(accepted, "dropdown") end
                             end
                         end
                     end)
@@ -41006,6 +41114,14 @@ return function(WindUI, config)
                 refreshBusy = false
                 return true
             end
+            function option:GetNativeValue()
+                local ok, value = pcall(nativeValue)
+                if not ok then return nil, tostring(value) end
+                return value
+            end
+            function option:SyncFromNative()
+                return reconcileNative()
+            end
             function option:SetValue(value)
                 if not bridge.Active and not bridge.Cleaning then return end
                 value = normalize(value, false)
@@ -41013,7 +41129,7 @@ return function(WindUI, config)
                 local requestRevision = revision
                 self.Pending = nil
                 if bridge.Cleaning then
-                    if not equal(self.Value, value) then emit(value) end
+                    if not equal(self.Value, value) then emit(value, "cleanup") end
                     return true
                 end
                 if kind == 'Dropdown' then
@@ -41031,7 +41147,7 @@ return function(WindUI, config)
                     if not self.Native.Locked then self.Pending = copy(value) end
                     return false
                 end
-                if not equal(self.Value, accepted) then emit(accepted) end
+                if not equal(self.Value, accepted) then emit(accepted, "setvalue") end
                 return true
             end
             function option:SetValues(newValues)
@@ -41057,7 +41173,7 @@ return function(WindUI, config)
                 return self
             end
             ready = true
-            emit(option.Value)
+            emit(option.Value, "initial")
             return option
         end
         for _, kind in ipairs({"Toggle", "Slider", "Input", "Dropdown", "Colorpicker"}) do
@@ -41228,12 +41344,21 @@ return function(WindUI, config)
         debugPage:AddToggle("wind_debug", {Title = "WindUI 原生调试", Default = config.Debug == true, Callback = function(v) native.Debug = v end})
         debugPage:AddToggle("wind_trace", {Title = "桥接回调跟踪", Default = false, Callback = function(v) bridge.Trace = v end})
         local diagnostic = debugPage:AddParagraph({Title = "运行诊断", Content = "点击刷新获取当前状态。"})
+        debugPage:AddButton({Title = "跨游戏回调状态复核", Callback = function()
+            local repaired = bridge:ReconcileGameplayOptions()
+            bridge:Notify({Title = "功能状态复核", Content = ("同步修复 %d 项；\n%s")
+                :format(repaired, bridge:FeatureHealth()), Duration = 10})
+        end})
+        debugPage:AddButton({Title = "查看游戏功能健康状态", Callback = function()
+            bridge:Notify({Title = "模块健康状态", Content = bridge:FeatureHealth(), Duration = 12})
+        end})
         bridge.GetDiagnostics = function()
             local optionCount = 0
             for _ in pairs(bridge.Options) do optionCount += 1 end
             return string.format("GameId: %s\nPlaceId: %s\nJobId: %s\n当前页: %s\n缩放: %s\n主题: %s\n选项: %s\n主题数: %s\n最近异常: %s\n视觉档位: %s\n视觉刷新: %s Hz (上限 %s)\nTopbarInset 监听: %s", tostring(game.GameId), tostring(game.PlaceId), tostring(game.JobId), tostring(native.CurrentTab), tostring(native:GetUIScale()), tostring(WindUI:GetCurrentTheme()), tostring(optionCount), tostring(#themes()), bridge.LastError or "无", tostring(bridge.Options.wind_perf_tier and bridge.Options.wind_perf_tier.Value or defaultPerfTier), tostring(clampHz(bridge.VisualHz)), tostring(VISUAL_HZ_MAX), tostring(topbarConnection and "是" or "否")) .. ("\n自适应视觉: %s / FPS %d / 上限 %s")
-                :format(tostring(adaptiveConnection ~= nil), adaptiveMeasured, tostring(bridge.AdaptiveVisualHz or "默认")) .. ("\n原生控件事件: %d / 丢弃过期事件: %d / 业务回调调用: %d\n最后控件事件: %s\n执行器: %s")
-                :format(nativeEvents, nativeMismatch, callbackCalls, lastNativeEvent, tostring(env.VortexionExecutorName or "未上报"))
+                :format(tostring(adaptiveConnection ~= nil), adaptiveMeasured, tostring(bridge.AdaptiveVisualHz or "默认")) .. ("\n原生控件事件: %d / 事件值不一致: %d / 延迟状态修复: %d / 业务回调调用: %d\n最后控件事件: %s\n执行器: %s")
+                :format(nativeEvents, nativeMismatch, nativeReconciled, callbackCalls, lastNativeEvent, tostring(env.VortexionExecutorName or "未上报")) .. ("\n跨游戏状态复核: %d 次 / 修复 %d / 异常 %d\n%s")
+                :format(syncSamples, syncRepairs, syncFailures, bridge:FeatureHealth())
         end
         local function refreshDiagnostic() local value = bridge.GetDiagnostics(); diagnostic:SetDesc(value); return value end
         local probeCount = 0
@@ -41260,6 +41385,20 @@ return function(WindUI, config)
         debugPage:AddButton({Title = "复制诊断", Callback = function()
             local clipboard = setclipboard or toclipboard or env.setclipboard or env.toclipboard
             if type(clipboard) == "function" then clipboard(refreshDiagnostic()) else bridge:Notify("剪贴板未挂载", refreshDiagnostic()) end
+        end})
+        debugPage:AddButton({Title = "查看最近控件回调（成功/错误）", Callback = function()
+            local detail = bridge:FeatureTrace()
+            print("[Vortexion/FeatureTrace]\n" .. detail)
+            bridge:Notify({Title = "业务回调轨迹（不代表服务器生效）", Content = detail:sub(1, 1600), Duration = 10})
+        end})
+        debugPage:AddButton({Title = "复制最近控件回调", Callback = function()
+            local clipboard = setclipboard or toclipboard or env.setclipboard or env.toclipboard
+            if type(clipboard) ~= "function" then
+                bridge:Notify({Title = "回调轨迹", Content = "执行器不支持剪贴板；请使用打印或查看功能"})
+                return
+            end
+            local ok = pcall(clipboard, bridge:FeatureTrace())
+            bridge:Notify({Title = "回调轨迹", Content = ok and "已复制最近 24 条控件回调" or "复制失败"})
         end})
         debugPage:AddButton({Title = "测试通知", Callback = function() bridge:Notify("WindUI", "原生通知正常。") end})
         debugPage:AddButton({Title = "清除最近异常", Callback = function() bridge.LastError = nil; refreshDiagnostic() end})
@@ -42070,20 +42209,44 @@ return function(options)
             for _, obj in ipairs(Lighting:GetDescendants()) do processVisual(obj) end
         end
     end
-    local function generatorContainer()
+    -- All Forsaken generator features use this discovery routine. Versions may
+    -- put Generator models directly in Ingame.Map or in a Generators folder.
+    -- The previous first-non-nil folder selection silently discarded other paths.
+    local generatorCache, generatorCachedAt = {}, -math.huge
+    local function enumerateGenerators()
+        if os.clock() - generatorCachedAt < 0.5 then return generatorCache end
+        generatorCachedAt = os.clock()
+        local found, seen, visited = {}, {}, 0
         local map = Workspace:FindFirstChild("Map")
-        local ingame = map and map:FindFirstChild("Ingame")
-        return (ingame and ingame:FindFirstChild("Map"))
-            or (ingame and ingame:FindFirstChild("Generators"))
-            or (map and map:FindFirstChild("Generators"))
+        local inGame = map and map:FindFirstChild("Ingame")
+        local innerMap = inGame and inGame:FindFirstChild("Map")
+        local roots = {
+            map and map:FindFirstChild("Generators"),
+            inGame and inGame:FindFirstChild("Generators"),
+            innerMap and innerMap:FindFirstChild("Generators"),
+            innerMap,
+        }
+        local function collect(container)
+            if not container or visited >= 192 then return end
+            for _, item in ipairs(container:GetChildren()) do
+                visited += 1
+                if visited > 192 then break end
+                if item:IsA("Model") and item.Name == "Generator" and not seen[item] then
+                    seen[item] = true
+                    found[#found + 1] = item
+                end
+            end
+        end
+        for _, root in pairs(roots) do collect(root) end
+        generatorCache = found
+        return found
     end
     local function nearestGenerator()
         local _, hum, root = character()
-        local folder = generatorContainer()
-        if not root or not hum or hum.Health <= 0 or not folder then return nil end
+        if not root or not hum or hum.Health <= 0 then return nil end
         local selected, closest, position
-        for _, gen in ipairs(folder:GetChildren()) do
-            if gen.Name == "Generator" and gen:IsA("Model") then
+        for _, gen in ipairs(enumerateGenerators()) do
+            if gen.Parent then
                 local progress = gen:FindFirstChild("Progress")
                 local main = gen:FindFirstChild("Main")
                 local part = main and (main:IsA("BasePart") and main or main:FindFirstChildWhichIsA("BasePart"))
@@ -42293,7 +42456,7 @@ return function(options)
                 state.lastAction, state.lastError))
     end})
     tabs.generators:AddParagraph({Title="修理限制", Content="按已知 Generator.Remotes.RE 请求修理，最短间隔 2.5 秒；服务器拒绝时不会虚报完成。缺少游戏接口会暂停或提示。自动前往默认关闭。"})
-    return {Destroy = shutdown, State = state}
+    return {Destroy = shutdown, State = state, EnumerateGenerators = enumerateGenerators}
 end
 
 end)()
@@ -42316,7 +42479,7 @@ end
 
 local bridge = WindBridgeFactory(WindUI, {Name = "Forsaken", Folder = "VortexionForsaken"})
 assert(bridge and bridge.Active, "Forsaken: WindUI bridge unavailable")
-local window = bridge:CreateWindow({Title = "Forsaken · R2.8"})
+local window = bridge:CreateWindow({Title = "Forsaken · R2.11"})
 assert(window, "Forsaken: window creation failed")
 local tabs = {
     vision = window:AddTab({Title = "感知", Icon = "lucide-eye"}),
@@ -42333,7 +42496,10 @@ local state = {alive = true, killers = false, survivors = false,
     generators = false, alert = false, fovEnabled = false, fov = 80,
     maxDistance = 240, alertDistance = 35, markers = {}, lastAlert = 0,
     ticker = nil, originalFov = setmetatable({}, {__mode="k"}),
-    scans = 0, objects = 0, lastProblem = "none"}
+    scans = 0, objects = 0, lastProblem = "none",
+    lastScanReason = "尚未开始", scanMode = "idle", stateRepairs = 0,
+    characterGeneration = 0, spectatorScans = 0, reconcileElapsed = 0,
+    watchConnection = nil, lifecycleConnections = {}}
 local function report(tag, err)
     local message = tostring(tag) .. ": " .. tostring(err)
     state.lastProblem = message:sub(1, 350)
@@ -42406,21 +42572,10 @@ local function candidates()
     if state.survivors then
         if survivors then for _, model in ipairs(survivors:GetChildren()) do addCandidate(selected, model, "Survivor") end end
     end
-    if state.generators then
-        local map = Workspace:FindFirstChild("Map")
-        local inGame = map and map:FindFirstChild("Ingame")
-        local candidates = {
-            map and map:FindFirstChild("Generators"),
-            inGame and inGame:FindFirstChild("Generators"),
-            inGame and inGame:FindFirstChild("Map") and inGame.Map:FindFirstChild("Generators"),
-        }
-        for _, folder in pairs(candidates) do
-            if folder then
-                for _, model in ipairs(folder:GetChildren()) do
-                    if model:IsA("Model") and (model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")) then
-                        selected[model] = "Generator"
-                    end
-                end
+    if state.generators and enhancements and type(enhancements.EnumerateGenerators) == "function" then
+        for _, model in ipairs(enhancements.EnumerateGenerators()) do
+            if model.Parent and (model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")) then
+                selected[model] = "Generator"
             end
         end
     end
@@ -42445,8 +42600,28 @@ local function markerFor(model, kind)
 end
 local function tickVisual()
     state.scans += 1
+    -- The camera is an independent observer during death/spectate. Do not
+    -- disable ESP merely because the player's previous character was removed.
     local playerRoot = getRoot(user.Character)
-    if not playerRoot then clearMarkers(); return end
+    local humanoid = user.Character and user.Character:FindFirstChildOfClass("Humanoid")
+    local aliveCharacter = playerRoot and (not humanoid or humanoid.Health > 0)
+    local camera = Workspace.CurrentCamera
+    local origin = aliveCharacter and playerRoot.Position
+        or (camera and camera.CFrame and camera.CFrame.Position)
+    if not origin then
+        state.scanMode = "no-origin"
+        state.lastScanReason = "没有有效角色或观战相机"
+        clearMarkers()
+        return
+    end
+    if aliveCharacter then
+        state.scanMode = "character"
+        state.lastScanReason = "存活角色扫描"
+    else
+        state.scanMode = "spectator"
+        state.spectatorScans += 1
+        state.lastScanReason = "观战相机扫描"
+    end
     local required = candidates()
     local visible = {}
     local budget = 32 -- Bound per-refresh allocations on mobile.
@@ -42454,7 +42629,7 @@ local function tickVisual()
     for model, kind in pairs(required) do
         local root = getRoot(model) or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
         if root and root:IsA("BasePart") then
-            local distance = (root.Position - playerRoot.Position).Magnitude
+            local distance = (root.Position - origin).Magnitude
             if kind == "Killer" and distance <= state.alertDistance then
                 nearestThreat = math.min(nearestThreat or math.huge, distance)
             end
@@ -42482,7 +42657,12 @@ end
 local function refreshScheduler()
     local enabled = state.killers or state.survivors or state.generators or state.alert or state.fovEnabled
     if not enabled and state.ticker then state.ticker:Disconnect(); state.ticker=nil end
-    if not enabled then clearMarkers(); return end
+    if not enabled then
+        state.scanMode = "off"
+        state.lastScanReason = "感知功能关闭"
+        clearMarkers()
+        return
+    end
     if state.ticker then return end
     local accumulated = 0
     state.ticker = RunService.Heartbeat:Connect(function(dt)
@@ -42501,12 +42681,25 @@ local function shutdown()
     state.alive = false
     if enhancements then enhancements:Destroy() end
     if state.ticker then state.ticker:Disconnect(); state.ticker = nil end
+    if state.watchConnection then state.watchConnection:Disconnect(); state.watchConnection = nil end
+    for _, connection in ipairs(state.lifecycleConnections) do
+        connection:Disconnect()
+    end
+    table.clear(state.lifecycleConnections)
     clearMarkers()
     restoreFov()
     if env.VortexionForsakenCleanup == shutdown then env.VortexionForsakenCleanup = nil end
 end
 env.VortexionForsakenCleanup = shutdown
 bridge:OnDestroy(shutdown)
+if type(bridge.RegisterFeatureHealth) == "function" then
+    bridge:RegisterFeatureHealth("Forsaken", function()
+        return ("活跃=%s 杀手=%s 幸存者=%s 发电机=%s 扫描=%d 标记=%d 观战扫描=%d 最近问题=%s")
+            :format(tostring(state.alive), tostring(state.killers), tostring(state.survivors),
+                tostring(state.generators), state.scans, state.objects, state.spectatorScans,
+                tostring(state.lastProblem))
+    end)
+end
 
 tabs.vision:AddParagraph({Title="运行架构", Content="感知与新增角色/防御/发电机功能均可独立开关，关闭后释放临时资源。"})
 tabs.vision:AddToggle("FsKillerESP", {Title="杀手高亮", Default=false,
@@ -42515,6 +42708,57 @@ tabs.vision:AddToggle("FsSurvivorESP", {Title="幸存者高亮", Default=false,
     Callback=function(v) state.survivors=v; refreshScheduler() end})
 tabs.vision:AddToggle("FsGeneratorESP", {Title="发电机高亮", Default=false,
     Callback=function(v) state.generators=v; refreshScheduler() end})
+-- Reconcile the three layers (native WindUI, bridge option, gameplay state).
+-- The user's preference is intentionally NOT cleared on CharacterRemoving,
+-- Humanoid.Died or spectator camera transitions.
+local function synchronizeVisionOptions()
+    local settings = {
+        {"FsKillerESP", "killers"},
+        {"FsSurvivorESP", "survivors"},
+        {"FsGeneratorESP", "generators"},
+        {"FsKillerWarning", "alert"},
+    }
+    local changed = false
+    for _, entry in ipairs(settings) do
+        local option = bridge.Options and bridge.Options[entry[1]]
+        if option then
+            if type(option.SyncFromNative) == "function" then
+                safe("native sync " .. entry[1], function() option:SyncFromNative() end)
+            end
+            if type(option.Value) == "boolean" and state[entry[2]] ~= option.Value then
+                state[entry[2]] = option.Value
+                state.stateRepairs += 1
+                changed = true
+            end
+        end
+    end
+    if changed then refreshScheduler() end
+end
+
+local function bindCharacterLifecycle(character)
+    state.characterGeneration += 1
+    clearMarkers()
+    state.lastScanReason = "角色变化，等待重新扫描"
+    -- The scanner and preferences remain alive through spectator transitions.
+end
+if user.CharacterAdded then
+    table.insert(state.lifecycleConnections, user.CharacterAdded:Connect(bindCharacterLifecycle))
+end
+if user.CharacterRemoving then
+    table.insert(state.lifecycleConnections, user.CharacterRemoving:Connect(function()
+        clearMarkers()
+        state.scanMode = "spectator"
+        state.lastScanReason = "角色已移除，等待观战相机"
+    end))
+end
+state.watchConnection = RunService.Heartbeat:Connect(function(dt)
+    if not state.alive then return end
+    state.reconcileElapsed += math.min(dt, 0.5)
+    if state.reconcileElapsed < 1 then return end
+    state.reconcileElapsed = 0
+    synchronizeVisionOptions()
+end)
+
 tabs.vision:AddSlider("FsVisionDistance", {Title="高亮距离", Min=40, Max=600, Default=240, Rounding=0,
     Callback=function(v) state.maxDistance=v end})
 tabs.vision:AddToggle("FsKillerWarning", {Title="附近杀手预警", Default=false,
@@ -42532,12 +42776,29 @@ tabs.system:AddButton({Title="检查游戏结构", Callback=function()
     local kTotal,kReady=countReadyCharacters(killers)
     local sTotal,sReady=countReadyCharacters(survivors)
     local enabled=state.killers or state.survivors or state.generators or state.alert
+    synchronizeVisionOptions()
+    enabled=state.killers or state.survivors or state.generators or state.alert
     local mode=enabled and "扫描中" or "感知开关关闭（不扫描）"
-    local msg = ("Killers=%s %d/%d Survivors=%s %d/%d Markers=%d Refresh=%d %s Error=%s")
+    local function optionInfo(id, field)
+        local option = bridge.Options and bridge.Options[id]
+        local native = nil
+        if option and type(option.GetNativeValue) == "function" then
+            native = option:GetNativeValue()
+        end
+        return string.format("%s:UI=%s Bridge=%s Runtime=%s", field,
+            tostring(native), tostring(option and option.Value), tostring(state[field]))
+    end
+    local msg = ("Killers=%s %d/%d Survivors=%s %d/%d Markers=%d Refresh=%d %s Error=%s\n" ..
+        "%s / %s / %s\n模式=%s 原因=%s 状态修复=%d 角色代次=%d 观战扫描=%d")
         :format(tostring(killers~=nil), kReady, kTotal,
             tostring(survivors~=nil), sReady, sTotal,
-            state.objects, state.scans, mode, state.lastProblem)
-    bridge:Notify({Title="Forsaken 诊断", Content=msg, Duration=8})
+            state.objects, state.scans, mode, state.lastProblem,
+            optionInfo("FsKillerESP", "Killer"),
+            optionInfo("FsSurvivorESP", "Survivor"),
+            optionInfo("FsGeneratorESP", "Generator"),
+            state.scanMode, state.lastScanReason, state.stateRepairs,
+            state.characterGeneration, state.spectatorScans)
+    bridge:Notify({Title="Forsaken 诊断", Content=msg, Duration=12})
 end})
 tabs.system:AddButton({Title="重进当前游戏", Callback=function()
     safe("rejoin",function() TeleportService:Teleport(game.PlaceId, user) end)
@@ -42548,7 +42809,7 @@ tabs.system:AddButton({Title="卸载 Forsaken 功能", Callback=function()
 end})
 tabs.system:AddParagraph({Title="运行限制", Content="场景结构可能随游戏更新变化。检测不到目标时会保持空状态，不会伪造功能成功；未进行 Roblox 安卓实测。"})
 window:SelectTab(1)
-bridge:Notify({Title="Forsaken", Content="R2.9 已加载；感知功能需手动开启，菜单场景没有角色模型时不会生成标记", Duration=5})
+bridge:Notify({Title="Forsaken", Content="R2.11 已加载；感知功能需手动开启，菜单场景没有角色模型时不会生成标记", Duration=5})
 
     end,
     ["BloxStrike"] = function()
@@ -45862,7 +46123,7 @@ local ctx={
 -- one broken subsystem never takes the UI down.
 --=========================================================================
 local function emptyModule()
-    local empty = {}
+    local empty = {Failed = true}
     function empty:Update() end
     function empty:Start() end
     function empty:Stop() end
@@ -45917,6 +46178,17 @@ setup("战斗", BloxCombatFactory, "Combat")
 setup("子弹追踪", BloxBulletFactory, "Bullet")
 setup("视觉", BloxVisualFactory)
 setup("皮肤", BloxCosmeticFactory)
+if type(ui.RegisterFeatureHealth) == "function" then
+    ui:RegisterFeatureHealth("BloxStrike", function()
+        local function status(key)
+            local item = common[key]
+            return item == nil and "missing" or (item.Failed and "failed" or "ready")
+        end
+        return ("存活=%s 战斗=%s 子弹=%s 模块失败=%d 阵营缓存=%d")
+            :format(tostring(isCurrent()), status("Combat"), status("Bullet"),
+                #bootFailures, (function() local n=0; for _ in pairs(folderCache.map) do n = n + 1 end; return n end)())
+    end)
+end
 
 -- R2.6: no global __namecall/metatable hook during boot.  Some mobile
 -- executors can terminate the host process inside hookmetamethod, where
@@ -46519,6 +46791,14 @@ local camera=workspace.CurrentCamera
 local defaultFov=camera and camera.FieldOfView or 70
 local fov=math.clamp(math.floor(defaultFov),60,110)
 local fovOn=false
+if app.ui and type(app.ui.RegisterFeatureHealth) == "function" then
+    app.ui:RegisterFeatureHealth("AOTR 大厅", function()
+        local character = app.player and app.player.Character
+        return ("存活=%s 角色=%s 视场角开关=%s 当前相机=%s")
+            :format(tostring(app:Alive()), tostring(character ~= nil),
+                tostring(fovOn), tostring(workspace.CurrentCamera ~= nil))
+    end)
+end
 local function restoreCameraFov()
     for cam,original in pairs(cameraDefaults) do
         pcall(function() cam.FieldOfView=original end)
@@ -48455,6 +48735,14 @@ setup("esp",AOTRESPFactory,"ESP")
 setup("farm",AOTRFarmFactory,"Farm")
 
 local Titans,Combat,Movement,ESP,Farm=app.Titans,app.Combat,app.Movement,app.ESP,app.Farm
+if app.ui and type(app.ui.RegisterFeatureHealth) == "function" then
+    app.ui:RegisterFeatureHealth("AOTR 战斗", function()
+        return ("存活=%s 巨人池=%s 战斗=%s 移动=%s 感知=%s 农场=%s 子模块错误=%d")
+            :format(tostring(app:Alive()), tostring(Titans ~= nil), tostring(Combat ~= nil),
+                tostring(Movement ~= nil), tostring(ESP ~= nil), tostring(Farm ~= nil), #bootFailures)
+    end)
+end
+
 
 --=========================================================================
 -- Shared render loop: one BindToRenderStep(Last), dt gate, per-subsystem
@@ -51428,6 +51716,15 @@ local Hitbox = common.Hitbox
 local Movement = common.Movement
 local ESP = common.ESP
 local Candidates = common.Candidates
+if type(ui.RegisterFeatureHealth) == "function" then
+    ui:RegisterFeatureHealth("SCP", function()
+        local frame = Candidates and Candidates.Frame or 0
+        return ("存活=%s 角色=%s 候选扫描=%s 模块失败=%d")
+            :format(tostring(isCurrent()), tostring(LocalPlayer.Character ~= nil),
+                tostring(frame), #bootFailures)
+    end)
+end
+
 
 --=========================================================================
 -- NPC scan: SCP roleplay populates the map with humanoid NPCs; without the

@@ -258,20 +258,44 @@ return function(options)
             for _, obj in ipairs(Lighting:GetDescendants()) do processVisual(obj) end
         end
     end
-    local function generatorContainer()
+    -- All Forsaken generator features use this discovery routine. Versions may
+    -- put Generator models directly in Ingame.Map or in a Generators folder.
+    -- The previous first-non-nil folder selection silently discarded other paths.
+    local generatorCache, generatorCachedAt = {}, -math.huge
+    local function enumerateGenerators()
+        if os.clock() - generatorCachedAt < 0.5 then return generatorCache end
+        generatorCachedAt = os.clock()
+        local found, seen, visited = {}, {}, 0
         local map = Workspace:FindFirstChild("Map")
-        local ingame = map and map:FindFirstChild("Ingame")
-        return (ingame and ingame:FindFirstChild("Map"))
-            or (ingame and ingame:FindFirstChild("Generators"))
-            or (map and map:FindFirstChild("Generators"))
+        local inGame = map and map:FindFirstChild("Ingame")
+        local innerMap = inGame and inGame:FindFirstChild("Map")
+        local roots = {
+            map and map:FindFirstChild("Generators"),
+            inGame and inGame:FindFirstChild("Generators"),
+            innerMap and innerMap:FindFirstChild("Generators"),
+            innerMap,
+        }
+        local function collect(container)
+            if not container or visited >= 192 then return end
+            for _, item in ipairs(container:GetChildren()) do
+                visited += 1
+                if visited > 192 then break end
+                if item:IsA("Model") and item.Name == "Generator" and not seen[item] then
+                    seen[item] = true
+                    found[#found + 1] = item
+                end
+            end
+        end
+        for _, root in pairs(roots) do collect(root) end
+        generatorCache = found
+        return found
     end
     local function nearestGenerator()
         local _, hum, root = character()
-        local folder = generatorContainer()
-        if not root or not hum or hum.Health <= 0 or not folder then return nil end
+        if not root or not hum or hum.Health <= 0 then return nil end
         local selected, closest, position
-        for _, gen in ipairs(folder:GetChildren()) do
-            if gen.Name == "Generator" and gen:IsA("Model") then
+        for _, gen in ipairs(enumerateGenerators()) do
+            if gen.Parent then
                 local progress = gen:FindFirstChild("Progress")
                 local main = gen:FindFirstChild("Main")
                 local part = main and (main:IsA("BasePart") and main or main:FindFirstChildWhichIsA("BasePart"))
@@ -481,7 +505,7 @@ return function(options)
                 state.lastAction, state.lastError))
     end})
     tabs.generators:AddParagraph({Title="修理限制", Content="按已知 Generator.Remotes.RE 请求修理，最短间隔 2.5 秒；服务器拒绝时不会虚报完成。缺少游戏接口会暂停或提示。自动前往默认关闭。"})
-    return {Destroy = shutdown, State = state}
+    return {Destroy = shutdown, State = state, EnumerateGenerators = enumerateGenerators}
 end
 
 end)()
@@ -504,7 +528,7 @@ end
 
 local bridge = WindBridgeFactory(WindUI, {Name = "Forsaken", Folder = "VortexionForsaken"})
 assert(bridge and bridge.Active, "Forsaken: WindUI bridge unavailable")
-local window = bridge:CreateWindow({Title = "Forsaken · R2.8"})
+local window = bridge:CreateWindow({Title = "Forsaken · R2.11"})
 assert(window, "Forsaken: window creation failed")
 local tabs = {
     vision = window:AddTab({Title = "感知", Icon = "lucide-eye"}),
@@ -521,7 +545,10 @@ local state = {alive = true, killers = false, survivors = false,
     generators = false, alert = false, fovEnabled = false, fov = 80,
     maxDistance = 240, alertDistance = 35, markers = {}, lastAlert = 0,
     ticker = nil, originalFov = setmetatable({}, {__mode="k"}),
-    scans = 0, objects = 0, lastProblem = "none"}
+    scans = 0, objects = 0, lastProblem = "none",
+    lastScanReason = "尚未开始", scanMode = "idle", stateRepairs = 0,
+    characterGeneration = 0, spectatorScans = 0, reconcileElapsed = 0,
+    watchConnection = nil, lifecycleConnections = {}}
 local function report(tag, err)
     local message = tostring(tag) .. ": " .. tostring(err)
     state.lastProblem = message:sub(1, 350)
@@ -594,21 +621,10 @@ local function candidates()
     if state.survivors then
         if survivors then for _, model in ipairs(survivors:GetChildren()) do addCandidate(selected, model, "Survivor") end end
     end
-    if state.generators then
-        local map = Workspace:FindFirstChild("Map")
-        local inGame = map and map:FindFirstChild("Ingame")
-        local candidates = {
-            map and map:FindFirstChild("Generators"),
-            inGame and inGame:FindFirstChild("Generators"),
-            inGame and inGame:FindFirstChild("Map") and inGame.Map:FindFirstChild("Generators"),
-        }
-        for _, folder in pairs(candidates) do
-            if folder then
-                for _, model in ipairs(folder:GetChildren()) do
-                    if model:IsA("Model") and (model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")) then
-                        selected[model] = "Generator"
-                    end
-                end
+    if state.generators and enhancements and type(enhancements.EnumerateGenerators) == "function" then
+        for _, model in ipairs(enhancements.EnumerateGenerators()) do
+            if model.Parent and (model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")) then
+                selected[model] = "Generator"
             end
         end
     end
@@ -633,8 +649,28 @@ local function markerFor(model, kind)
 end
 local function tickVisual()
     state.scans += 1
+    -- The camera is an independent observer during death/spectate. Do not
+    -- disable ESP merely because the player's previous character was removed.
     local playerRoot = getRoot(user.Character)
-    if not playerRoot then clearMarkers(); return end
+    local humanoid = user.Character and user.Character:FindFirstChildOfClass("Humanoid")
+    local aliveCharacter = playerRoot and (not humanoid or humanoid.Health > 0)
+    local camera = Workspace.CurrentCamera
+    local origin = aliveCharacter and playerRoot.Position
+        or (camera and camera.CFrame and camera.CFrame.Position)
+    if not origin then
+        state.scanMode = "no-origin"
+        state.lastScanReason = "没有有效角色或观战相机"
+        clearMarkers()
+        return
+    end
+    if aliveCharacter then
+        state.scanMode = "character"
+        state.lastScanReason = "存活角色扫描"
+    else
+        state.scanMode = "spectator"
+        state.spectatorScans += 1
+        state.lastScanReason = "观战相机扫描"
+    end
     local required = candidates()
     local visible = {}
     local budget = 32 -- Bound per-refresh allocations on mobile.
@@ -642,7 +678,7 @@ local function tickVisual()
     for model, kind in pairs(required) do
         local root = getRoot(model) or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
         if root and root:IsA("BasePart") then
-            local distance = (root.Position - playerRoot.Position).Magnitude
+            local distance = (root.Position - origin).Magnitude
             if kind == "Killer" and distance <= state.alertDistance then
                 nearestThreat = math.min(nearestThreat or math.huge, distance)
             end
@@ -670,7 +706,12 @@ end
 local function refreshScheduler()
     local enabled = state.killers or state.survivors or state.generators or state.alert or state.fovEnabled
     if not enabled and state.ticker then state.ticker:Disconnect(); state.ticker=nil end
-    if not enabled then clearMarkers(); return end
+    if not enabled then
+        state.scanMode = "off"
+        state.lastScanReason = "感知功能关闭"
+        clearMarkers()
+        return
+    end
     if state.ticker then return end
     local accumulated = 0
     state.ticker = RunService.Heartbeat:Connect(function(dt)
@@ -689,12 +730,25 @@ local function shutdown()
     state.alive = false
     if enhancements then enhancements:Destroy() end
     if state.ticker then state.ticker:Disconnect(); state.ticker = nil end
+    if state.watchConnection then state.watchConnection:Disconnect(); state.watchConnection = nil end
+    for _, connection in ipairs(state.lifecycleConnections) do
+        connection:Disconnect()
+    end
+    table.clear(state.lifecycleConnections)
     clearMarkers()
     restoreFov()
     if env.VortexionForsakenCleanup == shutdown then env.VortexionForsakenCleanup = nil end
 end
 env.VortexionForsakenCleanup = shutdown
 bridge:OnDestroy(shutdown)
+if type(bridge.RegisterFeatureHealth) == "function" then
+    bridge:RegisterFeatureHealth("Forsaken", function()
+        return ("活跃=%s 杀手=%s 幸存者=%s 发电机=%s 扫描=%d 标记=%d 观战扫描=%d 最近问题=%s")
+            :format(tostring(state.alive), tostring(state.killers), tostring(state.survivors),
+                tostring(state.generators), state.scans, state.objects, state.spectatorScans,
+                tostring(state.lastProblem))
+    end)
+end
 
 tabs.vision:AddParagraph({Title="运行架构", Content="感知与新增角色/防御/发电机功能均可独立开关，关闭后释放临时资源。"})
 tabs.vision:AddToggle("FsKillerESP", {Title="杀手高亮", Default=false,
@@ -703,6 +757,57 @@ tabs.vision:AddToggle("FsSurvivorESP", {Title="幸存者高亮", Default=false,
     Callback=function(v) state.survivors=v; refreshScheduler() end})
 tabs.vision:AddToggle("FsGeneratorESP", {Title="发电机高亮", Default=false,
     Callback=function(v) state.generators=v; refreshScheduler() end})
+-- Reconcile the three layers (native WindUI, bridge option, gameplay state).
+-- The user's preference is intentionally NOT cleared on CharacterRemoving,
+-- Humanoid.Died or spectator camera transitions.
+local function synchronizeVisionOptions()
+    local settings = {
+        {"FsKillerESP", "killers"},
+        {"FsSurvivorESP", "survivors"},
+        {"FsGeneratorESP", "generators"},
+        {"FsKillerWarning", "alert"},
+    }
+    local changed = false
+    for _, entry in ipairs(settings) do
+        local option = bridge.Options and bridge.Options[entry[1]]
+        if option then
+            if type(option.SyncFromNative) == "function" then
+                safe("native sync " .. entry[1], function() option:SyncFromNative() end)
+            end
+            if type(option.Value) == "boolean" and state[entry[2]] ~= option.Value then
+                state[entry[2]] = option.Value
+                state.stateRepairs += 1
+                changed = true
+            end
+        end
+    end
+    if changed then refreshScheduler() end
+end
+
+local function bindCharacterLifecycle(character)
+    state.characterGeneration += 1
+    clearMarkers()
+    state.lastScanReason = "角色变化，等待重新扫描"
+    -- The scanner and preferences remain alive through spectator transitions.
+end
+if user.CharacterAdded then
+    table.insert(state.lifecycleConnections, user.CharacterAdded:Connect(bindCharacterLifecycle))
+end
+if user.CharacterRemoving then
+    table.insert(state.lifecycleConnections, user.CharacterRemoving:Connect(function()
+        clearMarkers()
+        state.scanMode = "spectator"
+        state.lastScanReason = "角色已移除，等待观战相机"
+    end))
+end
+state.watchConnection = RunService.Heartbeat:Connect(function(dt)
+    if not state.alive then return end
+    state.reconcileElapsed += math.min(dt, 0.5)
+    if state.reconcileElapsed < 1 then return end
+    state.reconcileElapsed = 0
+    synchronizeVisionOptions()
+end)
+
 tabs.vision:AddSlider("FsVisionDistance", {Title="高亮距离", Min=40, Max=600, Default=240, Rounding=0,
     Callback=function(v) state.maxDistance=v end})
 tabs.vision:AddToggle("FsKillerWarning", {Title="附近杀手预警", Default=false,
@@ -720,12 +825,29 @@ tabs.system:AddButton({Title="检查游戏结构", Callback=function()
     local kTotal,kReady=countReadyCharacters(killers)
     local sTotal,sReady=countReadyCharacters(survivors)
     local enabled=state.killers or state.survivors or state.generators or state.alert
+    synchronizeVisionOptions()
+    enabled=state.killers or state.survivors or state.generators or state.alert
     local mode=enabled and "扫描中" or "感知开关关闭（不扫描）"
-    local msg = ("Killers=%s %d/%d Survivors=%s %d/%d Markers=%d Refresh=%d %s Error=%s")
+    local function optionInfo(id, field)
+        local option = bridge.Options and bridge.Options[id]
+        local native = nil
+        if option and type(option.GetNativeValue) == "function" then
+            native = option:GetNativeValue()
+        end
+        return string.format("%s:UI=%s Bridge=%s Runtime=%s", field,
+            tostring(native), tostring(option and option.Value), tostring(state[field]))
+    end
+    local msg = ("Killers=%s %d/%d Survivors=%s %d/%d Markers=%d Refresh=%d %s Error=%s\n" ..
+        "%s / %s / %s\n模式=%s 原因=%s 状态修复=%d 角色代次=%d 观战扫描=%d")
         :format(tostring(killers~=nil), kReady, kTotal,
             tostring(survivors~=nil), sReady, sTotal,
-            state.objects, state.scans, mode, state.lastProblem)
-    bridge:Notify({Title="Forsaken 诊断", Content=msg, Duration=8})
+            state.objects, state.scans, mode, state.lastProblem,
+            optionInfo("FsKillerESP", "Killer"),
+            optionInfo("FsSurvivorESP", "Survivor"),
+            optionInfo("FsGeneratorESP", "Generator"),
+            state.scanMode, state.lastScanReason, state.stateRepairs,
+            state.characterGeneration, state.spectatorScans)
+    bridge:Notify({Title="Forsaken 诊断", Content=msg, Duration=12})
 end})
 tabs.system:AddButton({Title="重进当前游戏", Callback=function()
     safe("rejoin",function() TeleportService:Teleport(game.PlaceId, user) end)
@@ -736,7 +858,7 @@ tabs.system:AddButton({Title="卸载 Forsaken 功能", Callback=function()
 end})
 tabs.system:AddParagraph({Title="运行限制", Content="场景结构可能随游戏更新变化。检测不到目标时会保持空状态，不会伪造功能成功；未进行 Roblox 安卓实测。"})
 window:SelectTab(1)
-bridge:Notify({Title="Forsaken", Content="R2.9 已加载；感知功能需手动开启，菜单场景没有角色模型时不会生成标记", Duration=5})
+bridge:Notify({Title="Forsaken", Content="R2.11 已加载；感知功能需手动开启，菜单场景没有角色模型时不会生成标记", Duration=5})
 
 end
 return GameRouter.Run(WindUI, WindBridgeFactory, entry, game.GameId, game.PlaceId, "Forsaken")

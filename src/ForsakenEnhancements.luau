@@ -249,20 +249,44 @@ return function(options)
             for _, obj in ipairs(Lighting:GetDescendants()) do processVisual(obj) end
         end
     end
-    local function generatorContainer()
+    -- All Forsaken generator features use this discovery routine. Versions may
+    -- put Generator models directly in Ingame.Map or in a Generators folder.
+    -- The previous first-non-nil folder selection silently discarded other paths.
+    local generatorCache, generatorCachedAt = {}, -math.huge
+    local function enumerateGenerators()
+        if os.clock() - generatorCachedAt < 0.5 then return generatorCache end
+        generatorCachedAt = os.clock()
+        local found, seen, visited = {}, {}, 0
         local map = Workspace:FindFirstChild("Map")
-        local ingame = map and map:FindFirstChild("Ingame")
-        return (ingame and ingame:FindFirstChild("Map"))
-            or (ingame and ingame:FindFirstChild("Generators"))
-            or (map and map:FindFirstChild("Generators"))
+        local inGame = map and map:FindFirstChild("Ingame")
+        local innerMap = inGame and inGame:FindFirstChild("Map")
+        local roots = {
+            map and map:FindFirstChild("Generators"),
+            inGame and inGame:FindFirstChild("Generators"),
+            innerMap and innerMap:FindFirstChild("Generators"),
+            innerMap,
+        }
+        local function collect(container)
+            if not container or visited >= 192 then return end
+            for _, item in ipairs(container:GetChildren()) do
+                visited += 1
+                if visited > 192 then break end
+                if item:IsA("Model") and item.Name == "Generator" and not seen[item] then
+                    seen[item] = true
+                    found[#found + 1] = item
+                end
+            end
+        end
+        for _, root in pairs(roots) do collect(root) end
+        generatorCache = found
+        return found
     end
     local function nearestGenerator()
         local _, hum, root = character()
-        local folder = generatorContainer()
-        if not root or not hum or hum.Health <= 0 or not folder then return nil end
+        if not root or not hum or hum.Health <= 0 then return nil end
         local selected, closest, position
-        for _, gen in ipairs(folder:GetChildren()) do
-            if gen.Name == "Generator" and gen:IsA("Model") then
+        for _, gen in ipairs(enumerateGenerators()) do
+            if gen.Parent then
                 local progress = gen:FindFirstChild("Progress")
                 local main = gen:FindFirstChild("Main")
                 local part = main and (main:IsA("BasePart") and main or main:FindFirstChildWhichIsA("BasePart"))
@@ -472,5 +496,5 @@ return function(options)
                 state.lastAction, state.lastError))
     end})
     tabs.generators:AddParagraph({Title="修理限制", Content="按已知 Generator.Remotes.RE 请求修理，最短间隔 2.5 秒；服务器拒绝时不会虚报完成。缺少游戏接口会暂停或提示。自动前往默认关闭。"})
-    return {Destroy = shutdown, State = state}
+    return {Destroy = shutdown, State = state, EnumerateGenerators = enumerateGenerators}
 end
