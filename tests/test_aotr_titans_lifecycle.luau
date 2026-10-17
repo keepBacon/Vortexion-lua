@@ -38,14 +38,14 @@ local function signal()
     return s
 end
 local function instance(name,class)
-    local obj={Name=name,ClassName=class,children={},ChildAdded=signal(),ChildRemoving=signal(),reads=0,lookups=0}
+    local obj={Name=name,ClassName=class,children={},ChildAdded=signal(),ChildRemoved=signal(),reads=0,lookups=0}
     function obj:IsA(kind) return kind==self.ClassName or (kind=="BasePart" and self.ClassName=="Part") end
     function obj:Add(child)
         child.Parent=self;table.insert(self.children,child);self.ChildAdded:Fire(child)
     end
     function obj:Remove(child)
         for i,item in ipairs(self.children) do
-            if item==child then self.ChildRemoving:Fire(child);table.remove(self.children,i);child.Parent=nil;return end
+            if item==child then self.ChildRemoved:Fire(child);table.remove(self.children,i);child.Parent=nil;return end
         end
     end
     function obj:GetChildren() self.reads+=1;return table.clone(self.children) end
@@ -107,22 +107,22 @@ local function test(name,fn) table.insert(tests,{name=name,fn=fn}) end
 test("late folder subscribes once and spawn/despawn mark dirty",function()
     local f=fixture(false);f.module:Update(0)
     f.workspace:Add(f.folder);now+=0.11;f.module:Update(0)
-    assert(f.folder.ChildAdded:Active()==1 and f.folder.ChildRemoving:Active()==1,"late folder listeners")
+    assert(f.folder.ChildAdded:Active()==1 and f.folder.ChildRemoved:Active()==1,"late folder listeners")
     local model=titan();f.folder:Add(model)
     assert(f.module:DebugSnapshot().dirty,"spawn dirty")
     f.module:Update(0);assert(#f.module:All()==1,"spawn scanned immediately")
     f.folder:Remove(model);assert(f.module:DebugSnapshot().dirty,"despawn dirty")
     f.module:Update(0);assert(f.module:DebugSnapshot().titans==0,"despawn removed")
     for _=1,20 do f.module:Update(0) end
-    assert(f.folder.ChildAdded.connects==1 and f.folder.ChildRemoving.connects==1,"no duplicate listeners")
+    assert(f.folder.ChildAdded.connects==1 and f.folder.ChildRemoved.connects==1,"no duplicate listeners")
 end)
 
 test("folder replacement detaches old and dirties from new signals",function()
     local f=fixture(true);f.folder:Add(titan());f.module:Update(0)
     local replacement=instance("Titans","Folder")
     f.workspace:Remove(f.folder);f.workspace:Add(replacement);f.module:Update(0)
-    assert(f.folder.ChildAdded:Active()==0 and f.folder.ChildRemoving:Active()==0,"old listeners detached")
-    assert(replacement.ChildAdded:Active()==1 and replacement.ChildRemoving:Active()==1,"replacement subscribed")
+    assert(f.folder.ChildAdded:Active()==0 and f.folder.ChildRemoved:Active()==0,"old listeners detached")
+    assert(replacement.ChildAdded:Active()==1 and replacement.ChildRemoved:Active()==1,"replacement subscribed")
     assert(f.module:DebugSnapshot().titans==0,"replacement clears old pool")
     f.folder.ChildAdded:Fire(titan());assert(not f.module:DebugSnapshot().dirty,"old signals inert")
     local model=titan();replacement:Add(model);assert(f.module:DebugSnapshot().dirty,"new spawn dirty")
@@ -133,7 +133,7 @@ test("reparented folder no longer belongs to workspace",function()
     local f=fixture(true);f.module:Update(0)
     f.workspace:Remove(f.folder);instance("Elsewhere","Folder"):Add(f.folder)
     now+=0.11;f.module:Update(0)
-    assert(f.folder.ChildAdded:Active()==0 and f.folder.ChildRemoving:Active()==0,"reparent detached")
+    assert(f.folder.ChildAdded:Active()==0 and f.folder.ChildRemoved:Active()==0,"reparent detached")
     assert(f.module:DebugSnapshot().titans==0,"removed folder cleared")
 end)
 
@@ -144,17 +144,17 @@ test("listener churn keeps app tracking bounded",function()
         f.workspace:Remove(current)
         local replacement=instance("Titans","Folder");f.workspace:Add(replacement)
         now+=0.11;f.module:Update(0)
-        assert(current.ChildAdded:Active()==0 and current.ChildRemoving:Active()==0,"replaced pair reclaimed")
+        assert(current.ChildAdded:Active()==0 and current.ChildRemoved:Active()==0,"replaced pair reclaimed")
         current=replacement
     end
     assert(#f.app.connections<=2,"app does not retain disconnected handles")
-    assert(current.ChildAdded:Active()==1 and current.ChildRemoving:Active()==1,"exactly one live pair")
+    assert(current.ChildAdded:Active()==1 and current.ChildRemoved:Active()==1,"exactly one live pair")
 end)
 
 test("stop is idempotent and never scans or resubscribes",function()
     local f=fixture(true);f.folder:Add(titan());f.module:Update(0)
     f.app:Stop();f.app:Stop()
-    assert(f.folder.ChildAdded:Active()==0 and f.folder.ChildRemoving:Active()==0,"stop detaches")
+    assert(f.folder.ChildAdded:Active()==0 and f.folder.ChildRemoved:Active()==0,"stop detaches")
     local connects=f.folder.ChildAdded.connects;local reads=f.folder.reads
     f.module:Update(0);f.module.Scan(true);f.module:Count();f.module:Nearest(false)
     assert(f.folder.ChildAdded.connects==connects,"no post-stop subscriptions")
@@ -272,7 +272,7 @@ test("folder removal within interval clears entries listeners and dirty",functio
     local f,_,_,_,_,entry=primed()
     f.workspace:Remove(f.folder);now+=0.001;f.module:Update(0)
     assert(f.module:DebugSnapshot().titans==0 and not f.module:DebugSnapshot().dirty,"missing folder settles immediately")
-    assert(f.folder.ChildAdded:Active()==0 and f.folder.ChildRemoving:Active()==0,"missing folder detaches immediately")
+    assert(f.folder.ChildAdded:Active()==0 and f.folder.ChildRemoved:Active()==0,"missing folder detaches immediately")
     clearVisual(entry);assert(not entry.alive,"missing folder retires held entries")
     f.folder.ChildAdded:Fire(titan());assert(not f.module:DebugSnapshot().dirty,"removed folder events stay inert")
 end)

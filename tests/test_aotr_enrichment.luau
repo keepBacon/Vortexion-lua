@@ -56,7 +56,7 @@ local function fixture()
     player.Idled=signal(); player.CharacterAdded=signal(); player.CharacterRemoving=signal(); player.Character=nil
     local workspaceFixture=node("Workspace","Workspace")
     workspaceFixture.CurrentCamera=nil
-    workspaceFixture.ChildAdded=signal(); workspaceFixture.ChildRemoving=signal()
+    workspaceFixture.ChildAdded=signal(); workspaceFixture.ChildRemoved=signal()
     function workspaceFixture:FindFirstChild() return nil end
     function workspaceFixture:GetPropertyChangedSignal() return signal() end
     function workspaceFixture:Raycast() return nil end

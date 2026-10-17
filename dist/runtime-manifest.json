@@ -1,5 +1,5 @@
 {
-  "build_tag": "loader-v2-modular-r2.7-feature-health",
+  "build_tag": "loader-v2-modular-r2.8-forsaken",
   "core": {
     "bytes": 1461094,
     "path": "dist/Vortexion_Core.lua",
@@ -8,9 +8,9 @@
   "fallback": "standalone-bundle-manual-only",
   "modules": {
     "AOTR_Battle": {
-      "bytes": 90731,
+      "bytes": 90725,
       "path": "dist/Vortexion_Module_AOTR_Battle.lua",
-      "sha256": "bedc2b0b24a943321bfa338d731ab89d23d38abdebd95124c90a5af38e6fb115"
+      "sha256": "aeb4b8687c83df82cdc0ee71706e31c1fe4dc757a539d6b97426d3146bb16e93"
     },
     "AOTR_Lobby": {
       "bytes": 24955,
@@ -23,9 +23,9 @@
       "sha256": "f232d4afb8d9f42266a0d0779bd568667512bc3a16f50f460d61844a028d5481"
     },
     "Forsaken": {
-      "bytes": 11297,
+      "bytes": 34259,
       "path": "dist/Vortexion_Module_Forsaken.lua",
-      "sha256": "f09a1ed2221671c31799cf76f7a18df0af4440e49e00604612f2a470a971608d"
+      "sha256": "2a02bed38a600a5dddcc57b0077ab1776d5df43947cbf5bb0b26e03241ccd012"
     },
     "SCP": {
       "bytes": 127584,

@@ -3,6 +3,7 @@
 -- have been retired. Every remaining control owns its side effects.
 local WindBridgeFactory = nil
 local WindUI = nil
+local ForsakenEnhancementsFactory = nil
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -19,14 +20,18 @@ end
 
 local bridge = WindBridgeFactory(WindUI, {Name = "Forsaken", Folder = "VortexionForsaken"})
 assert(bridge and bridge.Active, "Forsaken: WindUI bridge unavailable")
-local window = bridge:CreateWindow({Title = "Forsaken · 精简稳定版"})
+local window = bridge:CreateWindow({Title = "Forsaken · R2.8"})
 assert(window, "Forsaken: window creation failed")
 local tabs = {
     vision = window:AddTab({Title = "感知", Icon = "lucide-eye"}),
     player = window:AddTab({Title = "角色", Icon = "lucide-user"}),
+    defense = window:AddTab({Title = "防御", Icon = "lucide-shield"}),
+    generators = window:AddTab({Title = "发电机", Icon = "lucide-wrench"}),
     system = window:AddTab({Title = "系统", Icon = "lucide-settings"}),
 }
 window:InstallSettings(tabs.system)
+
+local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Tabs=tabs})
 
 local state = {alive = true, killers = false, survivors = false,
     generators = false, alert = false, fovEnabled = false, fov = 80,
@@ -78,6 +83,20 @@ local function sourceFolders()
     if not root then return nil, nil end
     return root:FindFirstChild("Killers"), root:FindFirstChild("Survivors")
 end
+local function countReadyCharacters(folder)
+    if not folder then return 0, 0 end
+    local total, ready = 0, 0
+    for _, child in ipairs(folder:GetChildren()) do
+        if child:IsA("Model") then
+            total += 1
+            if getRoot(child) and child ~= user.Character then
+                ready += 1
+            end
+        end
+    end
+    return total, ready
+end
+
 local function addCandidate(target, model, kind)
     if not model or not model:IsA("Model") or model == user.Character then return end
     if getRoot(model) then target[model] = kind end
@@ -184,6 +203,7 @@ end
 local function shutdown()
     if not state.alive then return end
     state.alive = false
+    if enhancements then enhancements:Destroy() end
     if state.ticker then state.ticker:Disconnect(); state.ticker = nil end
     clearMarkers()
     restoreFov()
@@ -192,7 +212,7 @@ end
 env.VortexionForsakenCleanup = shutdown
 bridge:OnDestroy(shutdown)
 
-tabs.vision:AddParagraph({Title="精简版", Content="只保留可独立开关的客户端感知功能；关闭时释放标记与刷新任务。其他角色功能不会在后台运行。"})
+tabs.vision:AddParagraph({Title="运行架构", Content="感知与新增角色/防御/发电机功能均可独立开关，关闭后释放临时资源。"})
 tabs.vision:AddToggle("FsKillerESP", {Title="杀手高亮", Default=false,
     Callback=function(v) state.killers=v; refreshScheduler() end})
 tabs.vision:AddToggle("FsSurvivorESP", {Title="幸存者高亮", Default=false,
@@ -213,8 +233,14 @@ tabs.player:AddSlider("FsCameraFovValue", {Title="视场角 (60–120)", Min=60,
 
 tabs.system:AddButton({Title="检查游戏结构", Callback=function()
     local killers,survivors=sourceFolders()
-    local msg = ("Killers=%s Survivors=%s Markers=%d Refresh=%d Error=%s")
-        :format(tostring(killers~=nil), tostring(survivors~=nil), state.objects, state.scans, state.lastProblem)
+    local kTotal,kReady=countReadyCharacters(killers)
+    local sTotal,sReady=countReadyCharacters(survivors)
+    local enabled=state.killers or state.survivors or state.generators or state.alert
+    local mode=enabled and "扫描中" or "感知开关关闭（不扫描）"
+    local msg = ("Killers=%s %d/%d Survivors=%s %d/%d Markers=%d Refresh=%d %s Error=%s")
+        :format(tostring(killers~=nil), kReady, kTotal,
+            tostring(survivors~=nil), sReady, sTotal,
+            state.objects, state.scans, mode, state.lastProblem)
     bridge:Notify({Title="Forsaken 诊断", Content=msg, Duration=8})
 end})
 tabs.system:AddButton({Title="重进当前游戏", Callback=function()
@@ -226,4 +252,4 @@ tabs.system:AddButton({Title="卸载 Forsaken 功能", Callback=function()
 end})
 tabs.system:AddParagraph({Title="运行限制", Content="场景结构可能随游戏更新变化。检测不到目标时会保持空状态，不会伪造功能成功；未进行 Roblox 安卓实测。"})
 window:SelectTab(1)
-bridge:Notify({Title="Forsaken", Content="精简模式已就绪，功能默认关闭", Duration=3})
+bridge:Notify({Title="Forsaken", Content="R2.9 已加载；感知功能需手动开启，菜单场景没有角色模型时不会生成标记", Duration=5})

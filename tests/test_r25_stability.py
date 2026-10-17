@@ -74,6 +74,8 @@ class ForsakenStreamlined(unittest.TestCase):
     def test_lifecycle_controls_in_mock(self):
         source = FS.replace('local WindBridgeFactory = nil',
                             'local WindBridgeFactory = function() return __bridge end')
+        source = source.replace('local ForsakenEnhancementsFactory = nil',
+                            'local ForsakenEnhancementsFactory = function() return {Destroy=function() end} end')
         runtime = SETUP + '\n' + source + '''
 assert(type(__callbacks.FsKillerESP)=='function')
 assert(type(__callbacks.FsCameraFov)=='function')
@@ -128,6 +130,8 @@ __markerCounts=function() return made, removed end
 """
         source = FS.replace('local WindBridgeFactory = nil',
                             'local WindBridgeFactory = function() return __bridge end')
+        source = source.replace('local ForsakenEnhancementsFactory = nil',
+                            'local ForsakenEnhancementsFactory = function() return {Destroy=function() end} end')
         script = SETUP + additions + source + """
 __callbacks.FsKillerESP(true)
 __pending()(0.3)
@@ -140,7 +144,7 @@ assert(a==1 and b==1, 'killer marker not destroyed')
         LuaRuntime().run(to_lua54(script))
 
     def test_legacy_is_removed_from_active_bundle(self):
-        self.assertIn('"Forsaken": ("ForsakenCore.luau", [])', BUILD)
+        self.assertIn('"Forsaken": ("ForsakenCore.luau", [("ForsakenEnhancementsFactory", "ForsakenEnhancements.luau")])', BUILD)
         self.assertNotIn('loadstring(game:HttpGet', FS)
         self.assertNotIn('getconnections(', FS)
         self.assertNotIn('hookmetamethod', FS)
@@ -157,13 +161,13 @@ assert(a==1 and b==1, 'killer marker not destroyed')
 
     def test_distribution_hashes(self):
         manifest = json.loads((ROOT/'dist/runtime-manifest.json').read_text())
-        self.assertRegex(manifest['build_tag'], r'r2\.(5|6|7)')
+        self.assertRegex(manifest['build_tag'], r'r2\.(5|6|7|8)')
         for entry in [manifest['core'], *manifest['modules'].values()]:
             file = ROOT / entry['path']
             data = file.read_bytes()
             self.assertEqual(entry['bytes'], len(data))
             self.assertEqual(entry['sha256'], hashlib.sha256(data).hexdigest())
-        self.assertLess(manifest['modules']['Forsaken']['bytes'], 16000)
+        self.assertLess(manifest['modules']['Forsaken']['bytes'], 60000)
         self.assertLess(manifest['modules']['AOTR_Battle']['bytes'], 110000)
 
 if __name__ == '__main__': unittest.main()

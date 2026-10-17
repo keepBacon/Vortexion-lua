@@ -1,675 +1,97 @@
 {
-  "build_tag": "loader-v2-modular-r2.7-feature-health",
-  "runtime_tested": false,
-  "repo": "keepBacon/Vortexion-lua",
+  "build_tag": "loader-v2-modular-r2.9-aotr-titan-event",
   "files": {
-    "R2_SOURCE_HASHES.json": {
-      "bytes": 3669,
-      "sha256": "a54cb772b99198b1397ca7e85117b3c347379d2ed642b95392f4199ea95749cb"
-    },
-    "verify_release.py": {
-      "bytes": 1199,
-      "sha256": "7768806664c47d3e8a326a6e4202945182c5140668adc817e3e510dabfe7c40d"
-    },
-    "build.py": {
-      "bytes": 12414,
-      "sha256": "73edb2dec81e41bf2bb81e024570dddfaeb813e73e49581abf25bdd862fc6e43"
-    },
     "R1_SOURCE_HASHES.json": {
       "bytes": 5590,
       "sha256": "fa51b1fd5767cab7aec750ba639f080f653a9f7b99d1a016516164b4586845b8"
     },
-    "package.json": {
-      "bytes": 154,
-      "sha256": "ca31027f57e713cb4a0ae34c773a07ac2152dc1497008b56b7621bf1e3af1dc2"
-    },
-    "loader.lua": {
-      "bytes": 23712,
-      "sha256": "1f6bd668dd186d5ca3df85b3c0a80a61e6f6412b11c3c011a806d2f71e219274"
+    "R2_SOURCE_HASHES.json": {
+      "bytes": 3669,
+      "sha256": "a54cb772b99198b1397ca7e85117b3c347379d2ed642b95392f4199ea95749cb"
     },
     "README.md": {
-      "bytes": 15316,
-      "sha256": "0c08d81e79f98d5f5a0e4790de6ae8a264103f6cc206f8299b8dbc9aede37beb"
-    },
-    "后续任务.md": {
-      "bytes": 49352,
-      "sha256": "ffe766ac10869a81ce884ba040331df5ecd21a0c7b5e0b34cbbb0185dbf98f8b"
-    },
-    "docs/SHARED_UI_FINAL_AUDIT_R16.md": {
-      "bytes": 8046,
-      "sha256": "e6fdcc88d4493ee7decfabdfc46a3f4d58b7073c0780dfd2bf20f3122fd0bd18"
-    },
-    "docs/LOADER_P0.md": {
-      "bytes": 2832,
-      "sha256": "b7ef0d812f877487b64354bf11c719db733d57009f7abb73cbf9500dcf14ed1a"
-    },
-    "docs/RELEASE_GATE_PARENT_AUDIT_R18.md": {
-      "bytes": 4176,
-      "sha256": "5dadedb530b46cb1d402aa990d8e4683eb33b442d03486786179ff313363f77d"
-    },
-    "docs/BUILD_RECONCILIATION_R17.md": {
-      "bytes": 7815,
-      "sha256": "1e7f396e4f53a6b544d72fb7f9ead68222111967725dbb7588ae67738dc9fa18"
-    },
-    "docs/RELEASE_ACCEPTANCE.md": {
-      "bytes": 8338,
-      "sha256": "7e88466fc79113241e90489f7bb63c8e80c7d29ecb34c2cbaa1b1609db36d5fc"
-    },
-    "docs/RELEASE_NOTES.md": {
-      "bytes": 2521,
-      "sha256": "c16c6c5baf67211a9f59ee25b924d2b4bff1533d13d741f9e92207d39ffc0326"
-    },
-    "docs/REFERENCES_AND_LICENSE.md": {
-      "bytes": 1368,
-      "sha256": "04adcddf8c045ca9bb14994fb3d9657d344e42ee81d6700d5238d591f2785026"
-    },
-    "docs/BOOT_FAILURE_SHARED_R21.md": {
-      "bytes": 1781,
-      "sha256": "b15b7ad12eec7290823e3b9686a1a89c71cd11ef273f851f5be777caa743a98f"
-    },
-    "docs/FORSAKEN_REFERENCE_COVERAGE.md": {
-      "bytes": 31401,
-      "sha256": "c7cac30783080a54d93eb8227cac051cb178dec63baa92ac89772e441901a9e2"
-    },
-    "docs/REVIEW_TOPBAR_SIGNAL_R14.md": {
-      "bytes": 19036,
-      "sha256": "47283a896d4664983bafb412c9007b1f573f570fa5701c15ad5c37f0a65714a3"
-    },
-    "docs/FEATURE_COVERAGE_R17.md": {
-      "bytes": 11536,
-      "sha256": "37660db528a5836c25f75c14cbe5a2781c44521db5f112e048491b3088b8d6b0"
-    },
-    "docs/FORSAKEN_AOTR_STABILITY_R25.md": {
-      "bytes": 3284,
-      "sha256": "6a32abb719e5efccb9e9ea9efd8fd7ead39350508110d5e658fd585607dac892"
-    },
-    "docs/REFERENCE_AUDIT_R1.md": {
-      "bytes": 1819,
-      "sha256": "5c873fd0d93345ab3b47806eaf41dfb69504ded4354ca25ae55e07d8c0071cfb"
-    },
-    "docs/VIEWPORT_EDGES_R14.md": {
-      "bytes": 12250,
-      "sha256": "a46da702520d682ee642d276933d858d20a2acae63681a5960e4f8c2a518f347"
-    },
-    "docs/AOTR_HUD_CONTRACT_R18.md": {
-      "bytes": 4600,
-      "sha256": "98bbacac10e64be5880f74fb1f0c0e884fc71120dddf95e785d6e1396f55e8f4"
-    },
-    "docs/BOOT_VENDOR_TRACE_R23.md": {
-      "bytes": 2045,
-      "sha256": "6ca5eb14120838a9f0557f045c352e971e5b33a3ab01165fbb5a445c2e512b6d"
-    },
-    "docs/BUILD_PARENT_AUDIT_R17.md": {
-      "bytes": 7384,
-      "sha256": "a65928b8d430437c3520a7a0b985d4076870b543086af9078072f46000efbd64"
-    },
-    "docs/REFACTOR_R1.md": {
-      "bytes": 5509,
-      "sha256": "661fc30bc49a54c8b8ecf867a1bc16614c34f800d4d6e2661fcf2ce24990f345"
-    },
-    "docs/FUNCTIONS_R22.md": {
-      "bytes": 5752,
-      "sha256": "30e648dfb82f46d7ff49cdd21f791591f167ec38c51b84969948254739940277"
-    },
-    "docs/AOTR_REFERENCE_COVERAGE.md": {
-      "bytes": 8276,
-      "sha256": "f28e50e09be6513b87f234e297d54d18d5a342048c952cb464fdc8595f8c7ee3"
-    },
-    "docs/RELEASE_BUILD_HUD_R18.md": {
-      "bytes": 8803,
-      "sha256": "085370489c044c98584dac636fe4fc2c68faccc5eeaf4a03fbc6cbd258406be9"
-    },
-    "docs/ANDROID_QA.md": {
-      "bytes": 3431,
-      "sha256": "d7d14a58038c7743e78b1891134c2b0cb11d36ef96d6f4c40991fb49b897cc24"
-    },
-    "docs/MOBILE_UI_EVIDENCE_REVIEW_R14.md": {
-      "bytes": 15036,
-      "sha256": "dcfd4ee79dce9812529287a9c17dffbd6a918ae64b77da4d629590f7dbcbe6cf"
-    },
-    "docs/FUNCTIONS_R23.md": {
-      "bytes": 6960,
-      "sha256": "7bf4b0caff5a47d51f3bc412bb908647ca2b59bdcd5476a38b386d6ad39de9f7"
-    },
-    "docs/RELEASE_GATE_PARENT_AUDIT_R16.md": {
-      "bytes": 5659,
-      "sha256": "13824399f352551474ec02c290e85cfadb372bb7798be95e33818d3eea837703"
-    },
-    "docs/VISUAL_RESOURCES_R20.md": {
-      "bytes": 5507,
-      "sha256": "f8a53e973a36e2f4a092df3243dafb902fd957bae34f2c2f634272545733278c"
-    },
-    "docs/BOOT_FAILURE_TEXTCOMPAT_R22.md": {
-      "bytes": 2539,
-      "sha256": "b1c76eb93bffd14644e2dcefa526db155cf99415d67450ec078fc4b1812de0a6"
-    },
-    "docs/FUNCTIONS_R21.md": {
-      "bytes": 4955,
-      "sha256": "81d984cafac720a2ede2ee403291fdf6d7a54794d2c02d6c28d32687604cbbdc"
-    },
-    "docs/COMMON_REFERENCE_COVERAGE.md": {
-      "bytes": 20344,
-      "sha256": "6cc6875c3c095b87d364665c9f58a3531964bef640545aa412864f98bae95eef"
-    },
-    "docs/PUBLISH.md": {
-      "bytes": 1148,
-      "sha256": "5b5df229c2c861e38b60355aef460f4c49bfb2378f572bc9d64e46f07a07a9b5"
-    },
-    "docs/SHARED_UI_AUDIT_ROUND13.md": {
-      "bytes": 3580,
-      "sha256": "3f1bc661d0bed0e4a1256dae8acf818a9ec0fc44dc0b589219a63dc29ff88311"
-    },
-    "docs/R46_QUICKSTART.md": {
-      "bytes": 2984,
-      "sha256": "70cb463ac9f5093a0adb3cb61626eaed0807551fc913c76d4b6ebdcd0ad9e648"
-    },
-    "docs/FEATURE_HEALTH_R27.md": {
-      "bytes": 3053,
-      "sha256": "853136e4ee31b0f7c9f78c0365a448c31a1ebb0e945a035a15ae34f5af24b51b"
-    },
-    "docs/RELEASE_GATE_SHARED_R16.md": {
-      "bytes": 5859,
-      "sha256": "ca5c3295155dbf96b3cd57c287571eeb79a2b5fa82c021b38f5791f0a5a9b70a"
-    },
-    "docs/BLOXSTRIKE_STARTUP_STABILITY_R26.md": {
-      "bytes": 3392,
-      "sha256": "5e02c8fa6180dcbef16cd6cc524391580c6634554d158bcb36a35ef09f849699"
-    },
-    "docs/VISUAL_BUDGET_R14.md": {
-      "bytes": 7909,
-      "sha256": "e65beaefc0e4aedef3886d0a64ef0a0d97cde573cf5d0b884d2745dc94337a9d"
-    },
-    "docs/WIND_ANDROID_QA.md": {
-      "bytes": 15821,
-      "sha256": "a78eb933f9b947fb014db529fd9203ad86339cca3b0fc15b838f818f19d8077c"
-    },
-    "docs/LOCAL_FEATURES_R19.md": {
-      "bytes": 5382,
-      "sha256": "0c9c52a3d14c607c7df4b5a4260d3ea4cc3870e0420e1ea7305e1bbbc278d955"
-    },
-    "docs/REFACTOR_R2.md": {
-      "bytes": 3436,
-      "sha256": "f533f25384557cd7af3f79f475148454622d4ee261f1a9d0bfc178ce7e624aa2"
-    },
-    "docs/SHARED_UI_ENRICHMENT.md": {
-      "bytes": 17956,
-      "sha256": "465db0cd4da41d4512dc5952a3d8d2c22deb34eb0ec21d365722e2f1fddad22b"
-    },
-    "docs/AOTR_HUD_PARENT_AUDIT_R18.md": {
-      "bytes": 7949,
-      "sha256": "53598e8817c79c77ae0fbcf2b3a7640d39cadc38c5f13f8fa11a81c3d29754be"
-    },
-    "docs/INPUT_QUEUE_R14.md": {
-      "bytes": 7692,
-      "sha256": "f88d3e86a9d27c4dececfea917d53055646faab466d855fbb386f68333c51a16"
-    },
-    "docs/SCP_REFERENCE_COVERAGE.md": {
-      "bytes": 10034,
-      "sha256": "1cd15b12ee3b8169350de2c168acbc92dcf682ce7728d24cd63739ec4b5ae96c"
-    },
-    "docs/WIND_THEME_ROOT_CAUSE_R24.md": {
-      "bytes": 2510,
-      "sha256": "afc3a739da53b06bb854237b015e528773490482e7cbbdc59214aa83e873abbe"
-    },
-    "docs/BLOXSTRIKE_REFERENCE_COVERAGE.md": {
-      "bytes": 10958,
-      "sha256": "4742bea052a32a65090157a2ec761e79a142597344b3c75eb9715870104f291a"
-    },
-    "src/WindAdapter.luau": {
-      "bytes": 69355,
-      "sha256": "bde0536ba3704a91657235ba5a364760710f69f8789fdf6b667f4a5e063e53a5"
-    },
-    "src/AOTRLobby.luau": {
-      "bytes": 6684,
-      "sha256": "87ad2e8c82226ebcd8b0783ac3ce24a1ef902d662343a517176bf21cbab218f9"
-    },
-    "src/ServerSwitch.luau": {
-      "bytes": 26263,
-      "sha256": "f5569973815af65392956ef811ea07b9bad4877af28d98a3566fa085973b994f"
-    },
-    "src/SCPCommon.luau": {
-      "bytes": 8761,
-      "sha256": "54c065a9527c3db68966d4149952e3482ba8e796cc69a1da0a135f18d97e0966"
-    },
-    "src/BloxStrikeBullet.luau": {
-      "bytes": 23992,
-      "sha256": "f22a645f7d83d4190a10b668fdd36b72a63280b4900c2d551a96622c5105d53e"
-    },
-    "src/SCPESP.luau": {
-      "bytes": 26480,
-      "sha256": "3336b54a6e371ae891692612a343f50dc9f649b3684e66b18afed0ec70e01aa3"
-    },
-    "src/AOTRMovement.luau": {
-      "bytes": 9663,
-      "sha256": "4de9b57f0caf09fd6c072df12698e2a10f40b3242f25378beb9d7d64428078ec"
-    },
-    "src/BloxStrikeCommon.luau": {
-      "bytes": 11271,
-      "sha256": "63b1f197e95348946332980f7a823bed792437b79845503fdaa1c26df71984bb"
-    },
-    "src/SCPCandidates.luau": {
-      "bytes": 7210,
-      "sha256": "66731652f08aecedc50d37b6c080a77565d7e599b192bd1baf3ced18792146e9"
-    },
-    "src/BloxStrikeVisual.luau": {
-      "bytes": 23406,
-      "sha256": "2e2cd42cf3e737bc636e73b2ced1fc11ab8e09ad6a0b38f4272412f8d3c9025d"
-    },
-    "src/AOTRCommon.luau": {
-      "bytes": 17581,
-      "sha256": "8a99bbb1a5e1da376fc4370495d2236b2a7ee9edeed66fabd10a196a356cbcd5"
-    },
-    "src/RuntimeMonitor.luau": {
-      "bytes": 7933,
-      "sha256": "2a42420421a3467b9a6395dfcba15f23933babc381851e4bb3103ab92b9df1b3"
-    },
-    "src/AOTRTitans.luau": {
-      "bytes": 11130,
-      "sha256": "8c55c4ecf8b91e4e44239cead676fda1113fda17a7541220796a707104921160"
-    },
-    "src/AOTRESP.luau": {
-      "bytes": 12257,
-      "sha256": "257d004647c1518f9cef26eccfabf0325b28e479293f322f45bb592996695de4"
-    },
-    "src/SCPMovement.luau": {
-      "bytes": 10705,
-      "sha256": "ae97afebe8523a9063e1598b455c0088bc2ebaf2573118264504e98fd152d47d"
-    },
-    "src/ForsakenCore.luau": {
-      "bytes": 10697,
-      "sha256": "07ca1813b96262b1ffe308b6ea4a2391ef3bc72e8dcec4c2bf8107c97a4b1637"
-    },
-    "src/BloxStrikeCosmetic.luau": {
-      "bytes": 41803,
-      "sha256": "1e7cb2fd71a0983b1a14276fc2b5ba80df7b88ba190f7cf69ee610c2f82a81d5"
-    },
-    "src/BloxStrikeCore.luau": {
-      "bytes": 14617,
-      "sha256": "a33099b2944f6dbbc9df784644a09262a7e1eeb4f36810f9ff8fdaa7339cefaf"
-    },
-    "src/SCPSilentAim.luau": {
-      "bytes": 8326,
-      "sha256": "c26edcc01c5506ff058daeec8b72c102be02a185c9401213efd676d721de544f"
-    },
-    "src/SCPCloak.lua": {
-      "bytes": 5404,
-      "sha256": "6a3640e73ef4dd2f532f73b64aa970a1d6abb2e77e88e175ec7b86a0d6c4c7c8"
-    },
-    "src/AOTRCloak.lua": {
-      "bytes": 6535,
-      "sha256": "0fdf01dc2022edd90b5733105026c4a88e75fb329cdac1af15324f61c92596ed"
-    },
-    "src/BloxStrikeCombat.luau": {
-      "bytes": 37437,
-      "sha256": "b93fc6ce3e24cad236f17d9133638612bee189e46fd64f1e8d791eef82bfa826"
-    },
-    "src/SCPHitbox.luau": {
-      "bytes": 11334,
-      "sha256": "92bcfe9fa2a60823872d393fd70d1b59d1ae944133f9eb8e8c5a4cc75c98f5e6"
-    },
-    "src/loader_routes.json": {
-      "bytes": 478,
-      "sha256": "4a4a09fab17048ea5ffaea6c06333e8d67ec221fde5e230bbb468189e6764ee9"
-    },
-    "src/AOTRScene.luau": {
-      "bytes": 833,
-      "sha256": "861e7c31b380ecc440a8d92cda642157f8b6a2fa01c0092560693a5c59340a57"
-    },
-    "src/SCPCore.luau": {
-      "bytes": 33221,
-      "sha256": "172c5d01257f9ca7e458920e65baf7702c8a84d015ddb94eb104c5af97dc09a8"
-    },
-    "src/SCPCamera.luau": {
-      "bytes": 15420,
-      "sha256": "dcb1afda4dc974a315a4a278e5e894c756b5e72aa9d5a71052e3780417a90274"
-    },
-    "src/BloxStrikeCloak.lua": {
-      "bytes": 6463,
-      "sha256": "e2ae697b026ac5f0bed64ab84f0f022d41b166b193897ce22a6680c0383189c4"
-    },
-    "src/AOTRFarm.luau": {
-      "bytes": 4118,
-      "sha256": "7146f18bbb5fc4ce7dc7ed72fe60739acdf2a9328391e4ed0dc75f820632b11b"
-    },
-    "src/AOTRCombat.luau": {
-      "bytes": 17615,
-      "sha256": "0fa29d14107677debd6b7ccc48ccba8ca63a455eee690b06d022f8a986234979"
-    },
-    "src/StarlightAdapter.luau": {
-      "bytes": 18766,
-      "sha256": "71ecb72282d8269dadd3ffb82f473e5bfe3abf01022ece8f45910482b8d02c86"
-    },
-    "src/GameRouter.luau": {
-      "bytes": 5818,
-      "sha256": "12cd8b7e44ca5396b0ddbea315b96f4e70b18a61dc265ab4514b74e036a50651"
-    },
-    "src/AOTRBattle.luau": {
-      "bytes": 17596,
-      "sha256": "d61d55941445ae92d8a8ad1b894d1ba1f0c88efc0019ef06302702d16827ebb2"
-    },
-    "tests/run_aotr_entry_lifecycle.mjs": {
-      "bytes": 1403,
-      "sha256": "0b2311c72648e6821d13dc77f17e8dc2de406a02f4ea35c46f836b32c049fd8e"
-    },
-    "tests/run_wind_visual_budget_r14.mjs": {
-      "bytes": 2736,
-      "sha256": "f08fb3809c53b4cdbb73a15bb67aa9b8baf02a34d841248cd4e207b05532c6ea"
-    },
-    "tests/wind_native_harness.luau": {
-      "bytes": 2654,
-      "sha256": "09d86aa6a3820f6e53167e79a1d429ad16d918c258cf3c0f82619270403443c5"
-    },
-    "tests/test_textcompat_vendor.py": {
-      "bytes": 2921,
-      "sha256": "c1e87c0c3d9c77255846455141efa44f901653ad2c1db0dfba4df7f5c9fa92ec"
-    },
-    "tests/test_boot_failure_visibility.py": {
-      "bytes": 2530,
-      "sha256": "31f8c001d4118949a85a636f4fa92c99dc12f43b373a08d7c20a55ff1c19d85e"
-    },
-    "tests/test_bloxstrike_enrichment.luau": {
-      "bytes": 42807,
-      "sha256": "bb439ab3a656981f3b375bb09fdd119e0de9dc2e6c802f28b8147d90558fc3b8"
-    },
-    "tests/test_r26_blox_stability.py": {
-      "bytes": 5941,
-      "sha256": "4edac57e51d3a519c48035efc4902f270494a38018dd7c7729f8146b13d7d8ad"
-    },
-    "tests/test_vendor_constructor_trace_r23.py": {
-      "bytes": 2410,
-      "sha256": "cbab21e9a0d84828f7234c450f70422cedfa261d5ea427b930ad5a94699263d2"
-    },
-    "tests/run_aotr_hud_contract_r18.mjs": {
-      "bytes": 10146,
-      "sha256": "ac58759c13b55e67f4ecad59e1e43346e8dad1e289ceb611d2551ad7f940dc60"
-    },
-    "tests/run_world_r34.mjs": {
-      "bytes": 5907,
-      "sha256": "565d3ea0c5dab86c63c7af77cc02271896728dc7acdcf4fd9f5a134a3cbbbf0d"
-    },
-    "tests/test_wind_visual_budget_r14.luau": {
-      "bytes": 12582,
-      "sha256": "a729384fbab7b3b6965f0d715e330f0cca988534cf8a23d3bfc746404a290cf3"
-    },
-    "tests/shared-ui-test-results.json": {
-      "bytes": 7839,
-      "sha256": "cce2470341a1bac30e65194df322264ecfae56afcecb81609cdb7a34b4531463"
-    },
-    "tests/test_forsaken_wind.py": {
-      "bytes": 3464,
-      "sha256": "d16ed8ba9516e55495bf88bb74dd4668df6c99e6475c427efad89e53e7fee08e"
-    },
-    "tests/test_aotr.py": {
-      "bytes": 2369,
-      "sha256": "d85618b49d3b915be9d9004ac8df5370012029d1846e01a6d45459902181602a"
-    },
-    "tests/run_wind_acrylic_policy_r16.mjs": {
-      "bytes": 3823,
-      "sha256": "c6120d65bd84f94fdb5d6350df9fae1b9f834fbedb4cde7325c0d58e3dda0db2"
-    },
-    "tests/test_aotr_lobby_runtime.luau": {
-      "bytes": 3433,
-      "sha256": "9ddb77b36b0d7e9772ffe8001c5c98bc3f4885f9a334151c198ae75edd42f331"
-    },
-    "tests/run_sil_animation_r39.mjs": {
-      "bytes": 2734,
-      "sha256": "ff1c2aa85d0003b73908f3551bf39a042c00767e8498bc50e117b8efa73bc2d9"
-    },
-    "tests/release-test-results.json": {
-      "bytes": 98367,
-      "sha256": "e3726018c3829645e51ddfc88f41a6107d420322b7cc98ec9cba77b04f67dda0"
-    },
-    "tests/test_sync_r35.luau": {
-      "bytes": 62596,
-      "sha256": "33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196"
-    },
-    "tests/test_guest_animation_r23.luau": {
-      "bytes": 15843,
-      "sha256": "522377c46fb87252663f1c4d1595f44f42f56e92956873d168c31b4adc2cd990"
-    },
-    "tests/run_audio_r34.mjs": {
-      "bytes": 4251,
-      "sha256": "9eb95654bdd1b8a903914dc010bdb39bbd12a43dbb6f33958e5c40c232a1fbc4"
-    },
-    "tests/test_wind_viewport_edges_r14.luau": {
-      "bytes": 33944,
-      "sha256": "bbb0a3efde98354da66188168bc6522eeebf1dfc03bd7e450c95548ec1785a07"
-    },
-    "tests/test_wind_theme_type_r24.py": {
-      "bytes": 3662,
-      "sha256": "926f215390b55a78ebb6fb8272a39d1499a2b83a6149c3e18215d37872c85fa7"
-    },
-    "tests/.__dbg_scp.luau": {
-      "bytes": 166120,
-      "sha256": "d8817b40dc7ed0a43249596f17c4f1a098f13c59143dbf17136fa43c0fb80f5c"
-    },
-    "tests/run_local_features_r19.mjs": {
-      "bytes": 5252,
-      "sha256": "c3b17cdaf03f7b1746d5af626e61de95ec38c6ac4781069d03f5c097351c3886"
-    },
-    "tests/test_sil_animation_r39.luau": {
-      "bytes": 17169,
-      "sha256": "9e219fa271866e5d8ef6fa744ec0c008b5fe34c6cddcc29dccbbb2f4a8023937"
-    },
-    "tests/test_local_features_r19.luau": {
-      "bytes": 17352,
-      "sha256": "64d9c1656149f8ccbf6d3c14b9e7a05aa89a3f584f57dd851490ffa72038dd5f"
-    },
-    "tests/run_bloxstrike_enrichment.mjs": {
-      "bytes": 4156,
-      "sha256": "476561687103a944a7002292ad64db6fcda72a1da65f1f56d2d6bfc0df771fb8"
-    },
-    "tests/test_wind_migration.py": {
-      "bytes": 1599,
-      "sha256": "15dbc907d2dbe41b05b778509a07a250148baabe4843714221c011b81aec333e"
-    },
-    "tests/test_scp_enrichment.luau": {
-      "bytes": 53070,
-      "sha256": "addf0bd3f89995e04fba7dc6e63262fa4b92b21e3fd2b84ff1925971bd547f75"
-    },
-    "tests/test_aotr_hud_contract_r18.luau": {
-      "bytes": 24342,
-      "sha256": "f3c7e00af65c5172eecce2c60eb4aa5e1aece5efc7605dfe0f0f79c6887eb6a3"
-    },
-    "tests/test_forsaken_enrichment.luau": {
-      "bytes": 35859,
-      "sha256": "1d3b28089ae0f5c7101817f9fa3c79cf3811158158481ad0fe753ded8b910830"
-    },
-    "tests/test_package_release.py": {
-      "bytes": 12034,
-      "sha256": "e5a0e019c27013b7817cc23bcf0647de29b585ad89a81eed7c7f6cf9fb6a9df5"
-    },
-    "tests/run_animation_r23.mjs": {
-      "bytes": 4001,
-      "sha256": "893e1215847926e8e4e07e07be74a430c79d9381d9176f622b9aebbe2fccb7e7"
-    },
-    "tests/test_wind_native_contracts.luau": {
-      "bytes": 122498,
-      "sha256": "ff5b9f781935504efca9a1c618c474acb468167c27a9d8fbffaff56a930be978"
-    },
-    "tests/test_wind_input_queue_r14.luau": {
-      "bytes": 18556,
-      "sha256": "af36154394ac60d563474e9cfad41f49f03aacb3c02d032ccf3c10707132cf07"
-    },
-    "tests/test_r25_stability.py": {
-      "bytes": 7341,
-      "sha256": "26890ea0ca24f604df3abda0f09e1f1e646d8bb89eec57ecb11b1a489efd7c54"
-    },
-    "tests/run_sync_r35.mjs": {
-      "bytes": 7358,
-      "sha256": "7b77b3bc40cad1d5fb9325297f62166a466a1fb04eb46f98707522f59460842f"
-    },
-    "tests/test_audio_r34.luau": {
-      "bytes": 18984,
-      "sha256": "d4b493f88482b4e408e8472dd0a12638abbd16f85d8da64960302b28b19ad075"
-    },
-    "tests/run_release_checks.mjs": {
-      "bytes": 6580,
-      "sha256": "18b5c505bad96765b4d3435ad1581f2624dd9e9077199e21614bb98c5f509230"
-    },
-    "tests/test_wind_router.py": {
-      "bytes": 22408,
-      "sha256": "de9615bd224d9a09c90c757f188519cc86dde24ec438a938f6ffa29c6bdef28f"
-    },
-    "tests/run_wind_input_queue_r14.mjs": {
-      "bytes": 4634,
-      "sha256": "2d99660bd8b98972424269fde21fbc51f5c6c5785b247fc4fb509e1828e52179"
-    },
-    "tests/test_aotr_common_lifecycle.luau": {
-      "bytes": 9158,
-      "sha256": "62ae6209de5016dfcbe07cc964f79c22fbe583827f43e8586cbdc1533de51037"
-    },
-    "tests/test_visual_resources_r20.luau": {
-      "bytes": 22043,
-      "sha256": "94e88034456a6d6a9d474ff099910f24ea8c71c6b83f2bb7ed2b35928408658e"
-    },
-    "tests/run_forsaken_enrichment.mjs": {
-      "bytes": 5473,
-      "sha256": "49c795e4e1479c9bfe049697ba7892047e98262f64ffaf94bd2cb40eb840be44"
-    },
-    "tests/test_server_switch.lua": {
-      "bytes": 15477,
-      "sha256": "5d7b426928505bac2274def24d5a6d3901419a5b839a628ed9f9fac12774c1dd"
-    },
-    "tests/test_wind_adapter.luau": {
-      "bytes": 27785,
-      "sha256": "f022bb8836d103a4b110f7be488f8af00920bae13ae0bc82293c24a0601ee5af"
-    },
-    "tests/test_aotr_enrichment.luau": {
-      "bytes": 9519,
-      "sha256": "aaf3c28a3a19613573ed6d76f930eaed220517bc25e65dc798a936041dffcd85"
-    },
-    "tests/run_wind_native_contracts.mjs": {
-      "bytes": 4130,
-      "sha256": "67de318c113a5835762a6d6fb0cab2f311c3995620af8e560ce6633747e40946"
-    },
-    "tests/wind_option_ids_baseline.json": {
-      "bytes": 5342,
-      "sha256": "3da56386c1bccc88467a40a833c27c2ca169ff61a0a806993887763d93f993df"
-    },
-    "tests/run_luau.mjs": {
-      "bytes": 1795,
-      "sha256": "58dcff580a2b2b36e210177cf6b82e71ebf84fa7cab098363165f32ab4e78882"
-    },
-    "tests/test_runtime_monitor.py": {
-      "bytes": 4824,
-      "sha256": "a1c3c5b83dec3706f7e2f714649de894ea7a95faf5608d026c5b23a224003c3d"
-    },
-    "tests/test_r2_regressions.py": {
-      "bytes": 4052,
-      "sha256": "57c390fd7ae8c20cb3adb0c326fe2498804945d6fcebf66c4aa66db21b632860"
-    },
-    "tests/test_release_runner.mjs": {
-      "bytes": 12414,
-      "sha256": "bdfaf4b397f23feeddb23adb801ab837949273aa1a6cfacd614eff0097540f81"
-    },
-    "tests/test_aotr_movement_lifecycle.luau": {
-      "bytes": 6567,
-      "sha256": "08ef74b80e6fe7e43b5997f741b98b6f898eaccd77672b8ad6a96f255da8133d"
-    },
-    "tests/test_generated_whitespace.py": {
-      "bytes": 1231,
-      "sha256": "2ebac41917e0d9d7a34de10aa95aa682519ae9207547600de48d341821edd330"
-    },
-    "tests/run_visual_resources_r20.mjs": {
-      "bytes": 5356,
-      "sha256": "308ef69c817cd2c86eec15ace37c2381d7c2b7e3b281a81c456440b36f7d50e1"
-    },
-    "tests/test_native_animation_r23.luau": {
-      "bytes": 6948,
-      "sha256": "c11382e8a4bcdf03a449d44758209a821befb819f8b8a6865bd62414fa211d62"
-    },
-    "tests/run_scp_enrichment.mjs": {
-      "bytes": 1632,
-      "sha256": "42af14d89db5c2d0039acfbb0b745c81750ce3aa8a42f22bcba6d57db19ceebf"
-    },
-    "tests/test_aotr_esp_lifecycle.luau": {
-      "bytes": 13569,
-      "sha256": "feacb09387adb2462782a8b43f19586ff4dd275a59bd6a61a0d29481d3ae4d9d"
-    },
-    "tests/test_wind_acrylic_policy_r16.luau": {
-      "bytes": 11950,
-      "sha256": "3ce0787012a0a25f03df244a47de533dc30ab2e5b023aefeeca7073c31808def"
-    },
-    "tests/README.md": {
-      "bytes": 859,
-      "sha256": "e1896817bc30645fb2b6cb53b6554e9d3043e8d2f93c8032679d780bae66c24b"
-    },
-    "tests/test_aotr_titans_lifecycle.luau": {
-      "bytes": 14435,
-      "sha256": "a0e17069730403a5a7c5f60d819fdd65544f2d0641a8cd89226b4d1dacb81033"
-    },
-    "tests/test_r27_feature_health.py": {
-      "bytes": 5558,
-      "sha256": "6466fe1817c1f336323442a503c5bdb800af06dec8953f3de8c47f331449f28a"
-    },
-    "tests/run_wind_viewport_edges_r14.mjs": {
-      "bytes": 6801,
-      "sha256": "b811217f0d119e05dec100ede334ad69455c8d12faf7324cf9308faff37679bd"
-    },
-    "tests/runtime-probe-results.json": {
-      "bytes": 563,
-      "sha256": "0f2ec1ecf61e5176bfe1e2242f751b1f2651c658fdc979a148805e251027adfa"
-    },
-    "tests/test_world_r34.luau": {
-      "bytes": 16461,
-      "sha256": "296fd0d6696200b4ef0772f354b6ed6efca6bf827022d935fc0981466d0848d5"
-    },
-    "tests/test_aotr_entry_lifecycle.luau": {
-      "bytes": 11161,
-      "sha256": "fb0ebfd14862b11bfb31f1a7f3d9d6b2c4f72c4b03eadb127b60ced4201cd0e7"
-    },
-    "tests/option_ids_baseline.json": {
-      "bytes": 957,
-      "sha256": "1b70941485ffda8698cc8ce717989205c3a53df772b9ec509a1ed352356c8a74"
-    },
-    "tools/publish-existing-repo.sh": {
-      "bytes": 801,
-      "sha256": "cb450b3fcdd6913ca2d09c91581cb9128f28709ab6fc7319442d5ba282425804"
-    },
-    "tools/pack.py": {
-      "bytes": 1933,
-      "sha256": "ec6a423c191c1b7fe9acdfba60dac933d2a3ff8f28e738532f807506de30c814"
-    },
-    "tools/unpack_references.py": {
-      "bytes": 2104,
-      "sha256": "f253aedb4e7ccb21779a4434520f6259faec0569498117ca9d750f4621e9377c"
-    },
-    "tools/package_release.py": {
-      "bytes": 7449,
-      "sha256": "b5a97996e774a56c000d7c40c0d4870664698550b99ba4516f34303ede076762"
-    },
-    "dist/runtime-manifest.json": {
-      "bytes": 1746,
-      "sha256": "edfc2b27fbe1b6430f0da6c4f6cfbc795453a753d27c5ddc1d634bac10d04a5c"
+      "bytes": 16075,
+      "sha256": "8d371a005a253ef00a3833a06e0bf010c25e49aa219744a90ab0e0a9b8db03c4"
+    },
+    "assets/forsaken/README.md": {
+      "bytes": 3415,
+      "sha256": "902cf65fb59592c2ed5f7fd50b7fc8f4173411713e4b68bea8b7a49cdd1ade81"
+    },
+    "assets/forsaken/TerioThings/coagulate.mp3": {
+      "bytes": 41760,
+      "sha256": "6a46e12c76812c437d86336d2b8b1272b76fd9d6af5b02f3ab809f11f254124e"
+    },
+    "assets/forsaken/TerioThings/lance_swing.mp3": {
+      "bytes": 50688,
+      "sha256": "2e4742e14585772e8f0c2ea0834150df95f0c973f97b540a88370e109b0135e5"
+    },
+    "assets/forsaken/TerioThings/sil_whip.mp3": {
+      "bytes": 61440,
+      "sha256": "7f35d7cc07d52d3cb770f9b85d06feee41339e9234ea11f7e5510752c08b8a7b"
+    },
+    "assets/forsaken/asset-manifest.json": {
+      "bytes": 5718,
+      "sha256": "33c41dbce36ba0e4063611bdf952abb61e2d1e68a2b611d0c7474ca7a2999edf"
+    },
+    "build.py": {
+      "bytes": 12468,
+      "sha256": "d350b7061b49beb4a1ee6fb27186f52e4048562bccdf8250e138b19695866fc1"
+    },
+    "dist/Vortexion_AOTR_Battle.lua": {
+      "bytes": 1551171,
+      "sha256": "64ce2d6a08a29eeae1f11dc74da9832628d42efb1a159a25b04f843c83cc20e3"
+    },
+    "dist/Vortexion_AOTR_Lobby.lua": {
+      "bytes": 1485401,
+      "sha256": "50224bdf0c32bdcf86622be4733f01126e6d24afbc8263a67737e0bab662c60f"
+    },
+    "dist/Vortexion_BloxStrike.lua": {
+      "bytes": 1620133,
+      "sha256": "d6db270fa64c8612cde916c341090594be33fdbfe2033f647e8bb67e8000b787"
     },
     "dist/Vortexion_Core.lua": {
       "bytes": 1461094,
       "sha256": "3a30298f6a7953102900b07c3e020beb8722ac2ac7980bae87157985e06a33eb"
     },
-    "dist/test-toggle-v7.json": {
-      "bytes": 124,
-      "sha256": "5851065e6f6c539b3d6e1fa123837df13907ecbdabacd0ac1cf04c8abe932470"
+    "dist/Vortexion_Forsaken.lua": {
+      "bytes": 1494705,
+      "sha256": "49a35936bd9faba6872a0140e713d1d3fde2c9429ca6eb45096f3769e3fd14ac"
+    },
+    "dist/Vortexion_Module_AOTR_Battle.lua": {
+      "bytes": 90725,
+      "sha256": "aeb4b8687c83df82cdc0ee71706e31c1fe4dc757a539d6b97426d3146bb16e93"
+    },
+    "dist/Vortexion_Module_AOTR_Lobby.lua": {
+      "bytes": 24955,
+      "sha256": "97e3892943a00cf696d416c5bfb865db5afa79bf82bddc072dbdf9f437f440bd"
     },
     "dist/Vortexion_Module_BloxStrike.lua": {
       "bytes": 159687,
       "sha256": "f232d4afb8d9f42266a0d0779bd568667512bc3a16f50f460d61844a028d5481"
     },
+    "dist/Vortexion_Module_Forsaken.lua": {
+      "bytes": 34259,
+      "sha256": "2a02bed38a600a5dddcc57b0077ab1776d5df43947cbf5bb0b26e03241ccd012"
+    },
     "dist/Vortexion_Module_SCP.lua": {
       "bytes": 127584,
       "sha256": "2da6a7b10cc33b8c40454aebc018c2612a70cf005d49417f11d286641a0228b5"
     },
-    "dist/test-touch-v8.json": {
-      "bytes": 185,
-      "sha256": "19c0c26ddabd82a980825ec064dd2f8c0ae2ad8aa7df08d652dd6992ddcacf21"
+    "dist/Vortexion_SCP.lua": {
+      "bytes": 1588030,
+      "sha256": "e71ced79d4a6e444c7baabca2414e75488895b3b65bb0f55a7ff9aa6a707664a"
     },
-    "dist/wind-test-results.json": {
-      "bytes": 2109,
-      "sha256": "6ec012e2de211e242570eae0abc5eb16f3435e2904ab983224dec23c3b9f7348"
+    "dist/Vortexion_Wind.lua": {
+      "bytes": 1895368,
+      "sha256": "85b4f5f23f4684d1745d3197a0d7a3ed2225cbe406bd20e963ca0cb23c67510d"
     },
     "dist/build-manifest.json": {
-      "bytes": 6037,
-      "sha256": "bd379919f3576d57dd814226409a8726060a313c639487c9ecd56f24e8c87e52"
+      "bytes": 6142,
+      "sha256": "10525bdf7eda2c34b2db39cd8e28fef16d19b9ad3ce16783c00abdc06b02f7c4"
+    },
+    "dist/runtime-manifest.json": {
+      "bytes": 1740,
+      "sha256": "ab061449f101539bc4edf14305c01a64859d792980b07733898955f0415838d2"
     },
     "dist/test-mobile-v6.json": {
       "bytes": 266,
@@ -679,49 +101,373 @@
       "bytes": 307,
       "sha256": "f899db796555b733c1b382a0f814373d4e409042adf6f96bc427cd70abdb5108"
     },
-    "dist/Vortexion_BloxStrike.lua": {
-      "bytes": 1620133,
-      "sha256": "d6db270fa64c8612cde916c341090594be33fdbfe2033f647e8bb67e8000b787"
+    "dist/test-toggle-v7.json": {
+      "bytes": 124,
+      "sha256": "5851065e6f6c539b3d6e1fa123837df13907ecbdabacd0ac1cf04c8abe932470"
     },
-    "dist/Vortexion_AOTR_Battle.lua": {
-      "bytes": 1551177,
-      "sha256": "189755b43b019ecbdbb31a433807a2f04bb101946ef9ef5f16e4bb5450214f0a"
+    "dist/test-touch-v8.json": {
+      "bytes": 185,
+      "sha256": "19c0c26ddabd82a980825ec064dd2f8c0ae2ad8aa7df08d652dd6992ddcacf21"
     },
-    "dist/Vortexion_Wind.lua": {
-      "bytes": 1872412,
-      "sha256": "d7f71e9964e3592eebece2be795e13ab96e1499dffca91ff527274eef3e1dcc1"
+    "dist/wind-test-results.json": {
+      "bytes": 2109,
+      "sha256": "6ec012e2de211e242570eae0abc5eb16f3435e2904ab983224dec23c3b9f7348"
     },
-    "dist/Vortexion_Module_Forsaken.lua": {
-      "bytes": 11297,
-      "sha256": "f09a1ed2221671c31799cf76f7a18df0af4440e49e00604612f2a470a971608d"
+    "docs/ANDROID_QA.md": {
+      "bytes": 3431,
+      "sha256": "d7d14a58038c7743e78b1891134c2b0cb11d36ef96d6f4c40991fb49b897cc24"
     },
-    "dist/Vortexion_AOTR_Lobby.lua": {
-      "bytes": 1485401,
-      "sha256": "50224bdf0c32bdcf86622be4733f01126e6d24afbc8263a67737e0bab662c60f"
+    "docs/AOTR_HUD_CONTRACT_R18.md": {
+      "bytes": 4600,
+      "sha256": "98bbacac10e64be5880f74fb1f0c0e884fc71120dddf95e785d6e1396f55e8f4"
     },
-    "dist/Vortexion_Module_AOTR_Battle.lua": {
-      "bytes": 90731,
-      "sha256": "bedc2b0b24a943321bfa338d731ab89d23d38abdebd95124c90a5af38e6fb115"
+    "docs/AOTR_HUD_PARENT_AUDIT_R18.md": {
+      "bytes": 7949,
+      "sha256": "53598e8817c79c77ae0fbcf2b3a7640d39cadc38c5f13f8fa11a81c3d29754be"
     },
-    "dist/Vortexion_Module_AOTR_Lobby.lua": {
-      "bytes": 24955,
-      "sha256": "97e3892943a00cf696d416c5bfb865db5afa79bf82bddc072dbdf9f437f440bd"
+    "docs/AOTR_REFERENCE_COVERAGE.md": {
+      "bytes": 8276,
+      "sha256": "f28e50e09be6513b87f234e297d54d18d5a342048c952cb464fdc8595f8c7ee3"
     },
-    "dist/Vortexion_SCP.lua": {
-      "bytes": 1588030,
-      "sha256": "e71ced79d4a6e444c7baabca2414e75488895b3b65bb0f55a7ff9aa6a707664a"
+    "docs/BLOXSTRIKE_REFERENCE_COVERAGE.md": {
+      "bytes": 10958,
+      "sha256": "4742bea052a32a65090157a2ec761e79a142597344b3c75eb9715870104f291a"
     },
-    "dist/Vortexion_Forsaken.lua": {
-      "bytes": 1471743,
-      "sha256": "d3b759e6ae386f0be0f3d47bf2d8d28e088a1983b04a26180991b5c26de93c01"
+    "docs/BLOXSTRIKE_STARTUP_STABILITY_R26.md": {
+      "bytes": 3392,
+      "sha256": "5e02c8fa6180dcbef16cd6cc524391580c6634554d158bcb36a35ef09f849699"
     },
-    "tests/archive/test_mobile_v6.py": {
-      "bytes": 287,
-      "sha256": "1b0f1d8f9f7ab3607cb1690718fc461918f023682b353c69d13bdc8bac073a5e"
+    "docs/BOOT_FAILURE_SHARED_R21.md": {
+      "bytes": 1781,
+      "sha256": "b15b7ad12eec7290823e3b9686a1a89c71cd11ef273f851f5be777caa743a98f"
+    },
+    "docs/BOOT_FAILURE_TEXTCOMPAT_R22.md": {
+      "bytes": 2539,
+      "sha256": "b1c76eb93bffd14644e2dcefa526db155cf99415d67450ec078fc4b1812de0a6"
+    },
+    "docs/BOOT_VENDOR_TRACE_R23.md": {
+      "bytes": 2045,
+      "sha256": "6ca5eb14120838a9f0557f045c352e971e5b33a3ab01165fbb5a445c2e512b6d"
+    },
+    "docs/BUILD_PARENT_AUDIT_R17.md": {
+      "bytes": 7384,
+      "sha256": "a65928b8d430437c3520a7a0b985d4076870b543086af9078072f46000efbd64"
+    },
+    "docs/BUILD_RECONCILIATION_R17.md": {
+      "bytes": 7815,
+      "sha256": "1e7f396e4f53a6b544d72fb7f9ead68222111967725dbb7588ae67738dc9fa18"
+    },
+    "docs/COMMON_REFERENCE_COVERAGE.md": {
+      "bytes": 20344,
+      "sha256": "6cc6875c3c095b87d364665c9f58a3531964bef640545aa412864f98bae95eef"
+    },
+    "docs/FEATURE_COVERAGE_R17.md": {
+      "bytes": 11536,
+      "sha256": "37660db528a5836c25f75c14cbe5a2781c44521db5f112e048491b3088b8d6b0"
+    },
+    "docs/FEATURE_HEALTH_R27.md": {
+      "bytes": 3053,
+      "sha256": "853136e4ee31b0f7c9f78c0365a448c31a1ebb0e945a035a15ae34f5af24b51b"
+    },
+    "docs/FORSAKEN_AOTR_STABILITY_R25.md": {
+      "bytes": 3284,
+      "sha256": "6a32abb719e5efccb9e9ea9efd8fd7ead39350508110d5e658fd585607dac892"
+    },
+    "docs/FORSAKEN_ENRICHMENT_R28.md": {
+      "bytes": 3656,
+      "sha256": "3a35e950c2b9a04f7838c8a9d50a7219ef018c19eb1c409b48cccf2a0ed47ca2"
+    },
+    "docs/FORSAKEN_REFERENCE_COVERAGE.md": {
+      "bytes": 31401,
+      "sha256": "c7cac30783080a54d93eb8227cac051cb178dec63baa92ac89772e441901a9e2"
+    },
+    "docs/FUNCTIONS_R21.md": {
+      "bytes": 4955,
+      "sha256": "81d984cafac720a2ede2ee403291fdf6d7a54794d2c02d6c28d32687604cbbdc"
+    },
+    "docs/FUNCTIONS_R22.md": {
+      "bytes": 5752,
+      "sha256": "30e648dfb82f46d7ff49cdd21f791591f167ec38c51b84969948254739940277"
+    },
+    "docs/FUNCTIONS_R23.md": {
+      "bytes": 6960,
+      "sha256": "7bf4b0caff5a47d51f3bc412bb908647ca2b59bdcd5476a38b386d6ad39de9f7"
+    },
+    "docs/INPUT_QUEUE_R14.md": {
+      "bytes": 7692,
+      "sha256": "f88d3e86a9d27c4dececfea917d53055646faab466d855fbb386f68333c51a16"
+    },
+    "docs/LOADER_P0.md": {
+      "bytes": 2832,
+      "sha256": "b7ef0d812f877487b64354bf11c719db733d57009f7abb73cbf9500dcf14ed1a"
+    },
+    "docs/LOCAL_FEATURES_R19.md": {
+      "bytes": 5382,
+      "sha256": "0c9c52a3d14c607c7df4b5a4260d3ea4cc3870e0420e1ea7305e1bbbc278d955"
+    },
+    "docs/MOBILE_UI_EVIDENCE_REVIEW_R14.md": {
+      "bytes": 15036,
+      "sha256": "dcfd4ee79dce9812529287a9c17dffbd6a918ae64b77da4d629590f7dbcbe6cf"
+    },
+    "docs/PUBLISH.md": {
+      "bytes": 1148,
+      "sha256": "5b5df229c2c861e38b60355aef460f4c49bfb2378f572bc9d64e46f07a07a9b5"
+    },
+    "docs/R46_QUICKSTART.md": {
+      "bytes": 2984,
+      "sha256": "70cb463ac9f5093a0adb3cb61626eaed0807551fc913c76d4b6ebdcd0ad9e648"
+    },
+    "docs/REFACTOR_R1.md": {
+      "bytes": 5509,
+      "sha256": "661fc30bc49a54c8b8ecf867a1bc16614c34f800d4d6e2661fcf2ce24990f345"
+    },
+    "docs/REFACTOR_R2.md": {
+      "bytes": 3436,
+      "sha256": "f533f25384557cd7af3f79f475148454622d4ee261f1a9d0bfc178ce7e624aa2"
+    },
+    "docs/REFERENCES_AND_LICENSE.md": {
+      "bytes": 1368,
+      "sha256": "04adcddf8c045ca9bb14994fb3d9657d344e42ee81d6700d5238d591f2785026"
+    },
+    "docs/REFERENCE_AUDIT_R1.md": {
+      "bytes": 1819,
+      "sha256": "5c873fd0d93345ab3b47806eaf41dfb69504ded4354ca25ae55e07d8c0071cfb"
+    },
+    "docs/RELEASE_ACCEPTANCE.md": {
+      "bytes": 8338,
+      "sha256": "7e88466fc79113241e90489f7bb63c8e80c7d29ecb34c2cbaa1b1609db36d5fc"
+    },
+    "docs/RELEASE_BUILD_HUD_R18.md": {
+      "bytes": 8803,
+      "sha256": "085370489c044c98584dac636fe4fc2c68faccc5eeaf4a03fbc6cbd258406be9"
+    },
+    "docs/RELEASE_GATE_PARENT_AUDIT_R16.md": {
+      "bytes": 5659,
+      "sha256": "13824399f352551474ec02c290e85cfadb372bb7798be95e33818d3eea837703"
+    },
+    "docs/RELEASE_GATE_PARENT_AUDIT_R18.md": {
+      "bytes": 4176,
+      "sha256": "5dadedb530b46cb1d402aa990d8e4683eb33b442d03486786179ff313363f77d"
+    },
+    "docs/RELEASE_GATE_SHARED_R16.md": {
+      "bytes": 5859,
+      "sha256": "ca5c3295155dbf96b3cd57c287571eeb79a2b5fa82c021b38f5791f0a5a9b70a"
+    },
+    "docs/RELEASE_NOTES.md": {
+      "bytes": 2521,
+      "sha256": "c16c6c5baf67211a9f59ee25b924d2b4bff1533d13d741f9e92207d39ffc0326"
+    },
+    "docs/REVIEW_TOPBAR_SIGNAL_R14.md": {
+      "bytes": 19036,
+      "sha256": "47283a896d4664983bafb412c9007b1f573f570fa5701c15ad5c37f0a65714a3"
+    },
+    "docs/SCP_REFERENCE_COVERAGE.md": {
+      "bytes": 10034,
+      "sha256": "1cd15b12ee3b8169350de2c168acbc92dcf682ce7728d24cd63739ec4b5ae96c"
+    },
+    "docs/SHARED_UI_AUDIT_ROUND13.md": {
+      "bytes": 3580,
+      "sha256": "3f1bc661d0bed0e4a1256dae8acf818a9ec0fc44dc0b589219a63dc29ff88311"
+    },
+    "docs/SHARED_UI_ENRICHMENT.md": {
+      "bytes": 17956,
+      "sha256": "465db0cd4da41d4512dc5952a3d8d2c22deb34eb0ec21d365722e2f1fddad22b"
+    },
+    "docs/SHARED_UI_FINAL_AUDIT_R16.md": {
+      "bytes": 8046,
+      "sha256": "e6fdcc88d4493ee7decfabdfc46a3f4d58b7073c0780dfd2bf20f3122fd0bd18"
+    },
+    "docs/VIEWPORT_EDGES_R14.md": {
+      "bytes": 12250,
+      "sha256": "a46da702520d682ee642d276933d858d20a2acae63681a5960e4f8c2a518f347"
+    },
+    "docs/VISUAL_BUDGET_R14.md": {
+      "bytes": 7909,
+      "sha256": "e65beaefc0e4aedef3886d0a64ef0a0d97cde573cf5d0b884d2745dc94337a9d"
+    },
+    "docs/VISUAL_RESOURCES_R20.md": {
+      "bytes": 5507,
+      "sha256": "f8a53e973a36e2f4a092df3243dafb902fd957bae34f2c2f634272545733278c"
+    },
+    "docs/WIND_ANDROID_QA.md": {
+      "bytes": 15821,
+      "sha256": "a78eb933f9b947fb014db529fd9203ad86339cca3b0fc15b838f818f19d8077c"
+    },
+    "docs/WIND_THEME_ROOT_CAUSE_R24.md": {
+      "bytes": 2510,
+      "sha256": "afc3a739da53b06bb854237b015e528773490482e7cbbdc59214aa83e873abbe"
+    },
+    "loader.lua": {
+      "bytes": 23717,
+      "sha256": "3ff0b8cf6bfeffbbb371e99ca6087ce383bd19f3005fbce566941115a073617e"
+    },
+    "package.json": {
+      "bytes": 154,
+      "sha256": "ca31027f57e713cb4a0ae34c773a07ac2152dc1497008b56b7621bf1e3af1dc2"
+    },
+    "src/AOTRBattle.luau": {
+      "bytes": 17596,
+      "sha256": "d61d55941445ae92d8a8ad1b894d1ba1f0c88efc0019ef06302702d16827ebb2"
+    },
+    "src/AOTRCloak.lua": {
+      "bytes": 6535,
+      "sha256": "0fdf01dc2022edd90b5733105026c4a88e75fb329cdac1af15324f61c92596ed"
+    },
+    "src/AOTRCombat.luau": {
+      "bytes": 17615,
+      "sha256": "0fa29d14107677debd6b7ccc48ccba8ca63a455eee690b06d022f8a986234979"
+    },
+    "src/AOTRCommon.luau": {
+      "bytes": 17581,
+      "sha256": "8a99bbb1a5e1da376fc4370495d2236b2a7ee9edeed66fabd10a196a356cbcd5"
+    },
+    "src/AOTRESP.luau": {
+      "bytes": 12257,
+      "sha256": "257d004647c1518f9cef26eccfabf0325b28e479293f322f45bb592996695de4"
+    },
+    "src/AOTRFarm.luau": {
+      "bytes": 4118,
+      "sha256": "7146f18bbb5fc4ce7dc7ed72fe60739acdf2a9328391e4ed0dc75f820632b11b"
+    },
+    "src/AOTRLobby.luau": {
+      "bytes": 6684,
+      "sha256": "87ad2e8c82226ebcd8b0783ac3ce24a1ef902d662343a517176bf21cbab218f9"
+    },
+    "src/AOTRMovement.luau": {
+      "bytes": 9663,
+      "sha256": "4de9b57f0caf09fd6c072df12698e2a10f40b3242f25378beb9d7d64428078ec"
+    },
+    "src/AOTRScene.luau": {
+      "bytes": 833,
+      "sha256": "861e7c31b380ecc440a8d92cda642157f8b6a2fa01c0092560693a5c59340a57"
+    },
+    "src/AOTRTitans.luau": {
+      "bytes": 11124,
+      "sha256": "d5ccf148f0c2dc1fc53376da59882c39c4d72b94b8ea8d002680eba02554a2cf"
+    },
+    "src/BloxStrikeBullet.luau": {
+      "bytes": 23992,
+      "sha256": "f22a645f7d83d4190a10b668fdd36b72a63280b4900c2d551a96622c5105d53e"
+    },
+    "src/BloxStrikeCloak.lua": {
+      "bytes": 6463,
+      "sha256": "e2ae697b026ac5f0bed64ab84f0f022d41b166b193897ce22a6680c0383189c4"
+    },
+    "src/BloxStrikeCombat.luau": {
+      "bytes": 37437,
+      "sha256": "b93fc6ce3e24cad236f17d9133638612bee189e46fd64f1e8d791eef82bfa826"
+    },
+    "src/BloxStrikeCommon.luau": {
+      "bytes": 11271,
+      "sha256": "63b1f197e95348946332980f7a823bed792437b79845503fdaa1c26df71984bb"
+    },
+    "src/BloxStrikeCore.luau": {
+      "bytes": 14617,
+      "sha256": "a33099b2944f6dbbc9df784644a09262a7e1eeb4f36810f9ff8fdaa7339cefaf"
+    },
+    "src/BloxStrikeCosmetic.luau": {
+      "bytes": 41803,
+      "sha256": "1e7cb2fd71a0983b1a14276fc2b5ba80df7b88ba190f7cf69ee610c2f82a81d5"
+    },
+    "src/BloxStrikeVisual.luau": {
+      "bytes": 23406,
+      "sha256": "2e2cd42cf3e737bc636e73b2ced1fc11ab8e09ad6a0b38f4272412f8d3c9025d"
+    },
+    "src/ForsakenCore.luau": {
+      "bytes": 11772,
+      "sha256": "d6a5f6fe8622d6970caa6c9c687c4ad50238d725d267dd08e9026d229315fc57"
+    },
+    "src/ForsakenEnhancements.luau": {
+      "bytes": 21871,
+      "sha256": "23341fbc532bc6180ea0ef52aec66ee7dec191ebb7100618694ddb06772e6065"
+    },
+    "src/GameRouter.luau": {
+      "bytes": 5818,
+      "sha256": "12cd8b7e44ca5396b0ddbea315b96f4e70b18a61dc265ab4514b74e036a50651"
+    },
+    "src/RuntimeMonitor.luau": {
+      "bytes": 7933,
+      "sha256": "2a42420421a3467b9a6395dfcba15f23933babc381851e4bb3103ab92b9df1b3"
+    },
+    "src/SCPCamera.luau": {
+      "bytes": 15420,
+      "sha256": "dcb1afda4dc974a315a4a278e5e894c756b5e72aa9d5a71052e3780417a90274"
+    },
+    "src/SCPCandidates.luau": {
+      "bytes": 7210,
+      "sha256": "66731652f08aecedc50d37b6c080a77565d7e599b192bd1baf3ced18792146e9"
+    },
+    "src/SCPCloak.lua": {
+      "bytes": 5404,
+      "sha256": "6a3640e73ef4dd2f532f73b64aa970a1d6abb2e77e88e175ec7b86a0d6c4c7c8"
+    },
+    "src/SCPCommon.luau": {
+      "bytes": 8761,
+      "sha256": "54c065a9527c3db68966d4149952e3482ba8e796cc69a1da0a135f18d97e0966"
+    },
+    "src/SCPCore.luau": {
+      "bytes": 33221,
+      "sha256": "172c5d01257f9ca7e458920e65baf7702c8a84d015ddb94eb104c5af97dc09a8"
+    },
+    "src/SCPESP.luau": {
+      "bytes": 26480,
+      "sha256": "3336b54a6e371ae891692612a343f50dc9f649b3684e66b18afed0ec70e01aa3"
+    },
+    "src/SCPHitbox.luau": {
+      "bytes": 11334,
+      "sha256": "92bcfe9fa2a60823872d393fd70d1b59d1ae944133f9eb8e8c5a4cc75c98f5e6"
+    },
+    "src/SCPMovement.luau": {
+      "bytes": 10705,
+      "sha256": "ae97afebe8523a9063e1598b455c0088bc2ebaf2573118264504e98fd152d47d"
+    },
+    "src/SCPSilentAim.luau": {
+      "bytes": 8326,
+      "sha256": "c26edcc01c5506ff058daeec8b72c102be02a185c9401213efd676d721de544f"
+    },
+    "src/ServerSwitch.luau": {
+      "bytes": 26263,
+      "sha256": "f5569973815af65392956ef811ea07b9bad4877af28d98a3566fa085973b994f"
+    },
+    "src/StarlightAdapter.luau": {
+      "bytes": 18766,
+      "sha256": "71ecb72282d8269dadd3ffb82f473e5bfe3abf01022ece8f45910482b8d02c86"
+    },
+    "src/WindAdapter.luau": {
+      "bytes": 69355,
+      "sha256": "bde0536ba3704a91657235ba5a364760710f69f8789fdf6b667f4a5e063e53a5"
+    },
+    "src/loader_routes.json": {
+      "bytes": 478,
+      "sha256": "4a4a09fab17048ea5ffaea6c06333e8d67ec221fde5e230bbb468189e6764ee9"
+    },
+    "tests/.__dbg_scp.luau": {
+      "bytes": 166120,
+      "sha256": "d8817b40dc7ed0a43249596f17c4f1a098f13c59143dbf17136fa43c0fb80f5c"
+    },
+    "tests/README.md": {
+      "bytes": 859,
+      "sha256": "e1896817bc30645fb2b6cb53b6554e9d3043e8d2f93c8032679d780bae66c24b"
+    },
+    "tests/archive/test_bloxstrike_v2.py": {
+      "bytes": 2422,
+      "sha256": "b1d850b809ba20e795833619257f21564c42f8d66309093020bb4a048910b104"
+    },
+    "tests/archive/test_forsaken_sidebar_v10.py": {
+      "bytes": 1893,
+      "sha256": "4c53729e78115ca522dfa8fc400dece7c6311888a58222596c9ed07e03633ed8"
+    },
+    "tests/archive/test_game_router.py": {
+      "bytes": 1530,
+      "sha256": "fccb2ee3ed2695b7feab13a1563fe13ee66d3d508cdc232d823d27e3b7917498"
     },
     "tests/archive/test_loader_p0.lua": {
       "bytes": 5543,
       "sha256": "92cd2a169a84015ab905df8e7cc6f34c12c41a1b9f21dc12c2bfaa19ee92e361"
+    },
+    "tests/archive/test_mobile_v6.py": {
+      "bytes": 287,
+      "sha256": "1b0f1d8f9f7ab3607cb1690718fc461918f023682b353c69d13bdc8bac073a5e"
     },
     "tests/archive/test_stage2.py": {
       "bytes": 6914,
@@ -735,29 +481,297 @@
       "bytes": 5977,
       "sha256": "4c4fcf15e98cf2b6202fdc0b0be83bb29de8339e8408a5061f89d5afa8f58d6f"
     },
-    "tests/archive/test_game_router.py": {
-      "bytes": 1530,
-      "sha256": "fccb2ee3ed2695b7feab13a1563fe13ee66d3d508cdc232d823d27e3b7917498"
+    "tests/option_ids_baseline.json": {
+      "bytes": 957,
+      "sha256": "1b70941485ffda8698cc8ce717989205c3a53df772b9ec509a1ed352356c8a74"
     },
-    "tests/archive/test_bloxstrike_v2.py": {
-      "bytes": 2422,
-      "sha256": "b1d850b809ba20e795833619257f21564c42f8d66309093020bb4a048910b104"
+    "tests/release-test-results.json": {
+      "bytes": 98367,
+      "sha256": "e3726018c3829645e51ddfc88f41a6107d420322b7cc98ec9cba77b04f67dda0"
     },
-    "tests/archive/test_forsaken_sidebar_v10.py": {
-      "bytes": 1893,
-      "sha256": "4c53729e78115ca522dfa8fc400dece7c6311888a58222596c9ed07e03633ed8"
+    "tests/run_animation_r23.mjs": {
+      "bytes": 4001,
+      "sha256": "893e1215847926e8e4e07e07be74a430c79d9381d9176f622b9aebbe2fccb7e7"
     },
-    "vendor/WindUI/NOTICE.md": {
-      "bytes": 327,
-      "sha256": "4036a7b29ef9ec50bbf0beab599d2260d41d000b241a7f3db0be2a7ee5009a7c"
+    "tests/run_aotr_entry_lifecycle.mjs": {
+      "bytes": 1403,
+      "sha256": "0b2311c72648e6821d13dc77f17e8dc2de406a02f4ea35c46f836b32c049fd8e"
     },
-    "vendor/WindUI/LICENSE": {
-      "bytes": 1065,
-      "sha256": "44d844d76e61f8a2ce40cba22d1962d65153c8f140d94d52eb2cbad3c25f6020"
+    "tests/run_aotr_hud_contract_r18.mjs": {
+      "bytes": 10146,
+      "sha256": "ac58759c13b55e67f4ecad59e1e43346e8dad1e289ceb611d2551ad7f940dc60"
     },
-    "vendor/WindUI/Source.lua": {
-      "bytes": 1350010,
-      "sha256": "e29ebad6907d6293731d1de042d6aec4a9428fcddbed8a8f19ef5f4ce05c6d05"
+    "tests/run_audio_r34.mjs": {
+      "bytes": 4251,
+      "sha256": "9eb95654bdd1b8a903914dc010bdb39bbd12a43dbb6f33958e5c40c232a1fbc4"
+    },
+    "tests/run_bloxstrike_enrichment.mjs": {
+      "bytes": 4156,
+      "sha256": "476561687103a944a7002292ad64db6fcda72a1da65f1f56d2d6bfc0df771fb8"
+    },
+    "tests/run_forsaken_enrichment.mjs": {
+      "bytes": 5473,
+      "sha256": "49c795e4e1479c9bfe049697ba7892047e98262f64ffaf94bd2cb40eb840be44"
+    },
+    "tests/run_local_features_r19.mjs": {
+      "bytes": 5252,
+      "sha256": "c3b17cdaf03f7b1746d5af626e61de95ec38c6ac4781069d03f5c097351c3886"
+    },
+    "tests/run_luau.mjs": {
+      "bytes": 1795,
+      "sha256": "58dcff580a2b2b36e210177cf6b82e71ebf84fa7cab098363165f32ab4e78882"
+    },
+    "tests/run_release_checks.mjs": {
+      "bytes": 6580,
+      "sha256": "18b5c505bad96765b4d3435ad1581f2624dd9e9077199e21614bb98c5f509230"
+    },
+    "tests/run_scp_enrichment.mjs": {
+      "bytes": 1632,
+      "sha256": "42af14d89db5c2d0039acfbb0b745c81750ce3aa8a42f22bcba6d57db19ceebf"
+    },
+    "tests/run_sil_animation_r39.mjs": {
+      "bytes": 2734,
+      "sha256": "ff1c2aa85d0003b73908f3551bf39a042c00767e8498bc50e117b8efa73bc2d9"
+    },
+    "tests/run_sync_r35.mjs": {
+      "bytes": 7358,
+      "sha256": "7b77b3bc40cad1d5fb9325297f62166a466a1fb04eb46f98707522f59460842f"
+    },
+    "tests/run_visual_resources_r20.mjs": {
+      "bytes": 5356,
+      "sha256": "308ef69c817cd2c86eec15ace37c2381d7c2b7e3b281a81c456440b36f7d50e1"
+    },
+    "tests/run_wind_acrylic_policy_r16.mjs": {
+      "bytes": 3823,
+      "sha256": "c6120d65bd84f94fdb5d6350df9fae1b9f834fbedb4cde7325c0d58e3dda0db2"
+    },
+    "tests/run_wind_input_queue_r14.mjs": {
+      "bytes": 4634,
+      "sha256": "2d99660bd8b98972424269fde21fbc51f5c6c5785b247fc4fb509e1828e52179"
+    },
+    "tests/run_wind_native_contracts.mjs": {
+      "bytes": 4130,
+      "sha256": "67de318c113a5835762a6d6fb0cab2f311c3995620af8e560ce6633747e40946"
+    },
+    "tests/run_wind_viewport_edges_r14.mjs": {
+      "bytes": 6801,
+      "sha256": "b811217f0d119e05dec100ede334ad69455c8d12faf7324cf9308faff37679bd"
+    },
+    "tests/run_wind_visual_budget_r14.mjs": {
+      "bytes": 2736,
+      "sha256": "f08fb3809c53b4cdbb73a15bb67aa9b8baf02a34d841248cd4e207b05532c6ea"
+    },
+    "tests/run_world_r34.mjs": {
+      "bytes": 5907,
+      "sha256": "565d3ea0c5dab86c63c7af77cc02271896728dc7acdcf4fd9f5a134a3cbbbf0d"
+    },
+    "tests/runtime-probe-results.json": {
+      "bytes": 563,
+      "sha256": "0f2ec1ecf61e5176bfe1e2242f751b1f2651c658fdc979a148805e251027adfa"
+    },
+    "tests/shared-ui-test-results.json": {
+      "bytes": 7839,
+      "sha256": "cce2470341a1bac30e65194df322264ecfae56afcecb81609cdb7a34b4531463"
+    },
+    "tests/test_aotr.py": {
+      "bytes": 2369,
+      "sha256": "d85618b49d3b915be9d9004ac8df5370012029d1846e01a6d45459902181602a"
+    },
+    "tests/test_aotr_common_lifecycle.luau": {
+      "bytes": 9158,
+      "sha256": "62ae6209de5016dfcbe07cc964f79c22fbe583827f43e8586cbdc1533de51037"
+    },
+    "tests/test_aotr_enrichment.luau": {
+      "bytes": 9518,
+      "sha256": "88e726c2c3deb28c543e6ba335755417372fe7e169506d271a21c0229dcd25c9"
+    },
+    "tests/test_aotr_entry_lifecycle.luau": {
+      "bytes": 11161,
+      "sha256": "fb0ebfd14862b11bfb31f1a7f3d9d6b2c4f72c4b03eadb127b60ced4201cd0e7"
+    },
+    "tests/test_aotr_esp_lifecycle.luau": {
+      "bytes": 13569,
+      "sha256": "feacb09387adb2462782a8b43f19586ff4dd275a59bd6a61a0d29481d3ae4d9d"
+    },
+    "tests/test_aotr_hud_contract_r18.luau": {
+      "bytes": 24342,
+      "sha256": "f3c7e00af65c5172eecce2c60eb4aa5e1aece5efc7605dfe0f0f79c6887eb6a3"
+    },
+    "tests/test_aotr_lobby_runtime.luau": {
+      "bytes": 3433,
+      "sha256": "9ddb77b36b0d7e9772ffe8001c5c98bc3f4885f9a334151c198ae75edd42f331"
+    },
+    "tests/test_aotr_movement_lifecycle.luau": {
+      "bytes": 6567,
+      "sha256": "08ef74b80e6fe7e43b5997f741b98b6f898eaccd77672b8ad6a96f255da8133d"
+    },
+    "tests/test_aotr_titans_lifecycle.luau": {
+      "bytes": 14424,
+      "sha256": "48cca5d605b5f86d605388b1cab412b5d40b0fa2630290b4ea95d436064a1df6"
+    },
+    "tests/test_audio_r34.luau": {
+      "bytes": 18984,
+      "sha256": "d4b493f88482b4e408e8472dd0a12638abbd16f85d8da64960302b28b19ad075"
+    },
+    "tests/test_bloxstrike_enrichment.luau": {
+      "bytes": 42807,
+      "sha256": "bb439ab3a656981f3b375bb09fdd119e0de9dc2e6c802f28b8147d90558fc3b8"
+    },
+    "tests/test_boot_failure_visibility.py": {
+      "bytes": 2530,
+      "sha256": "31f8c001d4118949a85a636f4fa92c99dc12f43b373a08d7c20a55ff1c19d85e"
+    },
+    "tests/test_forsaken_enrichment.luau": {
+      "bytes": 35859,
+      "sha256": "1d3b28089ae0f5c7101817f9fa3c79cf3811158158481ad0fe753ded8b910830"
+    },
+    "tests/test_forsaken_r28.py": {
+      "bytes": 8091,
+      "sha256": "8b214bc17f8cd8c2969f125e803f1b944de677a810e0b231b483da6630038577"
+    },
+    "tests/test_forsaken_wind.py": {
+      "bytes": 3464,
+      "sha256": "d16ed8ba9516e55495bf88bb74dd4668df6c99e6475c427efad89e53e7fee08e"
+    },
+    "tests/test_generated_whitespace.py": {
+      "bytes": 1231,
+      "sha256": "2ebac41917e0d9d7a34de10aa95aa682519ae9207547600de48d341821edd330"
+    },
+    "tests/test_guest_animation_r23.luau": {
+      "bytes": 15843,
+      "sha256": "522377c46fb87252663f1c4d1595f44f42f56e92956873d168c31b4adc2cd990"
+    },
+    "tests/test_local_features_r19.luau": {
+      "bytes": 17352,
+      "sha256": "64d9c1656149f8ccbf6d3c14b9e7a05aa89a3f584f57dd851490ffa72038dd5f"
+    },
+    "tests/test_native_animation_r23.luau": {
+      "bytes": 6948,
+      "sha256": "c11382e8a4bcdf03a449d44758209a821befb819f8b8a6865bd62414fa211d62"
+    },
+    "tests/test_package_release.py": {
+      "bytes": 12034,
+      "sha256": "e5a0e019c27013b7817cc23bcf0647de29b585ad89a81eed7c7f6cf9fb6a9df5"
+    },
+    "tests/test_r25_stability.py": {
+      "bytes": 7781,
+      "sha256": "98a6df558a7e0b7f4703d75a95550a94662105dd568c45ca3e3ebdce429611a5"
+    },
+    "tests/test_r26_blox_stability.py": {
+      "bytes": 5943,
+      "sha256": "57d25a78d59b1cb7c3d8f9dc858eaf5d75e93ef725b6dc25117fa6e1f770bd78"
+    },
+    "tests/test_r27_feature_health.py": {
+      "bytes": 5565,
+      "sha256": "8efd3299da37211b285f468333c66c8ea697bf06db62783b2ec6424cd110c2b0"
+    },
+    "tests/test_r29_field_failures.py": {
+      "bytes": 1860,
+      "sha256": "9c0b842e15f609f0c6dd90669e176653dc6edeabc72564b2ec98f1beff58e408"
+    },
+    "tests/test_r2_regressions.py": {
+      "bytes": 4052,
+      "sha256": "57c390fd7ae8c20cb3adb0c326fe2498804945d6fcebf66c4aa66db21b632860"
+    },
+    "tests/test_release_runner.mjs": {
+      "bytes": 12414,
+      "sha256": "bdfaf4b397f23feeddb23adb801ab837949273aa1a6cfacd614eff0097540f81"
+    },
+    "tests/test_runtime_monitor.py": {
+      "bytes": 4824,
+      "sha256": "a1c3c5b83dec3706f7e2f714649de894ea7a95faf5608d026c5b23a224003c3d"
+    },
+    "tests/test_scp_enrichment.luau": {
+      "bytes": 53070,
+      "sha256": "addf0bd3f89995e04fba7dc6e63262fa4b92b21e3fd2b84ff1925971bd547f75"
+    },
+    "tests/test_server_switch.lua": {
+      "bytes": 15477,
+      "sha256": "5d7b426928505bac2274def24d5a6d3901419a5b839a628ed9f9fac12774c1dd"
+    },
+    "tests/test_sil_animation_r39.luau": {
+      "bytes": 17169,
+      "sha256": "9e219fa271866e5d8ef6fa744ec0c008b5fe34c6cddcc29dccbbb2f4a8023937"
+    },
+    "tests/test_sync_r35.luau": {
+      "bytes": 62596,
+      "sha256": "33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196"
+    },
+    "tests/test_textcompat_vendor.py": {
+      "bytes": 2921,
+      "sha256": "c1e87c0c3d9c77255846455141efa44f901653ad2c1db0dfba4df7f5c9fa92ec"
+    },
+    "tests/test_vendor_constructor_trace_r23.py": {
+      "bytes": 2410,
+      "sha256": "cbab21e9a0d84828f7234c450f70422cedfa261d5ea427b930ad5a94699263d2"
+    },
+    "tests/test_visual_resources_r20.luau": {
+      "bytes": 22043,
+      "sha256": "94e88034456a6d6a9d474ff099910f24ea8c71c6b83f2bb7ed2b35928408658e"
+    },
+    "tests/test_wind_acrylic_policy_r16.luau": {
+      "bytes": 11950,
+      "sha256": "3ce0787012a0a25f03df244a47de533dc30ab2e5b023aefeeca7073c31808def"
+    },
+    "tests/test_wind_adapter.luau": {
+      "bytes": 27785,
+      "sha256": "f022bb8836d103a4b110f7be488f8af00920bae13ae0bc82293c24a0601ee5af"
+    },
+    "tests/test_wind_input_queue_r14.luau": {
+      "bytes": 18556,
+      "sha256": "af36154394ac60d563474e9cfad41f49f03aacb3c02d032ccf3c10707132cf07"
+    },
+    "tests/test_wind_migration.py": {
+      "bytes": 1599,
+      "sha256": "15dbc907d2dbe41b05b778509a07a250148baabe4843714221c011b81aec333e"
+    },
+    "tests/test_wind_native_contracts.luau": {
+      "bytes": 122498,
+      "sha256": "ff5b9f781935504efca9a1c618c474acb468167c27a9d8fbffaff56a930be978"
+    },
+    "tests/test_wind_router.py": {
+      "bytes": 22408,
+      "sha256": "de9615bd224d9a09c90c757f188519cc86dde24ec438a938f6ffa29c6bdef28f"
+    },
+    "tests/test_wind_theme_type_r24.py": {
+      "bytes": 3662,
+      "sha256": "926f215390b55a78ebb6fb8272a39d1499a2b83a6149c3e18215d37872c85fa7"
+    },
+    "tests/test_wind_viewport_edges_r14.luau": {
+      "bytes": 33944,
+      "sha256": "bbb0a3efde98354da66188168bc6522eeebf1dfc03bd7e450c95548ec1785a07"
+    },
+    "tests/test_wind_visual_budget_r14.luau": {
+      "bytes": 12582,
+      "sha256": "a729384fbab7b3b6965f0d715e330f0cca988534cf8a23d3bfc746404a290cf3"
+    },
+    "tests/test_world_r34.luau": {
+      "bytes": 16461,
+      "sha256": "296fd0d6696200b4ef0772f354b6ed6efca6bf827022d935fc0981466d0848d5"
+    },
+    "tests/wind_native_harness.luau": {
+      "bytes": 2654,
+      "sha256": "09d86aa6a3820f6e53167e79a1d429ad16d918c258cf3c0f82619270403443c5"
+    },
+    "tests/wind_option_ids_baseline.json": {
+      "bytes": 5342,
+      "sha256": "3da56386c1bccc88467a40a833c27c2ca169ff61a0a806993887763d93f993df"
+    },
+    "tools/pack.py": {
+      "bytes": 1933,
+      "sha256": "ec6a423c191c1b7fe9acdfba60dac933d2a3ff8f28e738532f807506de30c814"
+    },
+    "tools/package_release.py": {
+      "bytes": 7449,
+      "sha256": "b5a97996e774a56c000d7c40c0d4870664698550b99ba4516f34303ede076762"
+    },
+    "tools/publish-existing-repo.sh": {
+      "bytes": 801,
+      "sha256": "cb450b3fcdd6913ca2d09c91581cb9128f28709ab6fc7319442d5ba282425804"
+    },
+    "tools/unpack_references.py": {
+      "bytes": 2104,
+      "sha256": "f253aedb4e7ccb21779a4434520f6259faec0569498117ca9d750f4621e9377c"
     },
     "vendor/Starlight/LICENSE": {
       "bytes": 19347,
@@ -767,25 +781,27 @@
       "bytes": 387144,
       "sha256": "2ad87be9ee0144d575a2d7ee8e2ab4e2ed73117a5372203587d3969d836c1629"
     },
-    "assets/forsaken/asset-manifest.json": {
-      "bytes": 5718,
-      "sha256": "33c41dbce36ba0e4063611bdf952abb61e2d1e68a2b611d0c7474ca7a2999edf"
+    "vendor/WindUI/LICENSE": {
+      "bytes": 1065,
+      "sha256": "44d844d76e61f8a2ce40cba22d1962d65153c8f140d94d52eb2cbad3c25f6020"
     },
-    "assets/forsaken/README.md": {
-      "bytes": 3415,
-      "sha256": "902cf65fb59592c2ed5f7fd50b7fc8f4173411713e4b68bea8b7a49cdd1ade81"
+    "vendor/WindUI/NOTICE.md": {
+      "bytes": 327,
+      "sha256": "4036a7b29ef9ec50bbf0beab599d2260d41d000b241a7f3db0be2a7ee5009a7c"
     },
-    "assets/forsaken/TerioThings/lance_swing.mp3": {
-      "bytes": 50688,
-      "sha256": "2e4742e14585772e8f0c2ea0834150df95f0c973f97b540a88370e109b0135e5"
+    "vendor/WindUI/Source.lua": {
+      "bytes": 1350010,
+      "sha256": "e29ebad6907d6293731d1de042d6aec4a9428fcddbed8a8f19ef5f4ce05c6d05"
     },
-    "assets/forsaken/TerioThings/sil_whip.mp3": {
-      "bytes": 61440,
-      "sha256": "7f35d7cc07d52d3cb770f9b85d06feee41339e9234ea11f7e5510752c08b8a7b"
+    "verify_release.py": {
+      "bytes": 1199,
+      "sha256": "7768806664c47d3e8a326a6e4202945182c5140668adc817e3e510dabfe7c40d"
     },
-    "assets/forsaken/TerioThings/coagulate.mp3": {
-      "bytes": 41760,
-      "sha256": "6a46e12c76812c437d86336d2b8b1272b76fd9d6af5b02f3ab809f11f254124e"
+    "后续任务.md": {
+      "bytes": 49352,
+      "sha256": "ffe766ac10869a81ce884ba040331df5ecd21a0c7b5e0b34cbbb0185dbf98f8b"
     }
-  }
+  },
+  "repo": "keepBacon/Vortexion-lua",
+  "runtime_tested": false
 }

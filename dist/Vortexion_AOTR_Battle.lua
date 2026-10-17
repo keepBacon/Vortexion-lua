@@ -42296,10 +42296,10 @@ return function(app)
     -- every scan. Watches the Titans folder for spawn/despawn.
     --=========================================================================
     local stopped=false
-    local addedConnection,removingConnection
+    local addedConnection,removedConnection
     local function disconnectFolder()
         if addedConnection then addedConnection:Disconnect();addedConnection=nil end
-        if removingConnection then removingConnection:Disconnect();removingConnection=nil end
+        if removedConnection then removedConnection:Disconnect();removedConnection=nil end
     end
 
     local function ensureFolder()
@@ -42312,7 +42312,7 @@ return function(app)
             if folder then
                 -- Replaceable handles belong to this module, not the app registry.
                 addedConnection=folder.ChildAdded:Connect(function() state.dirty=true end)
-                removingConnection=folder.ChildRemoving:Connect(function() state.dirty=true end)
+                removedConnection=folder.ChildRemoved:Connect(function() state.dirty=true end)
             end
         end
         return folder
