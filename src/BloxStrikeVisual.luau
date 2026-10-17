@@ -1,7 +1,7 @@
 -- Vortexion BloxStrike visual: player ESP, fullbright, movement helpers.
 --
--- R2.19 ESP uses engine-tracked BillboardGui: one non-interactive instance
--- per valid player, event-safe cleanup, throttled metadata updates.
+-- R2.22: primary 2D ScreenGui projection plus optional native Billboard fallback.
+-- One non-interactive entry per valid player, throttled update and cleanup.
 --
 -- Speed keeps the WalkSpeed writer for game compatibility but adds the
 -- pulse/coast AssemblyLinearVelocity cycle from the SCP branch: a constant
@@ -25,6 +25,7 @@ return function(c)
         ESPWeapon = true,
         ESPBox = true,
         ESPTracer = false,
+        ESPOverlay = true, -- independent 2D ScreenGui projection; billboard fallback
         Fullbright = false,
         SpeedEnabled = false,
         SpeedValue = 24,
@@ -44,6 +45,118 @@ return function(c)
     -- Only roster reconciliation and text are throttled in Lua.
     --=========================================================================
     local highlights = {}
+    local overlayGui
+    local overlayCreates = 0
+    local overlayDraws = 0
+    local function ensureOverlay()
+        if overlayGui and overlayGui.Parent then return overlayGui end
+        local parent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if not parent and type(c.GetGuiParent) == "function" then
+            local ok, fallback = pcall(c.GetGuiParent)
+            if ok then parent = fallback end
+        end
+        if not parent then return nil end
+        local screen = Instance.new("ScreenGui")
+        screen.Name = "VortexionBloxESP2D222"
+        screen.ResetOnSpawn = false
+        screen.IgnoreGuiInset = true -- WorldToViewportPoint is viewport-local.
+        screen.DisplayOrder = 70
+        screen.Enabled = Config.ESPEnabled and Config.ESPOverlay
+        screen.Parent = parent
+        overlayGui = screen
+        return screen
+    end
+    local function makeOverlay(entry)
+        if entry.overlay and entry.overlay.Parent then return end
+        local screen = ensureOverlay()
+        if not screen then return end
+        local bounds = Instance.new("Frame")
+        bounds.Name = "Target"
+        bounds.BackgroundTransparency = 1
+        bounds.BorderSizePixel = 0
+        bounds.Active = false
+        bounds.Visible = false
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(243, 93, 93)
+        stroke.Thickness = 1.25
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = bounds
+        local label = Instance.new("TextLabel")
+        label.Name = "Info"
+        label.AnchorPoint = Vector2.new(0.5, 1)
+        label.Position = UDim2.new(0.5, 0, 0, -3)
+        label.Size = UDim2.fromOffset(190, 65)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = stroke.Color
+        label.TextStrokeTransparency = 0.3
+        label.TextSize = 13
+        label.TextWrapped = false
+        label.Active = false
+        label.Text = ""
+        label.Parent = bounds
+        bounds.Parent = screen
+        entry.overlay, entry.overlayStroke, entry.overlayText = bounds, stroke, label
+        overlayCreates += 1
+    end
+    local function projectOverlay(entry, camera)
+        if not Config.ESPOverlay then
+            if entry.overlay then entry.overlay.Visible = false end
+            entry.gui.Enabled = Config.ESPEnabled
+            return
+        end
+        -- Keep the independent 2D path authoritative on Android; the existing
+        -- BillboardGui survives as a fallback when viewport projection fails.
+        if not camera or not camera.WorldToViewportPoint then return end
+        makeOverlay(entry)
+        if not entry.overlay then return end
+        local root = entry.root
+        if not root or not root.Parent then
+            entry.overlay.Visible = false
+            return
+        end
+        local upper = entry.model:FindFirstChild("Head")
+        local top = upper and upper:IsA("BasePart") and (upper.Position + Vector3.new(0, 0.65, 0))
+            or (root.Position + Vector3.new(0, 2.7, 0))
+        local bottom = root.Position - Vector3.new(0, 2.8, 0)
+        local a = camera:WorldToViewportPoint(top)
+        local b = camera:WorldToViewportPoint(bottom)
+        local middle, inView = camera:WorldToViewportPoint(root.Position)
+        -- On mobile a nearby character's head can project above the screen
+        -- even while the torso is visible. Testing the head's inView here
+        -- removed valid targets. Cull by depth and the actual box instead.
+        if a.Z <= 0 or b.Z <= 0 or middle.Z <= 0 then
+            entry.overlay.Visible = false
+            entry.gui.Enabled = false
+            return
+        end
+        local rawTop, rawBottom = math.min(a.Y, b.Y), math.max(a.Y, b.Y)
+        local vw, vh = camera.ViewportSize.X, camera.ViewportSize.Y
+        local rawHeight = math.max(rawBottom - rawTop, 18)
+        local rawWidth = math.clamp(rawHeight * 0.52, 14, vw * 0.3)
+        local rawLeft = (a.X + b.X - rawWidth) * 0.5
+        if not inView and (rawBottom < 0 or rawTop > vh or rawLeft > vw or rawLeft + rawWidth < 0) then
+            entry.overlay.Visible = false
+            entry.gui.Enabled = false
+            return
+        end
+        local topY = math.clamp(rawTop, 0, vh)
+        local bottomY = math.clamp(rawBottom, 0, vh)
+        local height = math.max(1, bottomY - topY)
+        local width = rawWidth
+        entry.overlay.Position = UDim2.fromOffset(math.floor(rawLeft), math.floor(topY))
+        entry.overlay.Size = UDim2.fromOffset(math.floor(width), math.floor(height))
+        entry.overlay.Visible = true
+        entry.gui.Enabled = false
+        entry.overlayStroke.Enabled = Config.ESPBox
+        entry.overlayText.Text = entry.text.Text
+        entry.overlayText.Visible = entry.text.Visible
+        entry.overlayStroke.Color = entry.stroke.Color
+        entry.overlayText.TextColor3 = entry.stroke.Color
+        overlayDraws += 1
+    end
+    local function hideOverlay(entry)
+        if entry and entry.overlay then entry.overlay.Visible = false end
+    end
     local espStats = {refreshes=0, scanned=0, eligible=0, markers=0,
         noHumanoid=0, creates=0, writes=0, lastError="none"}
     local MAX_ESP_TARGETS = 24
@@ -64,6 +177,7 @@ return function(c)
         local entry = highlights[player]
         if not entry then return end
         highlights[player] = nil
+        if entry.overlay then pcall(function() entry.overlay:Destroy() end) end
         if entry.gui then pcall(function() entry.gui:Destroy() end) end
         if entry.highlight then pcall(function() entry.highlight:Destroy() end) end
         if entry.tracer then pcall(function() entry.tracer:Remove() end) end
@@ -71,9 +185,17 @@ return function(c)
     local function clearESP()
         for player in pairs(highlights) do clearEntry(player) end
         espStats.markers = 0
+        if overlayGui then
+            pcall(function() overlayGui:Destroy() end)
+            overlayGui = nil
+        end
     end
     local function makeEntry(player, model, root)
         local parent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if not parent and type(c.GetGuiParent) == "function" then
+            local ok, fallback = pcall(c.GetGuiParent)
+            if ok then parent = fallback end
+        end
         if not parent then return nil end
         local gui = Instance.new("BillboardGui")
         gui.Name = "VortexionBloxESP219"
@@ -184,11 +306,18 @@ return function(c)
         espStats.scanned, espStats.eligible, espStats.noHumanoid = 0, 0, 0
         local camera = Workspace.CurrentCamera
         local parent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        if not camera or not parent then return end
+        if not parent and type(c.GetGuiParent) == "function" then
+            local ok, fallback = pcall(c.GetGuiParent)
+            if ok then parent = fallback end
+        end
+        if not camera or not parent then
+            espStats.lastError = "camera or GUI parent unavailable"
+            return
+        end
         local now = os.clock()
         local left = MAX_ESP_TARGETS
         local origin = camera.CFrame.Position
-        for _, player in ipairs(Players:GetPlayers()) do
+        for _, player in ipairs(type(c.Targets) == "function" and c.Targets() or Players:GetPlayers()) do
             if player ~= LocalPlayer then
                 espStats.scanned += 1
                 local model, vitals = c.Living(player)
@@ -215,8 +344,9 @@ return function(c)
                     if entry then
                         entry.lastSeen = now
                         if not entry.gui.Enabled then entry.gui.Enabled = true end
-                        if entry.gui.MaxDistance ~= Config.ESPDistance + ESP_DISTANCE_SLACK then
-                            entry.gui.MaxDistance = Config.ESPDistance + ESP_DISTANCE_SLACK + ESP_DISTANCE_SLACK
+                        local maxDistance = Config.ESPDistance + ESP_DISTANCE_SLACK
+                        if entry.gui.MaxDistance ~= maxDistance then
+                            entry.gui.MaxDistance = maxDistance
                         end
                         if entry.stroke.Enabled ~= Config.ESPBox then
                             entry.stroke.Enabled = Config.ESPBox
@@ -239,6 +369,14 @@ return function(c)
                             entry.text.TextColor3 = color
                         end
                         entry.visibilityTinted = Config.ESPVisibility
+                        -- The native Billboard alone is not reliable for all
+                        -- custom rigs/mobile renderers; mirror into 2D.
+                        local projected, projectionError = pcall(projectOverlay, entry, camera)
+                        if not projected then
+                            espStats.lastError = "2D projection: " .. tostring(projectionError):sub(1, 150)
+                            hideOverlay(entry)
+                            entry.gui.Enabled = Config.ESPEnabled
+                        end
                         if Config.ESPWorldHighlight then
                             if not entry.highlight then
                                 local h = Instance.new("Highlight")
@@ -278,6 +416,7 @@ return function(c)
                     -- remain visible until the grace window expires.
                     if (not model or not root or not permitted or now - entry.lastSeen >= ESP_GRACE_SECONDS)
                         and entry.gui.Enabled then entry.gui.Enabled = false end
+                    hideOverlay(entry)
                     if entry.tracer then entry.tracer.Visible = false end
                     if now - entry.lastSeen >= ESP_GRACE_SECONDS or not entry.model.Parent then
                         clearEntry(player)
@@ -286,7 +425,10 @@ return function(c)
             end
         end
         for player in pairs(highlights) do
-            if not player.Parent then clearEntry(player) end
+            if not player.Parent or (player.IsVortexionNPC and
+                (not player.Character or not player.Character.Parent)) then
+                clearEntry(player)
+            end
         end
         local count = 0
         for _ in pairs(highlights) do count += 1 end
@@ -550,11 +692,12 @@ return function(c)
     local espInterval = 0.25
     local espRefreshes = 0
     local function visualInterval()
+        local base = Config.ESPOverlay and 0.08 or 0.25
         if c.VisualInterval then
-            local ok, value = pcall(c.VisualInterval, 0.25)
-            if ok and type(value) == "number" and value == value and value > 0 then return math.max(0.25, value) end
+            local ok, value = pcall(c.VisualInterval, base)
+            if ok and type(value) == "number" and value == value and value > 0 then return math.max(base, value) end
         end
-        return 0.25
+        return base
     end
     local function refreshESP()
         espRefreshes += 1
@@ -617,7 +760,10 @@ return function(c)
             markers = espStats.markers, scanned = espStats.scanned,
             eligible = espStats.eligible, refreshes = espStats.refreshes,
             noHumanoid = espStats.noHumanoid, error = espStats.lastError,
-            creates = espStats.creates, writes = espStats.writes, renderer = "NativeBillboard",
+            creates = espStats.creates, writes = espStats.writes,
+            renderer = Config.ESPOverlay and "Viewport2D+BillboardFallback" or "NativeBillboard",
+            overlayCreates = overlayCreates, overlayDraws = overlayDraws,
+            overlayParent = overlayGui ~= nil and overlayGui.Parent ~= nil,
             thirdPerson = thirdPerson.enabled, thirdOverrides = thirdPerson.overrides,
         }
     end
@@ -632,6 +778,13 @@ return function(c)
         Config.ESPEnabled = v
         if v then startESP() else clearESP() end
     end })
+    tab:AddToggle("BloxESP2D", { Title = "2D 屏幕 ESP（手机推荐）", Default = true,
+        Callback = function(v)
+            Config.ESPOverlay = v
+            if overlayGui then overlayGui.Enabled = v and Config.ESPEnabled end
+            if v then c.Guard("Visual.ESP2D", updateESP)
+            else for _, entry in pairs(highlights) do hideOverlay(entry); entry.gui.Enabled = Config.ESPEnabled end end
+        end })
     tab:AddToggle("BloxESPWorldHighlight", { Title = "额外启用 3D 高亮（性能消耗较高）", Default = false,
         Callback = function(v) Config.ESPWorldHighlight = v end })
     tab:AddToggle("BloxESPTeam", { Title = "仅显示敌方", Default = true, Callback = function(v)
@@ -656,9 +809,11 @@ return function(c)
         print(("[Vortexion/BloxESP] 开关=%s 玩家=%d 合格=%d 无Humanoid=%d 高亮=%d 刷新=%d 错误=%s")
             :format(tostring(Config.ESPEnabled), status.scanned, status.eligible,
                 status.noHumanoid, status.markers, status.refreshes, status.error))
+        print(("[Vortexion/BloxESP] 渲染=%s 2D创建=%d 2D绘制=%d 2D容器=%s")
+            :format(status.renderer, status.overlayCreates, status.overlayDraws, tostring(status.overlayParent)))
     end})
     tab:AddParagraph({ Title = "视觉刷新节流",
-        Content = "由 Roblox BillboardGui 引擎直接跟随目标，AlwaysOnTop 透墙；脚本每秒只更新约 4 次目标状态，位置每帧由引擎渲染。复用最多 24 目标的标记，无手动 8 角投影。关闭时立即清理。" })
+        Content = "默认将目标投影到不拦截触控的 2D ScreenGui（独立于 3D Highlight 的可见性）；保留可切换的 BillboardGui 作为兼容兜底。2D 投影约 12Hz、目标文字约 3Hz，最多 24 个，关闭立即清理。" })
 
     local movement = c.Tabs.Movement
     movement:AddToggle("BloxThirdPerson", {Title = "第三人称视角", Default = false,

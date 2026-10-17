@@ -28,6 +28,18 @@ return function(c)
     --=========================================================================
     local Config = {
         Enabled = false,
+        RageEnabled = false,
+        RageMode = "Fast", -- Fast | Instant
+        RageDelivery = "Auto", -- detect camera rewrites; fall back to mouse input
+        RageAutoFire = true,
+        RageFOV = 700,
+        RageDistance = 900,
+        RageMaxAngle = 85,
+        RagePart = "Head",
+        RageWallCheck = true,
+        RageFireInterval = 0.14,
+        RageLead = 0.09,
+        RageSwitchDelay = 0.09,
         Mode = "Camera",          -- Camera | Mouse | Both
         TriggerKey = "Always",    -- Always | Hold (RMB2 / touch)
         FOV = 240,
@@ -58,6 +70,19 @@ return function(c)
 
     local state = {
         locked = nil,
+        rageTarget = nil,
+        rageLastSwitch = 0,
+        rageAttempts = 0,
+        rageSent = 0,
+        rageReason = "off",
+        rageAimBackend = "none",
+        rageExpectedLook = nil,
+        rageCameraMisses = 0,
+        rageCameraHits = 0,
+        rageMouseMoves = 0,
+        rageLastMouseError = 0,
+        fireBackend = "none",
+        fireOwner = nil,
         lastLocked = nil,
         candidates = {},
         velEMA = {},
@@ -106,7 +131,9 @@ return function(c)
         local viewport = camera.ViewportSize
         local center = Vector2.new(viewport.X / 2, viewport.Y / 2)
 
-        for _, player in ipairs(Players:GetPlayers()) do
+        local searchDistance = Config.RageEnabled and math.max(Config.RageDistance, Config.MaxDistance) or Config.MaxDistance
+        local searchFov = Config.RageEnabled and math.max(Config.RageFOV, Config.FOV) or Config.FOV
+        for _, player in ipairs(type(c.Targets) == "function" and c.Targets() or Players:GetPlayers()) do
             if player ~= LocalPlayer then
                 local model, humanoid = c.Living(player)
                 if model and humanoid and humanoid.Health > 0 then
@@ -117,12 +144,12 @@ return function(c)
                         if root then
                             local pos = root.Position
                             local worldDist = (pos - camPos).Magnitude
-                            if worldDist <= Config.MaxDistance then
+                            if worldDist <= searchDistance then
                                 local screen, onScreen = camera:WorldToViewportPoint(pos)
                                 if screen.Z > 0 then
                                     local screenVec = Vector2.new(screen.X, screen.Y)
                                     local screenDist = onScreen and (screenVec - center).Magnitude or math.huge
-                                    if screenDist <= Config.FOV then
+                                    if screenDist <= searchFov then
                                         local vel = root.AssemblyLinearVelocity or Vector3.zero
                                         local ema = state.velEMA[player]
                                         if not ema then
@@ -154,7 +181,10 @@ return function(c)
         state.candidatesSeen = #state.candidates
         -- Drop EMA state for players that left.
         for player in pairs(state.velEMA) do
-            if not player.Parent then state.velEMA[player] = nil end
+            if not player.Parent or (player.IsVortexionNPC and
+                (not player.Character or not player.Character.Parent)) then
+                state.velEMA[player] = nil
+            end
         end
     end
 
@@ -216,7 +246,7 @@ return function(c)
     --=========================================================================
     -- Target selection + per-frame lock validation.
     --=========================================================================
-    local function entryValid(entry)
+    local function entryValid(entry, rage)
         if not entry or not entry.player.Parent or not entry.model.Parent or not entry.root.Parent then return false end
         local model, humanoid = c.Living(entry.player)
         if model ~= entry.model or humanoid ~= entry.humanoid or humanoid.Health <= 0 then return false end
@@ -224,17 +254,19 @@ return function(c)
         local camera = Workspace.CurrentCamera
         if not camera then return false end
         local delta = entry.root.Position - camera.CFrame.Position
-        if delta.Magnitude > Config.MaxDistance or delta.Magnitude < 0.01 then return false end
+        local limitDistance = rage and Config.RageDistance or Config.MaxDistance
+        if delta.Magnitude > limitDistance or delta.Magnitude < 0.01 then return false end
         local angle = math.deg(math.acos(math.clamp(camera.CFrame.LookVector:Dot(delta.Unit), -1, 1)))
-        if angle > Config.MaxAngle then return false end
+        if angle > (rage and Config.RageMaxAngle or Config.MaxAngle) then return false end
         local screen, visible = camera:WorldToViewportPoint(entry.root.Position)
         if not visible or screen.Z <= 0 then return false end
         local center = camera.ViewportSize * 0.5
         entry.screen = Vector2.new(screen.X, screen.Y)
         entry.screenDist = (entry.screen - center).Magnitude
         entry.worldDist = delta.Magnitude
-        if entry.screenDist > Config.FOV then return false end
-        return not Config.WallCheck or not wallBlocked(camera.CFrame.Position, entry.root.Position, c.Character(), entry.model)
+        if entry.screenDist > (rage and Config.RageFOV or Config.FOV) then return false end
+        local blocked = rage and Config.RageWallCheck or (not rage and Config.WallCheck)
+        return not blocked or not wallBlocked(camera.CFrame.Position, entry.root.Position, c.Character(), entry.model)
     end
 
     local function chanceFor(entry)
@@ -348,21 +380,47 @@ return function(c)
         if releaseFire then pcall(releaseFire) end
         releaseFire, releaseAt = nil, nil
         state.firing = false
+        state.fireOwner = nil
     end
-    local function pressFire(now)
+    local function pressFire(now, owner)
         local camera = Workspace.CurrentCamera
-        local position = Vector2.zero
+        local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+        local position = Vector2.new(viewport.X * 0.5, viewport.Y * 0.5)
         if c.Caps.mouse1press and c.Caps.mouse1release then
+            state.fireBackend = "mouse1press"
             releaseFire = mouse1release
             if not pcall(mouse1press) then finishFire(); return end
+        elseif type(mouse1click) == "function" then
+            -- Some mobile executors expose click but not a sustained press.
+            state.fireBackend = "mouse1click"
+            if not pcall(mouse1click) then return false end
+            state.fireOwner = owner
+            return true
         else
             local user = c.Services.VirtualUser
-            if not user or not camera then return end
-            releaseFire = function() user:Button1Up(position, camera.CFrame) end
-            if not pcall(function() user:Button1Down(position, camera.CFrame) end) then finishFire(); return end
+            if user and camera then
+                state.fireBackend = "VirtualUser"
+                releaseFire = function() user:Button1Up(position, camera.CFrame) end
+                if not pcall(function() user:Button1Down(position, camera.CFrame) end) then finishFire(); return false end
+            else
+                -- VirtualInputManager is unavailable on many Roblox clients;
+                -- a failed probe is visible in diagnostics, never called a hit.
+                local ok, vim = pcall(function() return game:GetService("VirtualInputManager") end)
+                if not ok or not vim then
+                    state.fireBackend = "unavailable"
+                    return false
+                end
+                state.fireBackend = "VirtualInputManager"
+                releaseFire = function() vim:SendMouseButtonEvent(position.X, position.Y, 0, false, game, 0) end
+                if not pcall(function()
+                    vim:SendMouseButtonEvent(position.X, position.Y, 0, true, game, 0)
+                end) then finishFire(); return false end
+            end
         end
         state.firing = true
-        releaseAt = now + math.max(Config.TriggerDelay, 0.02)
+        state.fireOwner = owner
+        releaseAt = now + (owner == "rage" and 0.035 or math.max(Config.TriggerDelay, 0.02))
+        return true
     end
 
     local UserInputService = game:GetService("UserInputService")
@@ -405,7 +463,7 @@ return function(c)
         if not allowed then return end
         if now - state.fireAt < 0.18 then return end
         state.fireAt = now
-        c.Guard("Combat.Trigger", function() pressFire(now) end)
+        c.Guard("Combat.Trigger", function() pressFire(now, "trigger") end)
     end
 
     --=========================================================================
@@ -641,19 +699,181 @@ return function(c)
     end
 
     --=========================================================================
+    -- R2.22 RageBot: independent selection + direct camera lock + gated fire.
+    -- No arbitrary remote injection: only normal input paths are attempted.
+    -- Real damage remains server-authoritative and must be checked in-game.
+    --=========================================================================
+    local function ragePart(entry)
+        local model = entry.model
+        if Config.RagePart == "Torso" then
+            return model:FindFirstChild("UpperTorso") or model:FindFirstChild("Torso") or entry.root
+        elseif Config.RagePart == "Nearest" then
+            return entry.head or entry.root
+        end
+        return entry.head or model:FindFirstChild("Head") or entry.root
+    end
+
+    local function selectRage(now)
+        local previous = state.rageTarget
+        if previous and entryValid(previous, true) and now - state.rageLastSwitch < Config.RageSwitchDelay then
+            return previous
+        end
+        local best, scoreBest
+        for _, entry in ipairs(state.candidates) do
+            if entryValid(entry, true) then
+                local score = entry.screenDist + entry.worldDist * 0.025
+                if entry == previous then score -= 12 end -- stable lock, no target thrash
+                if not scoreBest or score < scoreBest then
+                    best, scoreBest = entry, score
+                end
+            end
+        end
+        if best ~= previous then state.rageLastSwitch = now end
+        state.rageTarget = best
+        return best
+    end
+
+    -- BloxStrike may rebuild CurrentCamera from its own input yaw/pitch every
+    -- frame. Test whether last frame's camera write survived; if not, use the
+    -- executor's *input* path rather than repeatedly fighting the controller.
+    -- 0% inferred server hits: a successful camera write or mouse event is
+    -- only a delivery event, not confirmation that a bullet was accepted.
+    local function resolveRageMouse()
+        if type(mousemoverel) == "function" then return mousemoverel end
+        for _, fetch in ipairs({
+            function() return getgenv and getgenv().mousemoverel end,
+            function() return getfenv and getfenv().mousemoverel end,
+        }) do
+            local ok, fn = pcall(fetch)
+            if ok and type(fn) == "function" then return fn end
+        end
+        return nil
+    end
+    local rageMoveMouse = resolveRageMouse()
+    local function rageDeliverAim(dt, camera, targetPoint, targetCF)
+        if state.rageExpectedLook then
+            local observed = camera.CFrame.LookVector
+            local dot = math.clamp(observed:Dot(state.rageExpectedLook), -1, 1)
+            local drift = math.deg(math.acos(dot))
+            if drift > 2.5 then
+                state.rageCameraMisses = (state.rageCameraMisses or 0) + 1
+                state.rageCameraHits = 0
+            else
+                state.rageCameraHits = (state.rageCameraHits or 0) + 1
+                state.rageCameraMisses = math.max(0, (state.rageCameraMisses or 0) - 1)
+            end
+            state.rageExpectedLook = nil
+        end
+        local delivery = Config.RageDelivery or "Auto"
+        local useMouse = delivery == "Mouse"
+            or (delivery == "Auto" and (state.rageCameraMisses or 0) >= 4)
+        if useMouse and not rageMoveMouse then
+            state.rageAimBackend = "Mouse unavailable / Camera"
+            if delivery == "Mouse" then
+                return false, "mousemoverel unavailable"
+            end
+            useMouse = false
+        end
+        if useMouse then
+            state.rageAimBackend = "Mouse"
+            local point, visible = camera:WorldToViewportPoint(targetPoint)
+            if not visible or point.Z <= 0 then return false, "aim off screen" end
+            local centre = camera.ViewportSize * 0.5
+            local dx = point.X - centre.X
+            local dy = point.Y - centre.Y
+            local errorPx = math.sqrt(dx * dx + dy * dy)
+            state.rageLastMouseError = errorPx
+            -- Game input sensitivity varies. Bound every packet and only fire
+            -- when the next frame confirms that the target reached the crosshair.
+            if errorPx > 2 then
+                local speed = Config.RageMode == "Instant" and 0.85 or 0.46
+                local mx = math.floor(math.clamp(dx * speed, -120, 120) + 0.5)
+                local my = math.floor(math.clamp(dy * speed, -120, 120) + 0.5)
+                if mx ~= 0 or my ~= 0 then
+                    local ok = pcall(rageMoveMouse, mx, my)
+                    if not ok then return false, "mousemoverel error" end
+                    state.rageMouseMoves = (state.rageMouseMoves or 0) + 1
+                end
+                return false, "mouse tracking"
+            end
+            return true, "mouse converged"
+        end
+        state.rageAimBackend = "Camera"
+        local alpha = Config.RageMode == "Instant" and 1 or math.clamp(dt * 25, 0.45, 0.95)
+        camera.CFrame = camera.CFrame:Lerp(targetCF, alpha)
+        state.rageExpectedLook = camera.CFrame.LookVector
+        local direction = (targetPoint - camera.CFrame.Position).Unit
+        local error = math.deg(math.acos(math.clamp(camera.CFrame.LookVector:Dot(direction), -1, 1)))
+        if delivery == "Auto" and rageMoveMouse and (state.rageCameraHits or 0) < 2 then
+            return false, "camera stability probe"
+        end
+        return error <= 3, "camera tracking"
+    end
+
+    local function rageTick(dt, now)
+        if not Config.RageEnabled then
+            state.rageTarget = nil
+            state.rageReason = "off"
+            state.rageAimBackend = "none"
+            state.rageExpectedLook = nil
+            state.rageCameraMisses = 0
+            state.rageCameraHits = 0
+            return
+        end
+        if not gateHeld() then
+            state.rageReason = "hold gate"
+            state.rageTarget = nil
+            return
+        end
+        local camera = Workspace.CurrentCamera
+        if not camera then state.rageReason = "camera missing"; return end
+        local entry = selectRage(now)
+        if not entry then state.rageReason = "no visible candidate"; return end
+        local part = ragePart(entry)
+        if not part then state.rageReason = "target part unavailable"; return end
+        local ping = type(c.Ping) == "function" and c.Ping() or 0
+        local lead = math.clamp(Config.RageLead + ping * 0.5, 0, 0.3)
+        local velocity = state.velEMA[entry.player] or part.AssemblyLinearVelocity or Vector3.zero
+        local targetPoint = part.Position + velocity * lead
+        local delta = targetPoint - camera.CFrame.Position
+        if delta.Magnitude < 0.1 then return end
+        local targetCF = CFrame.lookAt(camera.CFrame.Position, targetPoint)
+        local aligned, deliveryReason = rageDeliverAim(dt, camera, targetPoint, targetCF)
+        if not Config.RageAutoFire then
+            state.rageReason = "tracking / auto-fire off: " .. deliveryReason
+            return
+        end
+        if not aligned then state.rageReason = deliveryReason; return end
+        if state.firing then state.rageReason = "fire pulse active"; return end
+        if now - state.fireAt < Config.RageFireInterval then
+            state.rageReason = "fire cooldown"
+            return
+        end
+        state.fireAt = now
+        state.rageAttempts += 1
+        local ok, sent = pcall(pressFire, now, "rage")
+        if ok and sent then
+            state.rageSent += 1
+            state.rageReason = "input sent (hit unverified)"
+        else
+            state.rageReason = "fire unavailable: " .. tostring(state.fireBackend)
+        end
+    end
+
+    --=========================================================================
     -- Public interface (consumed by Core and the Bullet module).
     --=========================================================================
     local Combat = {}
 
     function Combat:IsActive()
-        return not stopped and (Config.Enabled or Config.TriggerEnabled or Config.HitboxEnabled or state.firing)
+        return not stopped and (Config.Enabled or Config.RageEnabled or Config.TriggerEnabled or Config.HitboxEnabled or state.firing)
     end
 
     function Combat:Update(dt)
         if stopped then return end
         local t0 = tick()
-        if state.firing and (not Config.TriggerEnabled or not gateHeld() or t0 >= releaseAt) then finishFire() end
-        local active = Config.Enabled or Config.TriggerEnabled or Config.HitboxEnabled
+        if state.firing and ((not Config.TriggerEnabled and not Config.RageEnabled) or not gateHeld() or t0 >= (releaseAt or 0)) then finishFire() end
+        local active = Config.Enabled or Config.RageEnabled or Config.TriggerEnabled or Config.HitboxEnabled
         if not active then
             state.locked = nil
             state.candidates = {}
@@ -662,7 +882,7 @@ return function(c)
             return
         end
         state.scanAccum += dt
-        if state.scanAccum >= 0.1 then
+        if state.scanAccum >= (Config.RageEnabled and 0.05 or 0.1) then
             state.scanAccum = 0
             scan()
         end
@@ -671,7 +891,7 @@ return function(c)
             selectTarget()
         end
         local entry = state.locked
-        if Config.Enabled and gateHeld() and entry and chanceFor(entry) then
+        if Config.Enabled and not Config.RageEnabled and gateHeld() and entry and chanceFor(entry) then
             local part = pickPart(entry)
             if part then
                 local aimPos = Combat_PredictPoint(entry, part)
@@ -695,7 +915,8 @@ return function(c)
                 end
             end
         end
-        triggerTick(tick())
+        rageTick(dt, t0)
+        if not Config.RageEnabled then triggerTick(t0) end
         hitboxTick(dt)
         fovTick()
         state.cost = tick() - t0
@@ -703,7 +924,17 @@ return function(c)
 
     -- Lock accessor for the Bullet module and trigger integration.
     function Combat:GetLock()
-        if not Config.Enabled or not gateHeld() or not lockStillValid() then return nil end
+        if not gateHeld() then return nil end
+        if Config.RageEnabled then
+            local entry = state.rageTarget
+            if not entry or not entryValid(entry, true) then return nil end
+            local part = ragePart(entry)
+            if not part then return nil end
+            local offset = (state.velEMA[entry.player] or Vector3.zero)
+                * math.clamp(Config.RageLead + (type(c.Ping) == "function" and c.Ping() or 0) * 0.5, 0, 0.3)
+            return {player=entry.player, part=part, point=part.Position + offset, entry=entry}
+        end
+        if not Config.Enabled or not lockStillValid() then return nil end
         local entry = state.locked
         if not entry or not chanceFor(entry) then return nil end
         local part = pickPart(entry)
@@ -752,6 +983,14 @@ return function(c)
     function Combat:DebugSnapshot()
         return {
             locked = state.locked and state.locked.player.Name or "-",
+            rageLocked = state.rageTarget and state.rageTarget.player.Name or "-",
+            rageEnabled = Config.RageEnabled, rageAttempts = state.rageAttempts,
+            rageSent = state.rageSent, rageReason = state.rageReason,
+            rageAimBackend = state.rageAimBackend,
+            rageCameraMisses = state.rageCameraMisses,
+            rageMouseMoves = state.rageMouseMoves,
+            rageMouseError = state.rageLastMouseError,
+            fireBackend = state.fireBackend,
             candidates = #state.candidates,
             hitEntries = (function() local n = 0; for _ in pairs(state.hitEntries) do n += 1 end; return n end)(),
             hitboxScope = Config.HitboxMode, hitboxEnabled = Config.HitboxEnabled,
@@ -771,9 +1010,11 @@ return function(c)
         if fovGui then fovGui:Destroy(); fovGui = nil; fovFrame = nil end
         stopped = true
         finishFire()
-        state.locked, state.lastLocked = nil, nil
+        state.locked, state.lastLocked, state.rageTarget = nil, nil, nil
+        state.rageExpectedLook = nil
         state.candidates, state.velEMA, state.rollCache, state.rollAt = {}, {}, {}, {}
         Config.Enabled = false
+        Config.RageEnabled = false
         Config.TriggerEnabled = false
         Config.HitboxEnabled = false
     end
@@ -786,6 +1027,48 @@ return function(c)
     -- UI (Combat tab). Original flag names preserved.
     --=========================================================================
     local tab = c.Tabs.Combat
+    tab:AddParagraph({ Title = "RageBot · 游戏内输入驱动",
+        Content = "独立目标扫描、快速镜头锁定、自动开火；Android 将按执行器能力尝试模拟射击。输入成功不等于服务器实际命中。" })
+    tab:AddToggle("BloxRageEnabled", {Title="RageBot 总开关", Default=false, Callback=function(v)
+        Config.RageEnabled = v
+        if not v then
+            state.rageTarget = nil
+            state.rageReason = "off"
+            state.rageExpectedLook = nil
+            state.rageCameraMisses, state.rageCameraHits = 0, 0
+            if state.fireOwner == "rage" then finishFire() end
+        end
+    end})
+    tab:AddDropdown("BloxRageMode", {Title="Rage 锁定", Values={"Fast", "Instant"}, Default="Fast",
+        Callback=function(v) Config.RageMode = v end})
+    tab:AddDropdown("BloxRageDelivery", {Title="Rage 瞄准输入", Values={"Auto", "Mouse", "Camera"}, Default="Auto",
+        Callback=function(v)
+            Config.RageDelivery = v
+            state.rageExpectedLook = nil
+            state.rageCameraMisses, state.rageCameraHits = 0, 0
+        end})
+    tab:AddDropdown("BloxRagePart", {Title="Rage 部位", Values={"Head", "Torso", "Nearest"}, Default="Head",
+        Callback=function(v) Config.RagePart = v end})
+    tab:AddToggle("BloxRageAutoFire", {Title="Rage 自动射击", Default=true,
+        Callback=function(v) Config.RageAutoFire = v; if not v and state.fireOwner=="rage" then finishFire() end end})
+    tab:AddToggle("BloxRageWallCheck", {Title="Rage 遮挡检查", Default=true,
+        Callback=function(v) Config.RageWallCheck = v end})
+    tab:AddSlider("BloxRageFOV", {Title="Rage 屏幕半径", Min=100, Max=1300, Default=700, Rounding=0,
+        Callback=function(v) Config.RageFOV=v end})
+    tab:AddSlider("BloxRageDistance", {Title="Rage 距离", Min=100, Max=2000, Default=900, Rounding=0,
+        Callback=function(v) Config.RageDistance=v end})
+    tab:AddSlider("BloxRageMaxAngle", {Title="Rage 最大夹角", Min=15, Max=120, Default=85, Rounding=0,
+        Callback=function(v) Config.RageMaxAngle=v end})
+    tab:AddSlider("BloxRageFireInterval", {Title="Rage 开火间隔 (s)", Min=0.08, Max=0.5, Default=0.14, Rounding=2,
+        Callback=function(v) Config.RageFireInterval=v end})
+    tab:AddSlider("BloxRageLead", {Title="Rage 运动预测 (s)", Min=0, Max=0.25, Default=0.09, Rounding=2,
+        Callback=function(v) Config.RageLead=v end})
+    tab:AddButton({Title="RageBot 状态诊断", Callback=function()
+        local d=Combat:DebugSnapshot()
+        print(("[Vortexion/Rage] enabled=%s target=%s scans=%d candidates=%d attempts=%d sent=%d aim=%s camera_misses=%d mouse_moves=%d mouse_error=%.1f fire=%s reason=%s")
+            :format(tostring(d.rageEnabled),d.rageLocked,d.scans,d.candidates,d.rageAttempts,d.rageSent,
+                d.rageAimBackend,d.rageCameraMisses,d.rageMouseMoves,d.rageMouseError,d.fireBackend,d.rageReason))
+    end})
     tab:AddToggle("BloxAimEnabled", { Title = "自瞄辅助", Default = false, Callback = function(v)
         Config.Enabled = v
         c.Log("Combat", "aim", v, Config.Mode)

@@ -1,0 +1,17 @@
+{
+  "version": "R222",
+  "date": "2026-10-17",
+  "notes": "Lua 5.4 fragment/mock regression; not Roblox Android or server execution",
+  "checks": {
+    "r222": 5,
+    "r219": 4,
+    "r215": 3,
+    "r221": 4,
+    "r26": 3,
+    "total": 19
+  },
+  "build": "pass",
+  "release_verify": "pass",
+  "android": "not tested",
+  "server_hit": "not tested"
+}

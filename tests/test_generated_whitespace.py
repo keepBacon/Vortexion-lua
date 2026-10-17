@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class GeneratedWhitespaceTest(unittest.TestCase):
     def test_all_build_bundles_have_no_trailing_whitespace(self):
         bundles = sorted((ROOT / "dist").glob("Vortexion_*.lua"))
-        self.assertEqual(len(bundles), 12, "Expected six standalone + six modular bundles")
+        self.assertEqual(len(bundles), 13, "Expected seven standalone (including Neverlose alias) + six modular bundles")
         for bundle in bundles:
             with self.subTest(bundle=bundle.name):
                 bad = [

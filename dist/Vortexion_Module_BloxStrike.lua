@@ -1,5 +1,5 @@
--- Vortexion WindUI - generated offline; publishing must be performed separately.
--- WindUI attribution and license are retained in vendor/WindUI/.
+-- Vortexion Neverlose - generated offline; publishing must be performed separately.
+-- Neverlose attribution is retained in vendor/Neverlose/README.md.
 -- Forsaken retains runtime model rbxassetid://132866968194043.
 -- Modify src/*.luau and run python3 build.py; do not edit this output.
 return function(kernel)
@@ -35,6 +35,7 @@ return function(c)
     detect("checkcaller", function() return type(checkcaller) == "function" end)
     detect("getnamecallmethod", function() return type(getnamecallmethod) == "function" end)
     detect("mousemoverel", function() return type(mousemoverel) == "function" end)
+    detect("mouse1click", function() return type(mouse1click) == "function" end)
     detect("mouse1press", function() return type(mouse1press) == "function" end)
     detect("mouse1release", function() return type(mouse1release) == "function" end)
     detect("gethui", function() return type(gethui) == "function" end)
@@ -434,6 +435,18 @@ return function(c)
     --=========================================================================
     local Config = {
         Enabled = false,
+        RageEnabled = false,
+        RageMode = "Fast", -- Fast | Instant
+        RageDelivery = "Auto", -- detect camera rewrites; fall back to mouse input
+        RageAutoFire = true,
+        RageFOV = 700,
+        RageDistance = 900,
+        RageMaxAngle = 85,
+        RagePart = "Head",
+        RageWallCheck = true,
+        RageFireInterval = 0.14,
+        RageLead = 0.09,
+        RageSwitchDelay = 0.09,
         Mode = "Camera",          -- Camera | Mouse | Both
         TriggerKey = "Always",    -- Always | Hold (RMB2 / touch)
         FOV = 240,
@@ -464,6 +477,19 @@ return function(c)
 
     local state = {
         locked = nil,
+        rageTarget = nil,
+        rageLastSwitch = 0,
+        rageAttempts = 0,
+        rageSent = 0,
+        rageReason = "off",
+        rageAimBackend = "none",
+        rageExpectedLook = nil,
+        rageCameraMisses = 0,
+        rageCameraHits = 0,
+        rageMouseMoves = 0,
+        rageLastMouseError = 0,
+        fireBackend = "none",
+        fireOwner = nil,
         lastLocked = nil,
         candidates = {},
         velEMA = {},
@@ -512,7 +538,9 @@ return function(c)
         local viewport = camera.ViewportSize
         local center = Vector2.new(viewport.X / 2, viewport.Y / 2)
 
-        for _, player in ipairs(Players:GetPlayers()) do
+        local searchDistance = Config.RageEnabled and math.max(Config.RageDistance, Config.MaxDistance) or Config.MaxDistance
+        local searchFov = Config.RageEnabled and math.max(Config.RageFOV, Config.FOV) or Config.FOV
+        for _, player in ipairs(type(c.Targets) == "function" and c.Targets() or Players:GetPlayers()) do
             if player ~= LocalPlayer then
                 local model, humanoid = c.Living(player)
                 if model and humanoid and humanoid.Health > 0 then
@@ -523,12 +551,12 @@ return function(c)
                         if root then
                             local pos = root.Position
                             local worldDist = (pos - camPos).Magnitude
-                            if worldDist <= Config.MaxDistance then
+                            if worldDist <= searchDistance then
                                 local screen, onScreen = camera:WorldToViewportPoint(pos)
                                 if screen.Z > 0 then
                                     local screenVec = Vector2.new(screen.X, screen.Y)
                                     local screenDist = onScreen and (screenVec - center).Magnitude or math.huge
-                                    if screenDist <= Config.FOV then
+                                    if screenDist <= searchFov then
                                         local vel = root.AssemblyLinearVelocity or Vector3.zero
                                         local ema = state.velEMA[player]
                                         if not ema then
@@ -560,7 +588,10 @@ return function(c)
         state.candidatesSeen = #state.candidates
         -- Drop EMA state for players that left.
         for player in pairs(state.velEMA) do
-            if not player.Parent then state.velEMA[player] = nil end
+            if not player.Parent or (player.IsVortexionNPC and
+                (not player.Character or not player.Character.Parent)) then
+                state.velEMA[player] = nil
+            end
         end
     end
 
@@ -622,7 +653,7 @@ return function(c)
     --=========================================================================
     -- Target selection + per-frame lock validation.
     --=========================================================================
-    local function entryValid(entry)
+    local function entryValid(entry, rage)
         if not entry or not entry.player.Parent or not entry.model.Parent or not entry.root.Parent then return false end
         local model, humanoid = c.Living(entry.player)
         if model ~= entry.model or humanoid ~= entry.humanoid or humanoid.Health <= 0 then return false end
@@ -630,17 +661,19 @@ return function(c)
         local camera = Workspace.CurrentCamera
         if not camera then return false end
         local delta = entry.root.Position - camera.CFrame.Position
-        if delta.Magnitude > Config.MaxDistance or delta.Magnitude < 0.01 then return false end
+        local limitDistance = rage and Config.RageDistance or Config.MaxDistance
+        if delta.Magnitude > limitDistance or delta.Magnitude < 0.01 then return false end
         local angle = math.deg(math.acos(math.clamp(camera.CFrame.LookVector:Dot(delta.Unit), -1, 1)))
-        if angle > Config.MaxAngle then return false end
+        if angle > (rage and Config.RageMaxAngle or Config.MaxAngle) then return false end
         local screen, visible = camera:WorldToViewportPoint(entry.root.Position)
         if not visible or screen.Z <= 0 then return false end
         local center = camera.ViewportSize * 0.5
         entry.screen = Vector2.new(screen.X, screen.Y)
         entry.screenDist = (entry.screen - center).Magnitude
         entry.worldDist = delta.Magnitude
-        if entry.screenDist > Config.FOV then return false end
-        return not Config.WallCheck or not wallBlocked(camera.CFrame.Position, entry.root.Position, c.Character(), entry.model)
+        if entry.screenDist > (rage and Config.RageFOV or Config.FOV) then return false end
+        local blocked = rage and Config.RageWallCheck or (not rage and Config.WallCheck)
+        return not blocked or not wallBlocked(camera.CFrame.Position, entry.root.Position, c.Character(), entry.model)
     end
 
     local function chanceFor(entry)
@@ -754,21 +787,47 @@ return function(c)
         if releaseFire then pcall(releaseFire) end
         releaseFire, releaseAt = nil, nil
         state.firing = false
+        state.fireOwner = nil
     end
-    local function pressFire(now)
+    local function pressFire(now, owner)
         local camera = Workspace.CurrentCamera
-        local position = Vector2.zero
+        local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+        local position = Vector2.new(viewport.X * 0.5, viewport.Y * 0.5)
         if c.Caps.mouse1press and c.Caps.mouse1release then
+            state.fireBackend = "mouse1press"
             releaseFire = mouse1release
             if not pcall(mouse1press) then finishFire(); return end
+        elseif type(mouse1click) == "function" then
+            -- Some mobile executors expose click but not a sustained press.
+            state.fireBackend = "mouse1click"
+            if not pcall(mouse1click) then return false end
+            state.fireOwner = owner
+            return true
         else
             local user = c.Services.VirtualUser
-            if not user or not camera then return end
-            releaseFire = function() user:Button1Up(position, camera.CFrame) end
-            if not pcall(function() user:Button1Down(position, camera.CFrame) end) then finishFire(); return end
+            if user and camera then
+                state.fireBackend = "VirtualUser"
+                releaseFire = function() user:Button1Up(position, camera.CFrame) end
+                if not pcall(function() user:Button1Down(position, camera.CFrame) end) then finishFire(); return false end
+            else
+                -- VirtualInputManager is unavailable on many Roblox clients;
+                -- a failed probe is visible in diagnostics, never called a hit.
+                local ok, vim = pcall(function() return game:GetService("VirtualInputManager") end)
+                if not ok or not vim then
+                    state.fireBackend = "unavailable"
+                    return false
+                end
+                state.fireBackend = "VirtualInputManager"
+                releaseFire = function() vim:SendMouseButtonEvent(position.X, position.Y, 0, false, game, 0) end
+                if not pcall(function()
+                    vim:SendMouseButtonEvent(position.X, position.Y, 0, true, game, 0)
+                end) then finishFire(); return false end
+            end
         end
         state.firing = true
-        releaseAt = now + math.max(Config.TriggerDelay, 0.02)
+        state.fireOwner = owner
+        releaseAt = now + (owner == "rage" and 0.035 or math.max(Config.TriggerDelay, 0.02))
+        return true
     end
 
     local UserInputService = game:GetService("UserInputService")
@@ -811,7 +870,7 @@ return function(c)
         if not allowed then return end
         if now - state.fireAt < 0.18 then return end
         state.fireAt = now
-        c.Guard("Combat.Trigger", function() pressFire(now) end)
+        c.Guard("Combat.Trigger", function() pressFire(now, "trigger") end)
     end
 
     --=========================================================================
@@ -1047,19 +1106,181 @@ return function(c)
     end
 
     --=========================================================================
+    -- R2.22 RageBot: independent selection + direct camera lock + gated fire.
+    -- No arbitrary remote injection: only normal input paths are attempted.
+    -- Real damage remains server-authoritative and must be checked in-game.
+    --=========================================================================
+    local function ragePart(entry)
+        local model = entry.model
+        if Config.RagePart == "Torso" then
+            return model:FindFirstChild("UpperTorso") or model:FindFirstChild("Torso") or entry.root
+        elseif Config.RagePart == "Nearest" then
+            return entry.head or entry.root
+        end
+        return entry.head or model:FindFirstChild("Head") or entry.root
+    end
+
+    local function selectRage(now)
+        local previous = state.rageTarget
+        if previous and entryValid(previous, true) and now - state.rageLastSwitch < Config.RageSwitchDelay then
+            return previous
+        end
+        local best, scoreBest
+        for _, entry in ipairs(state.candidates) do
+            if entryValid(entry, true) then
+                local score = entry.screenDist + entry.worldDist * 0.025
+                if entry == previous then score -= 12 end -- stable lock, no target thrash
+                if not scoreBest or score < scoreBest then
+                    best, scoreBest = entry, score
+                end
+            end
+        end
+        if best ~= previous then state.rageLastSwitch = now end
+        state.rageTarget = best
+        return best
+    end
+
+    -- BloxStrike may rebuild CurrentCamera from its own input yaw/pitch every
+    -- frame. Test whether last frame's camera write survived; if not, use the
+    -- executor's *input* path rather than repeatedly fighting the controller.
+    -- 0% inferred server hits: a successful camera write or mouse event is
+    -- only a delivery event, not confirmation that a bullet was accepted.
+    local function resolveRageMouse()
+        if type(mousemoverel) == "function" then return mousemoverel end
+        for _, fetch in ipairs({
+            function() return getgenv and getgenv().mousemoverel end,
+            function() return getfenv and getfenv().mousemoverel end,
+        }) do
+            local ok, fn = pcall(fetch)
+            if ok and type(fn) == "function" then return fn end
+        end
+        return nil
+    end
+    local rageMoveMouse = resolveRageMouse()
+    local function rageDeliverAim(dt, camera, targetPoint, targetCF)
+        if state.rageExpectedLook then
+            local observed = camera.CFrame.LookVector
+            local dot = math.clamp(observed:Dot(state.rageExpectedLook), -1, 1)
+            local drift = math.deg(math.acos(dot))
+            if drift > 2.5 then
+                state.rageCameraMisses = (state.rageCameraMisses or 0) + 1
+                state.rageCameraHits = 0
+            else
+                state.rageCameraHits = (state.rageCameraHits or 0) + 1
+                state.rageCameraMisses = math.max(0, (state.rageCameraMisses or 0) - 1)
+            end
+            state.rageExpectedLook = nil
+        end
+        local delivery = Config.RageDelivery or "Auto"
+        local useMouse = delivery == "Mouse"
+            or (delivery == "Auto" and (state.rageCameraMisses or 0) >= 4)
+        if useMouse and not rageMoveMouse then
+            state.rageAimBackend = "Mouse unavailable / Camera"
+            if delivery == "Mouse" then
+                return false, "mousemoverel unavailable"
+            end
+            useMouse = false
+        end
+        if useMouse then
+            state.rageAimBackend = "Mouse"
+            local point, visible = camera:WorldToViewportPoint(targetPoint)
+            if not visible or point.Z <= 0 then return false, "aim off screen" end
+            local centre = camera.ViewportSize * 0.5
+            local dx = point.X - centre.X
+            local dy = point.Y - centre.Y
+            local errorPx = math.sqrt(dx * dx + dy * dy)
+            state.rageLastMouseError = errorPx
+            -- Game input sensitivity varies. Bound every packet and only fire
+            -- when the next frame confirms that the target reached the crosshair.
+            if errorPx > 2 then
+                local speed = Config.RageMode == "Instant" and 0.85 or 0.46
+                local mx = math.floor(math.clamp(dx * speed, -120, 120) + 0.5)
+                local my = math.floor(math.clamp(dy * speed, -120, 120) + 0.5)
+                if mx ~= 0 or my ~= 0 then
+                    local ok = pcall(rageMoveMouse, mx, my)
+                    if not ok then return false, "mousemoverel error" end
+                    state.rageMouseMoves = (state.rageMouseMoves or 0) + 1
+                end
+                return false, "mouse tracking"
+            end
+            return true, "mouse converged"
+        end
+        state.rageAimBackend = "Camera"
+        local alpha = Config.RageMode == "Instant" and 1 or math.clamp(dt * 25, 0.45, 0.95)
+        camera.CFrame = camera.CFrame:Lerp(targetCF, alpha)
+        state.rageExpectedLook = camera.CFrame.LookVector
+        local direction = (targetPoint - camera.CFrame.Position).Unit
+        local error = math.deg(math.acos(math.clamp(camera.CFrame.LookVector:Dot(direction), -1, 1)))
+        if delivery == "Auto" and rageMoveMouse and (state.rageCameraHits or 0) < 2 then
+            return false, "camera stability probe"
+        end
+        return error <= 3, "camera tracking"
+    end
+
+    local function rageTick(dt, now)
+        if not Config.RageEnabled then
+            state.rageTarget = nil
+            state.rageReason = "off"
+            state.rageAimBackend = "none"
+            state.rageExpectedLook = nil
+            state.rageCameraMisses = 0
+            state.rageCameraHits = 0
+            return
+        end
+        if not gateHeld() then
+            state.rageReason = "hold gate"
+            state.rageTarget = nil
+            return
+        end
+        local camera = Workspace.CurrentCamera
+        if not camera then state.rageReason = "camera missing"; return end
+        local entry = selectRage(now)
+        if not entry then state.rageReason = "no visible candidate"; return end
+        local part = ragePart(entry)
+        if not part then state.rageReason = "target part unavailable"; return end
+        local ping = type(c.Ping) == "function" and c.Ping() or 0
+        local lead = math.clamp(Config.RageLead + ping * 0.5, 0, 0.3)
+        local velocity = state.velEMA[entry.player] or part.AssemblyLinearVelocity or Vector3.zero
+        local targetPoint = part.Position + velocity * lead
+        local delta = targetPoint - camera.CFrame.Position
+        if delta.Magnitude < 0.1 then return end
+        local targetCF = CFrame.lookAt(camera.CFrame.Position, targetPoint)
+        local aligned, deliveryReason = rageDeliverAim(dt, camera, targetPoint, targetCF)
+        if not Config.RageAutoFire then
+            state.rageReason = "tracking / auto-fire off: " .. deliveryReason
+            return
+        end
+        if not aligned then state.rageReason = deliveryReason; return end
+        if state.firing then state.rageReason = "fire pulse active"; return end
+        if now - state.fireAt < Config.RageFireInterval then
+            state.rageReason = "fire cooldown"
+            return
+        end
+        state.fireAt = now
+        state.rageAttempts += 1
+        local ok, sent = pcall(pressFire, now, "rage")
+        if ok and sent then
+            state.rageSent += 1
+            state.rageReason = "input sent (hit unverified)"
+        else
+            state.rageReason = "fire unavailable: " .. tostring(state.fireBackend)
+        end
+    end
+
+    --=========================================================================
     -- Public interface (consumed by Core and the Bullet module).
     --=========================================================================
     local Combat = {}
 
     function Combat:IsActive()
-        return not stopped and (Config.Enabled or Config.TriggerEnabled or Config.HitboxEnabled or state.firing)
+        return not stopped and (Config.Enabled or Config.RageEnabled or Config.TriggerEnabled or Config.HitboxEnabled or state.firing)
     end
 
     function Combat:Update(dt)
         if stopped then return end
         local t0 = tick()
-        if state.firing and (not Config.TriggerEnabled or not gateHeld() or t0 >= releaseAt) then finishFire() end
-        local active = Config.Enabled or Config.TriggerEnabled or Config.HitboxEnabled
+        if state.firing and ((not Config.TriggerEnabled and not Config.RageEnabled) or not gateHeld() or t0 >= (releaseAt or 0)) then finishFire() end
+        local active = Config.Enabled or Config.RageEnabled or Config.TriggerEnabled or Config.HitboxEnabled
         if not active then
             state.locked = nil
             state.candidates = {}
@@ -1068,7 +1289,7 @@ return function(c)
             return
         end
         state.scanAccum += dt
-        if state.scanAccum >= 0.1 then
+        if state.scanAccum >= (Config.RageEnabled and 0.05 or 0.1) then
             state.scanAccum = 0
             scan()
         end
@@ -1077,7 +1298,7 @@ return function(c)
             selectTarget()
         end
         local entry = state.locked
-        if Config.Enabled and gateHeld() and entry and chanceFor(entry) then
+        if Config.Enabled and not Config.RageEnabled and gateHeld() and entry and chanceFor(entry) then
             local part = pickPart(entry)
             if part then
                 local aimPos = Combat_PredictPoint(entry, part)
@@ -1101,7 +1322,8 @@ return function(c)
                 end
             end
         end
-        triggerTick(tick())
+        rageTick(dt, t0)
+        if not Config.RageEnabled then triggerTick(t0) end
         hitboxTick(dt)
         fovTick()
         state.cost = tick() - t0
@@ -1109,7 +1331,17 @@ return function(c)
 
     -- Lock accessor for the Bullet module and trigger integration.
     function Combat:GetLock()
-        if not Config.Enabled or not gateHeld() or not lockStillValid() then return nil end
+        if not gateHeld() then return nil end
+        if Config.RageEnabled then
+            local entry = state.rageTarget
+            if not entry or not entryValid(entry, true) then return nil end
+            local part = ragePart(entry)
+            if not part then return nil end
+            local offset = (state.velEMA[entry.player] or Vector3.zero)
+                * math.clamp(Config.RageLead + (type(c.Ping) == "function" and c.Ping() or 0) * 0.5, 0, 0.3)
+            return {player=entry.player, part=part, point=part.Position + offset, entry=entry}
+        end
+        if not Config.Enabled or not lockStillValid() then return nil end
         local entry = state.locked
         if not entry or not chanceFor(entry) then return nil end
         local part = pickPart(entry)
@@ -1158,6 +1390,14 @@ return function(c)
     function Combat:DebugSnapshot()
         return {
             locked = state.locked and state.locked.player.Name or "-",
+            rageLocked = state.rageTarget and state.rageTarget.player.Name or "-",
+            rageEnabled = Config.RageEnabled, rageAttempts = state.rageAttempts,
+            rageSent = state.rageSent, rageReason = state.rageReason,
+            rageAimBackend = state.rageAimBackend,
+            rageCameraMisses = state.rageCameraMisses,
+            rageMouseMoves = state.rageMouseMoves,
+            rageMouseError = state.rageLastMouseError,
+            fireBackend = state.fireBackend,
             candidates = #state.candidates,
             hitEntries = (function() local n = 0; for _ in pairs(state.hitEntries) do n += 1 end; return n end)(),
             hitboxScope = Config.HitboxMode, hitboxEnabled = Config.HitboxEnabled,
@@ -1177,9 +1417,11 @@ return function(c)
         if fovGui then fovGui:Destroy(); fovGui = nil; fovFrame = nil end
         stopped = true
         finishFire()
-        state.locked, state.lastLocked = nil, nil
+        state.locked, state.lastLocked, state.rageTarget = nil, nil, nil
+        state.rageExpectedLook = nil
         state.candidates, state.velEMA, state.rollCache, state.rollAt = {}, {}, {}, {}
         Config.Enabled = false
+        Config.RageEnabled = false
         Config.TriggerEnabled = false
         Config.HitboxEnabled = false
     end
@@ -1192,6 +1434,48 @@ return function(c)
     -- UI (Combat tab). Original flag names preserved.
     --=========================================================================
     local tab = c.Tabs.Combat
+    tab:AddParagraph({ Title = "RageBot · 游戏内输入驱动",
+        Content = "独立目标扫描、快速镜头锁定、自动开火；Android 将按执行器能力尝试模拟射击。输入成功不等于服务器实际命中。" })
+    tab:AddToggle("BloxRageEnabled", {Title="RageBot 总开关", Default=false, Callback=function(v)
+        Config.RageEnabled = v
+        if not v then
+            state.rageTarget = nil
+            state.rageReason = "off"
+            state.rageExpectedLook = nil
+            state.rageCameraMisses, state.rageCameraHits = 0, 0
+            if state.fireOwner == "rage" then finishFire() end
+        end
+    end})
+    tab:AddDropdown("BloxRageMode", {Title="Rage 锁定", Values={"Fast", "Instant"}, Default="Fast",
+        Callback=function(v) Config.RageMode = v end})
+    tab:AddDropdown("BloxRageDelivery", {Title="Rage 瞄准输入", Values={"Auto", "Mouse", "Camera"}, Default="Auto",
+        Callback=function(v)
+            Config.RageDelivery = v
+            state.rageExpectedLook = nil
+            state.rageCameraMisses, state.rageCameraHits = 0, 0
+        end})
+    tab:AddDropdown("BloxRagePart", {Title="Rage 部位", Values={"Head", "Torso", "Nearest"}, Default="Head",
+        Callback=function(v) Config.RagePart = v end})
+    tab:AddToggle("BloxRageAutoFire", {Title="Rage 自动射击", Default=true,
+        Callback=function(v) Config.RageAutoFire = v; if not v and state.fireOwner=="rage" then finishFire() end end})
+    tab:AddToggle("BloxRageWallCheck", {Title="Rage 遮挡检查", Default=true,
+        Callback=function(v) Config.RageWallCheck = v end})
+    tab:AddSlider("BloxRageFOV", {Title="Rage 屏幕半径", Min=100, Max=1300, Default=700, Rounding=0,
+        Callback=function(v) Config.RageFOV=v end})
+    tab:AddSlider("BloxRageDistance", {Title="Rage 距离", Min=100, Max=2000, Default=900, Rounding=0,
+        Callback=function(v) Config.RageDistance=v end})
+    tab:AddSlider("BloxRageMaxAngle", {Title="Rage 最大夹角", Min=15, Max=120, Default=85, Rounding=0,
+        Callback=function(v) Config.RageMaxAngle=v end})
+    tab:AddSlider("BloxRageFireInterval", {Title="Rage 开火间隔 (s)", Min=0.08, Max=0.5, Default=0.14, Rounding=2,
+        Callback=function(v) Config.RageFireInterval=v end})
+    tab:AddSlider("BloxRageLead", {Title="Rage 运动预测 (s)", Min=0, Max=0.25, Default=0.09, Rounding=2,
+        Callback=function(v) Config.RageLead=v end})
+    tab:AddButton({Title="RageBot 状态诊断", Callback=function()
+        local d=Combat:DebugSnapshot()
+        print(("[Vortexion/Rage] enabled=%s target=%s scans=%d candidates=%d attempts=%d sent=%d aim=%s camera_misses=%d mouse_moves=%d mouse_error=%.1f fire=%s reason=%s")
+            :format(tostring(d.rageEnabled),d.rageLocked,d.scans,d.candidates,d.rageAttempts,d.rageSent,
+                d.rageAimBackend,d.rageCameraMisses,d.rageMouseMoves,d.rageMouseError,d.fireBackend,d.rageReason))
+    end})
     tab:AddToggle("BloxAimEnabled", { Title = "自瞄辅助", Default = false, Callback = function(v)
         Config.Enabled = v
         c.Log("Combat", "aim", v, Config.Mode)
@@ -2022,8 +2306,8 @@ end)()
 local BloxVisualFactory = (function()
 -- Vortexion BloxStrike visual: player ESP, fullbright, movement helpers.
 --
--- R2.19 ESP uses engine-tracked BillboardGui: one non-interactive instance
--- per valid player, event-safe cleanup, throttled metadata updates.
+-- R2.22: primary 2D ScreenGui projection plus optional native Billboard fallback.
+-- One non-interactive entry per valid player, throttled update and cleanup.
 --
 -- Speed keeps the WalkSpeed writer for game compatibility but adds the
 -- pulse/coast AssemblyLinearVelocity cycle from the SCP branch: a constant
@@ -2047,6 +2331,7 @@ return function(c)
         ESPWeapon = true,
         ESPBox = true,
         ESPTracer = false,
+        ESPOverlay = true, -- independent 2D ScreenGui projection; billboard fallback
         Fullbright = false,
         SpeedEnabled = false,
         SpeedValue = 24,
@@ -2066,6 +2351,118 @@ return function(c)
     -- Only roster reconciliation and text are throttled in Lua.
     --=========================================================================
     local highlights = {}
+    local overlayGui
+    local overlayCreates = 0
+    local overlayDraws = 0
+    local function ensureOverlay()
+        if overlayGui and overlayGui.Parent then return overlayGui end
+        local parent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if not parent and type(c.GetGuiParent) == "function" then
+            local ok, fallback = pcall(c.GetGuiParent)
+            if ok then parent = fallback end
+        end
+        if not parent then return nil end
+        local screen = Instance.new("ScreenGui")
+        screen.Name = "VortexionBloxESP2D222"
+        screen.ResetOnSpawn = false
+        screen.IgnoreGuiInset = true -- WorldToViewportPoint is viewport-local.
+        screen.DisplayOrder = 70
+        screen.Enabled = Config.ESPEnabled and Config.ESPOverlay
+        screen.Parent = parent
+        overlayGui = screen
+        return screen
+    end
+    local function makeOverlay(entry)
+        if entry.overlay and entry.overlay.Parent then return end
+        local screen = ensureOverlay()
+        if not screen then return end
+        local bounds = Instance.new("Frame")
+        bounds.Name = "Target"
+        bounds.BackgroundTransparency = 1
+        bounds.BorderSizePixel = 0
+        bounds.Active = false
+        bounds.Visible = false
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(243, 93, 93)
+        stroke.Thickness = 1.25
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = bounds
+        local label = Instance.new("TextLabel")
+        label.Name = "Info"
+        label.AnchorPoint = Vector2.new(0.5, 1)
+        label.Position = UDim2.new(0.5, 0, 0, -3)
+        label.Size = UDim2.fromOffset(190, 65)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = stroke.Color
+        label.TextStrokeTransparency = 0.3
+        label.TextSize = 13
+        label.TextWrapped = false
+        label.Active = false
+        label.Text = ""
+        label.Parent = bounds
+        bounds.Parent = screen
+        entry.overlay, entry.overlayStroke, entry.overlayText = bounds, stroke, label
+        overlayCreates += 1
+    end
+    local function projectOverlay(entry, camera)
+        if not Config.ESPOverlay then
+            if entry.overlay then entry.overlay.Visible = false end
+            entry.gui.Enabled = Config.ESPEnabled
+            return
+        end
+        -- Keep the independent 2D path authoritative on Android; the existing
+        -- BillboardGui survives as a fallback when viewport projection fails.
+        if not camera or not camera.WorldToViewportPoint then return end
+        makeOverlay(entry)
+        if not entry.overlay then return end
+        local root = entry.root
+        if not root or not root.Parent then
+            entry.overlay.Visible = false
+            return
+        end
+        local upper = entry.model:FindFirstChild("Head")
+        local top = upper and upper:IsA("BasePart") and (upper.Position + Vector3.new(0, 0.65, 0))
+            or (root.Position + Vector3.new(0, 2.7, 0))
+        local bottom = root.Position - Vector3.new(0, 2.8, 0)
+        local a = camera:WorldToViewportPoint(top)
+        local b = camera:WorldToViewportPoint(bottom)
+        local middle, inView = camera:WorldToViewportPoint(root.Position)
+        -- On mobile a nearby character's head can project above the screen
+        -- even while the torso is visible. Testing the head's inView here
+        -- removed valid targets. Cull by depth and the actual box instead.
+        if a.Z <= 0 or b.Z <= 0 or middle.Z <= 0 then
+            entry.overlay.Visible = false
+            entry.gui.Enabled = false
+            return
+        end
+        local rawTop, rawBottom = math.min(a.Y, b.Y), math.max(a.Y, b.Y)
+        local vw, vh = camera.ViewportSize.X, camera.ViewportSize.Y
+        local rawHeight = math.max(rawBottom - rawTop, 18)
+        local rawWidth = math.clamp(rawHeight * 0.52, 14, vw * 0.3)
+        local rawLeft = (a.X + b.X - rawWidth) * 0.5
+        if not inView and (rawBottom < 0 or rawTop > vh or rawLeft > vw or rawLeft + rawWidth < 0) then
+            entry.overlay.Visible = false
+            entry.gui.Enabled = false
+            return
+        end
+        local topY = math.clamp(rawTop, 0, vh)
+        local bottomY = math.clamp(rawBottom, 0, vh)
+        local height = math.max(1, bottomY - topY)
+        local width = rawWidth
+        entry.overlay.Position = UDim2.fromOffset(math.floor(rawLeft), math.floor(topY))
+        entry.overlay.Size = UDim2.fromOffset(math.floor(width), math.floor(height))
+        entry.overlay.Visible = true
+        entry.gui.Enabled = false
+        entry.overlayStroke.Enabled = Config.ESPBox
+        entry.overlayText.Text = entry.text.Text
+        entry.overlayText.Visible = entry.text.Visible
+        entry.overlayStroke.Color = entry.stroke.Color
+        entry.overlayText.TextColor3 = entry.stroke.Color
+        overlayDraws += 1
+    end
+    local function hideOverlay(entry)
+        if entry and entry.overlay then entry.overlay.Visible = false end
+    end
     local espStats = {refreshes=0, scanned=0, eligible=0, markers=0,
         noHumanoid=0, creates=0, writes=0, lastError="none"}
     local MAX_ESP_TARGETS = 24
@@ -2086,6 +2483,7 @@ return function(c)
         local entry = highlights[player]
         if not entry then return end
         highlights[player] = nil
+        if entry.overlay then pcall(function() entry.overlay:Destroy() end) end
         if entry.gui then pcall(function() entry.gui:Destroy() end) end
         if entry.highlight then pcall(function() entry.highlight:Destroy() end) end
         if entry.tracer then pcall(function() entry.tracer:Remove() end) end
@@ -2093,9 +2491,17 @@ return function(c)
     local function clearESP()
         for player in pairs(highlights) do clearEntry(player) end
         espStats.markers = 0
+        if overlayGui then
+            pcall(function() overlayGui:Destroy() end)
+            overlayGui = nil
+        end
     end
     local function makeEntry(player, model, root)
         local parent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if not parent and type(c.GetGuiParent) == "function" then
+            local ok, fallback = pcall(c.GetGuiParent)
+            if ok then parent = fallback end
+        end
         if not parent then return nil end
         local gui = Instance.new("BillboardGui")
         gui.Name = "VortexionBloxESP219"
@@ -2206,11 +2612,18 @@ return function(c)
         espStats.scanned, espStats.eligible, espStats.noHumanoid = 0, 0, 0
         local camera = Workspace.CurrentCamera
         local parent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        if not camera or not parent then return end
+        if not parent and type(c.GetGuiParent) == "function" then
+            local ok, fallback = pcall(c.GetGuiParent)
+            if ok then parent = fallback end
+        end
+        if not camera or not parent then
+            espStats.lastError = "camera or GUI parent unavailable"
+            return
+        end
         local now = os.clock()
         local left = MAX_ESP_TARGETS
         local origin = camera.CFrame.Position
-        for _, player in ipairs(Players:GetPlayers()) do
+        for _, player in ipairs(type(c.Targets) == "function" and c.Targets() or Players:GetPlayers()) do
             if player ~= LocalPlayer then
                 espStats.scanned += 1
                 local model, vitals = c.Living(player)
@@ -2237,8 +2650,9 @@ return function(c)
                     if entry then
                         entry.lastSeen = now
                         if not entry.gui.Enabled then entry.gui.Enabled = true end
-                        if entry.gui.MaxDistance ~= Config.ESPDistance + ESP_DISTANCE_SLACK then
-                            entry.gui.MaxDistance = Config.ESPDistance + ESP_DISTANCE_SLACK + ESP_DISTANCE_SLACK
+                        local maxDistance = Config.ESPDistance + ESP_DISTANCE_SLACK
+                        if entry.gui.MaxDistance ~= maxDistance then
+                            entry.gui.MaxDistance = maxDistance
                         end
                         if entry.stroke.Enabled ~= Config.ESPBox then
                             entry.stroke.Enabled = Config.ESPBox
@@ -2261,6 +2675,14 @@ return function(c)
                             entry.text.TextColor3 = color
                         end
                         entry.visibilityTinted = Config.ESPVisibility
+                        -- The native Billboard alone is not reliable for all
+                        -- custom rigs/mobile renderers; mirror into 2D.
+                        local projected, projectionError = pcall(projectOverlay, entry, camera)
+                        if not projected then
+                            espStats.lastError = "2D projection: " .. tostring(projectionError):sub(1, 150)
+                            hideOverlay(entry)
+                            entry.gui.Enabled = Config.ESPEnabled
+                        end
                         if Config.ESPWorldHighlight then
                             if not entry.highlight then
                                 local h = Instance.new("Highlight")
@@ -2300,6 +2722,7 @@ return function(c)
                     -- remain visible until the grace window expires.
                     if (not model or not root or not permitted or now - entry.lastSeen >= ESP_GRACE_SECONDS)
                         and entry.gui.Enabled then entry.gui.Enabled = false end
+                    hideOverlay(entry)
                     if entry.tracer then entry.tracer.Visible = false end
                     if now - entry.lastSeen >= ESP_GRACE_SECONDS or not entry.model.Parent then
                         clearEntry(player)
@@ -2308,7 +2731,10 @@ return function(c)
             end
         end
         for player in pairs(highlights) do
-            if not player.Parent then clearEntry(player) end
+            if not player.Parent or (player.IsVortexionNPC and
+                (not player.Character or not player.Character.Parent)) then
+                clearEntry(player)
+            end
         end
         local count = 0
         for _ in pairs(highlights) do count += 1 end
@@ -2572,11 +2998,12 @@ return function(c)
     local espInterval = 0.25
     local espRefreshes = 0
     local function visualInterval()
+        local base = Config.ESPOverlay and 0.08 or 0.25
         if c.VisualInterval then
-            local ok, value = pcall(c.VisualInterval, 0.25)
-            if ok and type(value) == "number" and value == value and value > 0 then return math.max(0.25, value) end
+            local ok, value = pcall(c.VisualInterval, base)
+            if ok and type(value) == "number" and value == value and value > 0 then return math.max(base, value) end
         end
-        return 0.25
+        return base
     end
     local function refreshESP()
         espRefreshes += 1
@@ -2639,7 +3066,10 @@ return function(c)
             markers = espStats.markers, scanned = espStats.scanned,
             eligible = espStats.eligible, refreshes = espStats.refreshes,
             noHumanoid = espStats.noHumanoid, error = espStats.lastError,
-            creates = espStats.creates, writes = espStats.writes, renderer = "NativeBillboard",
+            creates = espStats.creates, writes = espStats.writes,
+            renderer = Config.ESPOverlay and "Viewport2D+BillboardFallback" or "NativeBillboard",
+            overlayCreates = overlayCreates, overlayDraws = overlayDraws,
+            overlayParent = overlayGui ~= nil and overlayGui.Parent ~= nil,
             thirdPerson = thirdPerson.enabled, thirdOverrides = thirdPerson.overrides,
         }
     end
@@ -2654,6 +3084,13 @@ return function(c)
         Config.ESPEnabled = v
         if v then startESP() else clearESP() end
     end })
+    tab:AddToggle("BloxESP2D", { Title = "2D 屏幕 ESP（手机推荐）", Default = true,
+        Callback = function(v)
+            Config.ESPOverlay = v
+            if overlayGui then overlayGui.Enabled = v and Config.ESPEnabled end
+            if v then c.Guard("Visual.ESP2D", updateESP)
+            else for _, entry in pairs(highlights) do hideOverlay(entry); entry.gui.Enabled = Config.ESPEnabled end end
+        end })
     tab:AddToggle("BloxESPWorldHighlight", { Title = "额外启用 3D 高亮（性能消耗较高）", Default = false,
         Callback = function(v) Config.ESPWorldHighlight = v end })
     tab:AddToggle("BloxESPTeam", { Title = "仅显示敌方", Default = true, Callback = function(v)
@@ -2678,9 +3115,11 @@ return function(c)
         print(("[Vortexion/BloxESP] 开关=%s 玩家=%d 合格=%d 无Humanoid=%d 高亮=%d 刷新=%d 错误=%s")
             :format(tostring(Config.ESPEnabled), status.scanned, status.eligible,
                 status.noHumanoid, status.markers, status.refreshes, status.error))
+        print(("[Vortexion/BloxESP] 渲染=%s 2D创建=%d 2D绘制=%d 2D容器=%s")
+            :format(status.renderer, status.overlayCreates, status.overlayDraws, tostring(status.overlayParent)))
     end})
     tab:AddParagraph({ Title = "视觉刷新节流",
-        Content = "由 Roblox BillboardGui 引擎直接跟随目标，AlwaysOnTop 透墙；脚本每秒只更新约 4 次目标状态，位置每帧由引擎渲染。复用最多 24 目标的标记，无手动 8 角投影。关闭时立即清理。" })
+        Content = "默认将目标投影到不拦截触控的 2D ScreenGui（独立于 3D Highlight 的可见性）；保留可切换的 BillboardGui 作为兼容兜底。2D 投影约 12Hz、目标文字约 3Hz，最多 24 个，关闭立即清理。" })
 
     local movement = c.Tabs.Movement
     movement:AddToggle("BloxThirdPerson", {Title = "第三人称视角", Default = false,
@@ -3711,28 +4150,74 @@ window:InstallSettings(tabs.Settings)
 -- Team folder cache: the old code re-walked Workspace.Characters twice per
 -- player per frame. One 250ms map rebuild serves every caller.
 --=========================================================================
-local folderCache = { at = 0, map = {} }
+local folderCache = { at = 0, map = {}, roster = {}, npcs = 0 }
+local npcByModel = setmetatable({}, {__mode="k"})
 local function rebuildFolderMap()
-    folderCache.map = {}
-    local root=Workspace:FindFirstChild("Characters")
+    local map = {}
+    local roster = Players:GetPlayers()
+    local root = Workspace:FindFirstChild("Characters")
+    local count = 0
     if root then
-        for _,name in ipairs({"Terrorists","Counter-Terrorists"}) do
-            local folder=root:FindFirstChild(name)
-            if folder then
-                for _,child in ipairs(folder:GetChildren()) do
-                    folderCache.map[child.Name]=folder
+        local function visit(model, folder)
+            if not model:IsA("Model") then return end
+            map[model.Name] = folder
+            local owner = Players:FindFirstChild(model.Name)
+            if owner and not owner:IsA("Player") then owner = nil end
+            if not owner then
+                local ok, player = pcall(function() return Players:GetPlayerFromCharacter(model) end)
+                if ok then owner = player end
+            end
+            if not owner then
+                local id = model:GetAttribute("UserId") or model:GetAttribute("PlayerUserId")
+                if type(id) == "number" and id > 0 then
+                    local ok, player = pcall(function() return Players:GetPlayerByUserId(id) end)
+                    if ok then owner = player end
+                end
+            end
+            if owner then return end
+            -- The latest BloxStrike rounds may add bots as bare Models under
+            -- Workspace.Characters; Players:GetPlayers() omits these actors.
+            local proxy = npcByModel[model]
+            if not proxy then
+                proxy = {IsVortexionNPC=true, Name=model.Name, DisplayName=model.Name, Character=model}
+                function proxy:GetAttribute(key) return self.Character:GetAttribute(key) end
+                npcByModel[model] = proxy
+            end
+            proxy.Parent = model.Parent
+            proxy.TeamFolder = folder
+            proxy.Name, proxy.DisplayName = model.Name, model.Name
+            roster[#roster + 1] = proxy
+            count = count + 1
+        end
+        for _, container in ipairs(root:GetChildren()) do
+            if container:IsA("Model") then
+                visit(container, root)
+            elseif container:IsA("Folder") then
+                for _, model in ipairs(container:GetChildren()) do
+                    visit(model, container)
                 end
             end
         end
     end
+    folderCache.map, folderCache.roster, folderCache.npcs = map, roster, count
     folderCache.at = tick()
 end
-local function teamFolder(player)
+local function ensureRoster()
     if tick()-folderCache.at > 0.25 then rebuildFolderMap() end
+end
+local function targets()
+    ensureRoster()
+    return folderCache.roster
+end
+local function teamFolder(player)
+    if not player then return nil end
+    ensureRoster()
+    if player.IsVortexionNPC then return player.TeamFolder end
     return folderCache.map[player.Name]
 end
 local function characterOf(player)
     if not player then return LocalPlayer and LocalPlayer.Character end
+    if player.IsVortexionNPC then return player.Character end
     local team=teamFolder(player)
     local candidate=team and team:FindFirstChild(player.Name)
     if candidate and candidate:IsA("Model") then return candidate end
@@ -3802,7 +4287,8 @@ local function playerFromModel(model)
     if not model then return nil end
     local byName=Players:FindFirstChild(model.Name)
     if byName and byName:IsA("Player") then return byName end
-    return Players:GetPlayerFromCharacter(model)
+    local player = Players:GetPlayerFromCharacter(model)
+    return player or npcByModel[model]
 end
 
 local ctx={
@@ -3811,7 +4297,7 @@ local ctx={
     LocalPlayer=LocalPlayer,UI=ui,Window=window,Tabs=tabs,
     Notify=notify,IsCurrent=isCurrent,Own=ownConnection,OnCleanup=ownCleanup,
     Character=characterOf,Living=livingCharacter,TeamFolder=teamFolder,
-    Enemy=isEnemy,PlayerFromModel=playerFromModel,
+    Enemy=isEnemy,PlayerFromModel=playerFromModel,Targets=targets,
 }
 
 --=========================================================================
@@ -3884,9 +4370,9 @@ if type(ui.RegisterFeatureHealth) == "function" then
         local visual = common.Visual
         local snapshot = visual and type(visual.Status) == "function" and visual:Status() or {}
         local combat = common.Combat and type(common.Combat.DebugSnapshot) == "function" and common.Combat:DebugSnapshot() or {}
-        return ("存活=%s 战斗=%s 子弹=%s 视觉=%s 失败=%d 阵营=%d 目标=%d ESP=%d/%d/%.0f 倍镜=%s")
+        return ("存活=%s 战斗=%s 子弹=%s 视觉=%s 失败=%d NPC=%d 目标=%d ESP=%d/%d/%.0f 倍镜=%s")
             :format(tostring(isCurrent()), status("Combat"), status("Bullet"), status("Visual"),
-                #bootFailures, (function() local n=0; for _ in pairs(folderCache.map) do n = n + 1 end; return n end)(),
+                #bootFailures, (function() ensureRoster(); return folderCache.npcs end)(),
                 tonumber(combat.candidates) or 0, tonumber(snapshot.markers) or 0,
                 tonumber(snapshot.scanned) or 0, tonumber(snapshot.refreshes) or 0,
                 tostring(snapshot.thirdPerson or false))

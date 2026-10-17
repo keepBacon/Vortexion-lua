@@ -121,28 +121,74 @@ window:InstallSettings(tabs.Settings)
 -- Team folder cache: the old code re-walked Workspace.Characters twice per
 -- player per frame. One 250ms map rebuild serves every caller.
 --=========================================================================
-local folderCache = { at = 0, map = {} }
+local folderCache = { at = 0, map = {}, roster = {}, npcs = 0 }
+local npcByModel = setmetatable({}, {__mode="k"})
 local function rebuildFolderMap()
-    folderCache.map = {}
-    local root=Workspace:FindFirstChild("Characters")
+    local map = {}
+    local roster = Players:GetPlayers()
+    local root = Workspace:FindFirstChild("Characters")
+    local count = 0
     if root then
-        for _,name in ipairs({"Terrorists","Counter-Terrorists"}) do
-            local folder=root:FindFirstChild(name)
-            if folder then
-                for _,child in ipairs(folder:GetChildren()) do
-                    folderCache.map[child.Name]=folder
+        local function visit(model, folder)
+            if not model:IsA("Model") then return end
+            map[model.Name] = folder
+            local owner = Players:FindFirstChild(model.Name)
+            if owner and not owner:IsA("Player") then owner = nil end
+            if not owner then
+                local ok, player = pcall(function() return Players:GetPlayerFromCharacter(model) end)
+                if ok then owner = player end
+            end
+            if not owner then
+                local id = model:GetAttribute("UserId") or model:GetAttribute("PlayerUserId")
+                if type(id) == "number" and id > 0 then
+                    local ok, player = pcall(function() return Players:GetPlayerByUserId(id) end)
+                    if ok then owner = player end
+                end
+            end
+            if owner then return end
+            -- The latest BloxStrike rounds may add bots as bare Models under
+            -- Workspace.Characters; Players:GetPlayers() omits these actors.
+            local proxy = npcByModel[model]
+            if not proxy then
+                proxy = {IsVortexionNPC=true, Name=model.Name, DisplayName=model.Name, Character=model}
+                function proxy:GetAttribute(key) return self.Character:GetAttribute(key) end
+                npcByModel[model] = proxy
+            end
+            proxy.Parent = model.Parent
+            proxy.TeamFolder = folder
+            proxy.Name, proxy.DisplayName = model.Name, model.Name
+            roster[#roster + 1] = proxy
+            count = count + 1
+        end
+        for _, container in ipairs(root:GetChildren()) do
+            if container:IsA("Model") then
+                visit(container, root)
+            elseif container:IsA("Folder") then
+                for _, model in ipairs(container:GetChildren()) do
+                    visit(model, container)
                 end
             end
         end
     end
+    folderCache.map, folderCache.roster, folderCache.npcs = map, roster, count
     folderCache.at = tick()
 end
-local function teamFolder(player)
+local function ensureRoster()
     if tick()-folderCache.at > 0.25 then rebuildFolderMap() end
+end
+local function targets()
+    ensureRoster()
+    return folderCache.roster
+end
+local function teamFolder(player)
+    if not player then return nil end
+    ensureRoster()
+    if player.IsVortexionNPC then return player.TeamFolder end
     return folderCache.map[player.Name]
 end
 local function characterOf(player)
     if not player then return LocalPlayer and LocalPlayer.Character end
+    if player.IsVortexionNPC then return player.Character end
     local team=teamFolder(player)
     local candidate=team and team:FindFirstChild(player.Name)
     if candidate and candidate:IsA("Model") then return candidate end
@@ -212,7 +258,8 @@ local function playerFromModel(model)
     if not model then return nil end
     local byName=Players:FindFirstChild(model.Name)
     if byName and byName:IsA("Player") then return byName end
-    return Players:GetPlayerFromCharacter(model)
+    local player = Players:GetPlayerFromCharacter(model)
+    return player or npcByModel[model]
 end
 
 local ctx={
@@ -221,7 +268,7 @@ local ctx={
     LocalPlayer=LocalPlayer,UI=ui,Window=window,Tabs=tabs,
     Notify=notify,IsCurrent=isCurrent,Own=ownConnection,OnCleanup=ownCleanup,
     Character=characterOf,Living=livingCharacter,TeamFolder=teamFolder,
-    Enemy=isEnemy,PlayerFromModel=playerFromModel,
+    Enemy=isEnemy,PlayerFromModel=playerFromModel,Targets=targets,
 }
 
 --=========================================================================
@@ -294,9 +341,9 @@ if type(ui.RegisterFeatureHealth) == "function" then
         local visual = common.Visual
         local snapshot = visual and type(visual.Status) == "function" and visual:Status() or {}
         local combat = common.Combat and type(common.Combat.DebugSnapshot) == "function" and common.Combat:DebugSnapshot() or {}
-        return ("存活=%s 战斗=%s 子弹=%s 视觉=%s 失败=%d 阵营=%d 目标=%d ESP=%d/%d/%.0f 倍镜=%s")
+        return ("存活=%s 战斗=%s 子弹=%s 视觉=%s 失败=%d NPC=%d 目标=%d ESP=%d/%d/%.0f 倍镜=%s")
             :format(tostring(isCurrent()), status("Combat"), status("Bullet"), status("Visual"),
-                #bootFailures, (function() local n=0; for _ in pairs(folderCache.map) do n = n + 1 end; return n end)(),
+                #bootFailures, (function() ensureRoster(); return folderCache.npcs end)(),
                 tonumber(combat.candidates) or 0, tonumber(snapshot.markers) or 0,
                 tonumber(snapshot.scanned) or 0, tonumber(snapshot.refreshes) or 0,
                 tostring(snapshot.thirdPerson or false))

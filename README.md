@@ -1,3 +1,11 @@
+# R221 · Neverlose UI（移动端兼容版）
+
+**当前最新构建已改为 Neverlose UI。** 首选入口 `dist/Vortexion_Neverlose.lua`；旧 `dist/Vortexion_Wind.lua` 仍为同内容兼容别名。移动端单列、自动视口布局、触控优先、关闭重开、动态选项桥接与 Neverlose UI 调试已加入。原 Forsaken / BloxStrike / AOTR / SCP 游戏业务模块未修改。
+
+完整说明、安卓触控验收清单、改动范围、验证边界见 **`docs/R221_NEVERLOSE_MOBILE.md`**。本轮已通过新适配器离线 mock 专项；没有 Android 真机或官方 Luau 编译器结果，不能用历史 WindUI 回归数据代表 Neverlose 运行结果。以下段落保留 R220 及以前的历史记录，包含旧 WindUI 入口、旧哈希和旧 UI 说明，均**不代表本轮最新交付**。
+
+---
+
 # Vortexion R2.8 — Forsaken 功能扩充（2026-10-17）
 
 新增七项 Forsaken 可选功能：无限体力、反减速、反塔夫亚空间炸弹（本地视觉抑制）、自动关闭 1x1x1x1 弹窗、移动倍率（1–2）、自动修发电机、修理间隔（2.5–10 秒）。发电机另提供可选的自动前往功能（默认关闭）和手动重试按钮。

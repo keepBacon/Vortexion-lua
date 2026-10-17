@@ -1,5 +1,5 @@
--- Vortexion WindUI - generated offline; publishing must be performed separately.
--- WindUI attribution and license are retained in vendor/WindUI/.
+-- Vortexion Neverlose - generated offline; publishing must be performed separately.
+-- Neverlose attribution is retained in vendor/Neverlose/README.md.
 -- Forsaken retains runtime model rbxassetid://132866968194043.
 -- Modify src/*.luau and run python3 build.py; do not edit this output.
 return function(kernel)

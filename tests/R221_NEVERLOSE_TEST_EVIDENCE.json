@@ -1,0 +1,89 @@
+{
+  "release": "R221 Neverlose UI Mobile",
+  "date": "2026-10-17",
+  "test_scope": "offline build, Lua5.4 adapter mock runtime, static mobile/vendor assertions and original gameplay source integrity",
+  "offline_neverlose_tests": {
+    "passed": 4,
+    "failed": 0,
+    "errors": 0
+  },
+  "generated_whitespace_tests": {
+    "passed": 1,
+    "failed": 0,
+    "errors": 0
+  },
+  "legacy_tests": {
+    "total": 148,
+    "failures": 13,
+    "errors": 2,
+    "note": "Legacy WindUI-specific assertions and missing historical source modules; these tests are not green"
+  },
+  "android_client_tested": false,
+  "roblox_studio_tested": false,
+  "luau_compiler_tested": false,
+  "git_published": false,
+  "preferred_entry": "dist/Vortexion_Neverlose.lua",
+  "bundles": {
+    "Vortexion_AOTR_Battle.lua": {
+      "bytes": 502707,
+      "sha256": "5e0cdc2bdf55ca070278dea6a8b10e40e6e7e923dec5e5d6903b35a9a7e23ac5"
+    },
+    "Vortexion_AOTR_Lobby.lua": {
+      "bytes": 428692,
+      "sha256": "52f9dc9ba499858e44445fd3adbe97a7826b3e9bb00a975a2889c77c0d85fa36"
+    },
+    "Vortexion_BloxStrike.lua": {
+      "bytes": 588665,
+      "sha256": "0043c4f58b624bd00927e54d150fc0cbaba2d75a6c274fa99fdeeeceae2e6971"
+    },
+    "Vortexion_Forsaken.lua": {
+      "bytes": 496332,
+      "sha256": "4d61d5a140160e1aaeae1f8f400aa6b0ff939ec059911bd56dc05489a8ca12b2"
+    },
+    "Vortexion_Neverlose.lua": {
+      "bytes": 932122,
+      "sha256": "0fb9475d1a57c936d562ea7477595dd4ecfd25a8b082ad1c254141f3e3b38f0d"
+    },
+    "Vortexion_SCP.lua": {
+      "bytes": 531274,
+      "sha256": "20161c2cc6780ef71ad9c77f947b8bc5612285859fb7626e9016ba17a4c0ae65"
+    },
+    "Vortexion_Wind.lua": {
+      "bytes": 932122,
+      "sha256": "0fb9475d1a57c936d562ea7477595dd4ecfd25a8b082ad1c254141f3e3b38f0d"
+    }
+  },
+  "modules": {
+    "Vortexion_Core.lua": {
+      "bytes": 403963,
+      "path": "dist/Vortexion_Core.lua",
+      "sha256": "ccdccc67bbefdaf537039baf16378b2888470c194dd8bef425654cead52e68f1"
+    },
+    "Vortexion_Module_AOTR_Battle.lua": {
+      "bytes": 99397,
+      "path": "dist/Vortexion_Module_AOTR_Battle.lua",
+      "sha256": "b2cb131451a9402258ce7224e03bec3cf8df4778b79aeda2b645e8353c7262d3"
+    },
+    "Vortexion_Module_AOTR_Lobby.lua": {
+      "bytes": 25382,
+      "path": "dist/Vortexion_Module_AOTR_Lobby.lua",
+      "sha256": "769b4a03c2d57f1100123a6a95ab5fca4dbebc52726aa13f39713c59cb21d343"
+    },
+    "Vortexion_Module_BloxStrike.lua": {
+      "bytes": 185355,
+      "path": "dist/Vortexion_Module_BloxStrike.lua",
+      "sha256": "11b991d951dd104891ff6373ecb95a737bf7e1888b5dc7ab3aa317b14d4ddbd8"
+    },
+    "Vortexion_Module_Forsaken.lua": {
+      "bytes": 93022,
+      "path": "dist/Vortexion_Module_Forsaken.lua",
+      "sha256": "989eb5d397f8afcf28208d183a5c25733ba358c11f231026580531f59dabba8c"
+    },
+    "Vortexion_Module_SCP.lua": {
+      "bytes": 127964,
+      "path": "dist/Vortexion_Module_SCP.lua",
+      "sha256": "f158314c842db038f2c129288a5c335e8626e0a2a9cf8d68a7bacc96a20ed7fc"
+    }
+  },
+  "vendor_sha256": "7fb21c08c43906e5bcc86356b62f396f6be8bb29287fa95eedaa87bb5c289fca"
+}

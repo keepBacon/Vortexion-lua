@@ -1,36 +1,36 @@
 {
-  "build_tag": "loader-v2-modular-r2.20-blox-runtime-probe-esp-hysteresis",
+  "build_tag": "loader-v2-modular-r2.22-neverlose-mobile",
   "core": {
-    "bytes": 1476436,
+    "bytes": 403963,
     "path": "dist/Vortexion_Core.lua",
-    "sha256": "a7099fd571f05f7ec909e1da0c1c2198291b47c39b7a1a56f6dd84d21747f41b"
+    "sha256": "ccdccc67bbefdaf537039baf16378b2888470c194dd8bef425654cead52e68f1"
   },
   "fallback": "standalone-bundle-manual-only",
   "modules": {
     "AOTR_Battle": {
-      "bytes": 99392,
+      "bytes": 99397,
       "path": "dist/Vortexion_Module_AOTR_Battle.lua",
-      "sha256": "df94ed1675cb38063327f786d875cd4922d96359a095b3a644c885d3b46e5ea2"
+      "sha256": "b2cb131451a9402258ce7224e03bec3cf8df4778b79aeda2b645e8353c7262d3"
     },
     "AOTR_Lobby": {
-      "bytes": 25377,
+      "bytes": 25382,
       "path": "dist/Vortexion_Module_AOTR_Lobby.lua",
-      "sha256": "84a6fc1465708a87ae48157c07b9b922260134ec6235369db3db5d2fd926ed03"
+      "sha256": "769b4a03c2d57f1100123a6a95ab5fca4dbebc52726aa13f39713c59cb21d343"
     },
     "BloxStrike": {
-      "bytes": 185350,
+      "bytes": 209882,
       "path": "dist/Vortexion_Module_BloxStrike.lua",
-      "sha256": "367d5c604e8d497a027fc79f0113a343967d12cc6671bb0b1a67204e952bb959"
+      "sha256": "7cccd10d40d6e8b8162cc8ec14100f79980f9ff4b5e8b3886a062901dfb802de"
     },
     "Forsaken": {
-      "bytes": 93017,
+      "bytes": 93022,
       "path": "dist/Vortexion_Module_Forsaken.lua",
-      "sha256": "36b888b983e3397439fe6a20320055732d422bb5b60934192a09f3498607d204"
+      "sha256": "989eb5d397f8afcf28208d183a5c25733ba358c11f231026580531f59dabba8c"
     },
     "SCP": {
-      "bytes": 127959,
+      "bytes": 127964,
       "path": "dist/Vortexion_Module_SCP.lua",
-      "sha256": "ef387b1c12ef1810a8ba82b181675447cfe9c6280e66c7ab1929793908748a9a"
+      "sha256": "f158314c842db038f2c129288a5c335e8626e0a2a9cf8d68a7bacc96a20ed7fc"
     }
   },
   "routes": {

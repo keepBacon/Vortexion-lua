@@ -39,7 +39,7 @@ local c={Living=function(player) if player==enemy then return model,vital end en
 local Config={ESPWorldHighlight=false,ESPOverlay=true,ESPEnabled=true,ESPTeam=true,ESPDistance=500,
  ESPNames=true,ESPHealth=true,ESPRange=true,ESPWeapon=true,ESPBox=true,ESPTracer=false}
 local LocalPlayer=localPlayer
-local Enum={HighlightDepthMode={AlwaysOnTop='AlwaysOnTop'},RaycastFilterType={Exclude='Exclude'}}
+local Enum={HighlightDepthMode={AlwaysOnTop='AlwaysOnTop'},RaycastFilterType={Exclude='Exclude'},ApplyStrokeMode={Border='Border'}}
 local RaycastParams={new=function()return {} end}
 local Color3={fromRGB=function(r,g,b)return {r,g,b}end}
 local UDim2={fromScale=function()return {}end,fromOffset=function()return {}end,
