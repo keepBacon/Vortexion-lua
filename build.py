@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Build self-contained Neverlose UI bundles offline; never publishes files."""
+"""Build self-contained WindUI bundles offline; never publishes files."""
 from pathlib import Path
 import hashlib
 import json
 import re
 
 ROOT = Path(__file__).resolve().parent
-VENDOR = "vendor/Neverlose/Source.lua"
-BRIDGE = "src/NeverloseAdapter.luau"
+VENDOR = "vendor/WindUI/Source.lua"
+BRIDGE = "src/WindAdapter.luau"
 SERVER_SWITCH = "src/ServerSwitch.luau"
 ROUTER = "src/GameRouter.luau"
 MONITOR = "src/RuntimeMonitor.luau"
@@ -48,8 +48,8 @@ GAMES = {
 }
 
 HEADER = (
-    "-- Vortexion Neverlose - generated offline; publishing must be performed separately.\n"
-    "-- Neverlose attribution is retained in vendor/Neverlose/README.md.\n"
+    "-- Vortexion WindUI - generated offline; publishing must be performed separately.\n"
+    "-- WindUI attribution and license are retained in vendor/WindUI/.\n"
     "-- Forsaken retains runtime model rbxassetid://132866968194043.\n"
     "-- Modify src/*.luau and run python3 build.py; do not edit this output.\n"
 )
@@ -139,22 +139,7 @@ def build(root=ROOT):
     if terminator and banner.startswith("--[["):
         clean_banner = "\n".join(line.rstrip(" \t") for line in banner.split("\n"))
         vendor_source = clean_banner + terminator + remainder
-    # Fixture-only builds may supply a minimal vendor/bridge without the brand
-    # module. Production builds always require the packaged local PNG factory.
-    brand_file = root / "src/VortexionLogoEmbedded.lua"
-    brand_source = read("src/VortexionLogoEmbedded.lua") if brand_file.is_file() else (
-        'local VortexionLogoAssetFactory = function() return nil,"asset unavailable" end\n'
-    )
-    # Historical fixture builders omit the production emergency GUI. Preserve
-    # their minimal compilation contract without weakening production builds.
-    emergency_file = root / "src/NeverloseEmergency.luau"
-    if root == ROOT and not emergency_file.is_file():
-        raise FileNotFoundError("Production emergency GUI missing")
-    emergency_source = read("src/NeverloseEmergency.luau") if emergency_file.is_file() else (
-        "return function() error('Emergency GUI was not included in this test fixture') end\n"
-    )
-    shared = HEADER + PRELOAD + embed("WindUI", vendor_source) + brand_source + "\n"
-    shared += embed("EmergencyWindowFactory", emergency_source)
+    shared = HEADER + PRELOAD + embed("WindUI", patch_vendor_text_compat(vendor_source))
     # Adapter closures must capture the already-declared server controller factory.
     for name, path in (("ServerSwitchFactory", SERVER_SWITCH), ("RuntimeMonitorFactory", MONITOR), ("WindBridgeFactory", BRIDGE)):
         source = read(path)
@@ -196,7 +181,7 @@ def build(root=ROOT):
         "return GameRouter.Run(WindUI, WindBridgeFactory, entry, game.GameId, game.PlaceId, reason)\n"
     )
     outputs["Vortexion_Wind.lua"] = unified
-    outputs["Vortexion_Neverlose.lua"] = unified  # preferred Neverlose name, old route alias retained
+    outputs["Vortexion_Neverlose.lua"] = unified  # legacy URL alias: embeds WindUI, never Neverlose
 
     # V2 runtime bundles: isolate UI / common services from game code.
     # Loader retrieves the shared core and only the current game's module.
@@ -250,7 +235,7 @@ def build(root=ROOT):
         raise ValueError("AOTR universe mismatch")
     runtime_manifest = {
         "schema": 2,
-        "build_tag": "r232-loader-v2-scp-hitbox-adapter",
+        "build_tag": "r233-loader-v2-wind-blox-esp-rebuild",
         "core": modular_bundles["Vortexion_Core.lua"],
         "modules": {name: modular_bundles["Vortexion_Module_" + name + ".lua"] for name in GAMES},
         "routes": routes,
@@ -261,18 +246,18 @@ def build(root=ROOT):
     )
 
     manifest = {
-        "project_name": "Vortexion Neverlose",
-        "build_tag": "neverlose-mobile-r232",
+        "project_name": "Vortexion WindUI",
+        "build_tag": "wind-restored-r233",
         "status": "local_build_unpublished",
         "publication": "not_published_to_github",
         "repository": "keepBacon/Vortexion-lua",
         "vendor_path": VENDOR,
         "vendor_sha256": source_hashes[VENDOR],
-        "neverlose_source_sha256": source_hashes[VENDOR],
+        "windui_source_sha256": source_hashes[VENDOR],
         "sources": {path: source_hashes[path] for path in sorted(sources)},
         "bundles": bundles,
         "outputs": sorted(bundles),
-        "unified_entry": "dist/Vortexion_Neverlose.lua",
+        "unified_entry": "dist/Vortexion_Wind.lua",
         "roblox_android_tested": False,
         "luau_compiler_tested": False,
         "old_repo_touched": False,

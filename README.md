@@ -1,3 +1,13 @@
+# Vortexion R233 — WindUI 恢复 / BloxStrike ESP 可观测修复
+
+**当前构建**：全部五个游戏模块统一使用用户上传的 WindUI v1.6.66，构建依赖为 `vendor/WindUI/Source.lua` 和 `src/WindAdapter.luau`。`dist/Vortexion_Wind.lua` 是正式统一入口；保留 `Vortexion_Neverlose.lua` 路径仅为旧调用兼容，其内容同样为 WindUI，**不再加载 Neverlose**。
+
+BloxStrike ESP 修复了 2D 失败回退中诊断对象的局部作用域错误，并将 2D 屏幕盒子、BillboardGui 和必要时的 Highlight 兜底统一处理；新增角色缺失、阵营过滤、距离过滤、GUI 挂载和绘制统计。视觉分页内新增“复制完整 ESP 运行诊断”和独立“ESP 画面自检”，并提供只读 `src/BloxStrikeESPProbe.lua`。详见 `docs/R233_WINDUI_BLOX_ESP.md`。
+
+**验证边界**：未做安卓 Roblox 实机测试，不能从模拟测试推断服务器当前角色结构与实际屏幕显示。以下 R232 及以前章节为历史归档，不代表活动 UI。
+
+---
+
 ## R229 启动兼容修复（2026-10-17）
 
 Neverlose 原生窗口创建失败时自动尝试双列兼容界面，记录完整原生异常；Loader 和路由保留原始失败原因，不会把部分 UI 初始化误判为功能正常。详见 `docs/R229_STARTUP_RECOVERY.md`。未完成 Android Roblox 实机验证。

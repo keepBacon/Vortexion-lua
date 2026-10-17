@@ -1,6 +1,6 @@
 -- Vortexion Loader V2.1 / modular routing and diagnostic bootstrap.
 -- Keep V1 standalone fallback available for controlled compatibility tests.
-local VERSION = "2.21.0-r232-scp-hitbox-fix"
+local VERSION = "2.22.0-r233-wind-blox-esp"
 local DEFAULT_BASE = "https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/"
 local LEGACY_BUNDLE = "dist/Vortexion_Wind.lua"
 local MANIFEST_PATH = "dist/runtime-manifest.json"
@@ -426,7 +426,7 @@ local function run()
                 if state.cancelled then return end
                 stage("compile-module", "编译游戏模块")
                 entry = compileSource(source, "Module")
-                stage("runtime", "初始化 " .. route .. " 模块与 Neverlose UI")
+                stage("runtime", "初始化 " .. route .. " 模块与 WindUI")
                 local okModule, moduleFactory = xpcall(entry, traceError)
                 if not okModule or type(moduleFactory) ~= "function" then
                     error("Module factory invalid: " .. stringify(moduleFactory))
@@ -478,7 +478,7 @@ local function run()
         if not validWindow then
             local original = env.VortexionBootError or bridge.BootError
                 or bridge.LastError or env.VortexionNativeUIError
-            error("Neverlose bridge active but no valid window. Root cause: "
+            error("WindUI bridge active but no valid window. Root cause: "
                 .. tostring(original or "not captured; check executor console"))
         end
         local partial = bridge.BootStatus == "partial"

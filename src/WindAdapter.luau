@@ -3,7 +3,7 @@ return function(WindUI, config)
     config = config or {}
     assert(WindUI and type(WindUI.CreateWindow) == "function", "WindUI missing")
     local env = config.Env or (getgenv and getgenv()) or _G
-    local bridge = {Options = {}, Tabs = {}, GameTabs = {}, Library = WindUI, GUI = WindUI.ScreenGui, Active = true, Trace = false}
+    local bridge = {Options = {}, Tabs = {}, GameTabs = {}, Library = WindUI, GUI = WindUI.ScreenGui, Active = true, UIBackend = "WindUI", Trace = false}
     local connections, destroyCallbacks = {}, {}
     local healthProviders = {} -- declared before cleanup, same scope for all lifecycle closures
     local native, windowHandle

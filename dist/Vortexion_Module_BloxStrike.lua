@@ -1,5 +1,5 @@
--- Vortexion Neverlose - generated offline; publishing must be performed separately.
--- Neverlose attribution is retained in vendor/Neverlose/README.md.
+-- Vortexion WindUI - generated offline; publishing must be performed separately.
+-- WindUI attribution and license are retained in vendor/WindUI/.
 -- Forsaken retains runtime model rbxassetid://132866968194043.
 -- Modify src/*.luau and run python3 build.py; do not edit this output.
 return function(kernel)
@@ -2485,7 +2485,7 @@ return function(c)
         ESPHealth = true,
         ESPRange = true,
         ESPVisibility = false, -- optional visibility tint: rays are OFF by default
-        ESPWorldHighlight = false, -- optional 3D GPU highlight; native billboard is default
+        ESPWorldHighlight = false, -- optional 3D GPU highlight; used as fallback if 2D is unavailable
         ESPWeapon = true,
         ESPBox = true,
         ESPTracer = false,
@@ -2512,6 +2512,13 @@ return function(c)
     local overlayGui
     local overlayCreates = 0
     local overlayDraws = 0
+    -- Declare the diagnostics table BEFORE any rendering closures capture it.
+    -- R232 defined this table after projectOverlay(), making espStats global/nil
+    -- inside the fallback branch on real Luau runtimes.
+    local espStats = {refreshes=0, scanned=0, eligible=0, markers=0,
+        noHumanoid=0, noModel=0, noRoot=0, teamFiltered=0,
+        rangeFiltered=0, guiFailed=0, rendered2D=0, fallback3D=0,
+        creates=0, writes=0, lastError="none"}
     local function ensureOverlay()
         if overlayGui and overlayGui.Parent then return overlayGui end
         local parent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
@@ -2595,8 +2602,8 @@ return function(c)
         -- removed valid targets. Cull by depth and the actual box instead.
         if a.Z <= 0 or b.Z <= 0 or middle.Z <= 0 then
             entry.overlay.Visible = false
-            entry.gui.Enabled = false
-            return
+            entry.gui.Enabled = Config.ESPEnabled
+            return false
         end
         local rawTop, rawBottom = math.min(a.Y, b.Y), math.max(a.Y, b.Y)
         local vw, vh = camera.ViewportSize.X, camera.ViewportSize.Y
@@ -2605,8 +2612,8 @@ return function(c)
         local rawLeft = (a.X + b.X - rawWidth) * 0.5
         if not inView and (rawBottom < 0 or rawTop > vh or rawLeft > vw or rawLeft + rawWidth < 0) then
             entry.overlay.Visible = false
-            entry.gui.Enabled = false
-            return
+            entry.gui.Enabled = Config.ESPEnabled
+            return false
         end
         local topY = math.clamp(rawTop, 0, vh)
         local bottomY = math.clamp(rawBottom, 0, vh)
@@ -2622,12 +2629,12 @@ return function(c)
         entry.overlayStroke.Color = entry.stroke.Color
         entry.overlayText.TextColor3 = entry.stroke.Color
         overlayDraws += 1
+        espStats.rendered2D += 1
+        return true
     end
     local function hideOverlay(entry)
         if entry and entry.overlay then entry.overlay.Visible = false end
     end
-    local espStats = {refreshes=0, scanned=0, eligible=0, markers=0,
-        noHumanoid=0, creates=0, writes=0, lastError="none"}
     local MAX_ESP_TARGETS = 24
     local ESP_GRACE_SECONDS = 1.25
     -- Distances are hysteretic: existing labels survive small camera offsets.
@@ -2773,6 +2780,9 @@ return function(c)
     local function updateESP()
         if not Config.ESPEnabled then clearESP(); return end
         espStats.scanned, espStats.eligible, espStats.noHumanoid = 0, 0, 0
+        espStats.noModel, espStats.noRoot, espStats.teamFiltered = 0, 0, 0
+        espStats.rangeFiltered, espStats.guiFailed = 0, 0
+        espStats.rendered2D, espStats.fallback3D = 0, 0
         local camera = Workspace.CurrentCamera
         local parent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
         if not parent and type(c.GetGuiParent) == "function" then
@@ -2786,7 +2796,14 @@ return function(c)
         local now = os.clock()
         local left = MAX_ESP_TARGETS
         local origin = camera.CFrame.Position
-        for _, player in ipairs(type(c.Targets) == "function" and c.Targets() or Players:GetPlayers()) do
+        local rosterOK, roster = pcall(function()
+            return type(c.Targets) == "function" and c.Targets() or Players:GetPlayers()
+        end)
+        if not rosterOK or type(roster) ~= "table" then
+            espStats.lastError = "target roster failure: " .. tostring(roster):sub(1, 160)
+            roster = Players:GetPlayers()
+        end
+        for _, player in ipairs(roster) do
             if player ~= LocalPlayer then
                 espStats.scanned += 1
                 local model, vitals = c.Living(player)
@@ -2798,6 +2815,10 @@ return function(c)
                 local dist = root and (root.Position - origin).Magnitude or math.huge
                 local valid = model and vitals and vitals.Health > 0 and root and permitted
                     and dist <= Config.ESPDistance + (highlights[player] and ESP_DISTANCE_SLACK or 0) and left > 0
+                if not model then espStats.noModel += 1
+                elseif not root then espStats.noRoot += 1
+                elseif not permitted then espStats.teamFiltered += 1
+                elseif dist > Config.ESPDistance then espStats.rangeFiltered += 1 end
                 local entry = highlights[player]
                 if valid then
                     left -= 1
@@ -2808,7 +2829,8 @@ return function(c)
                     end
                     if not entry then
                         entry = makeEntry(player, model, root)
-                        if entry then highlights[player] = entry end
+                        if entry then highlights[player] = entry
+                        else espStats.guiFailed += 1 end
                     end
                     if entry then
                         entry.lastSeen = now
@@ -2840,25 +2862,38 @@ return function(c)
                         entry.visibilityTinted = Config.ESPVisibility
                         -- The native Billboard alone is not reliable for all
                         -- custom rigs/mobile renderers; mirror into 2D.
-                        local projected, projectionError = pcall(projectOverlay, entry, camera)
-                        if not projected then
-                            espStats.lastError = "2D projection: " .. tostring(projectionError):sub(1, 150)
+                        local projectionOK, projectionResult = pcall(projectOverlay, entry, camera)
+                        if not projectionOK then
+                            espStats.lastError = "2D projection: " .. tostring(projectionResult):sub(1, 150)
                             hideOverlay(entry)
                             entry.gui.Enabled = Config.ESPEnabled
                         end
-                        if Config.ESPWorldHighlight then
+                        -- When screen projection is unavailable, do not turn off
+                        -- every renderer. Billboard stays on; use native Highlight
+                        -- as a secondary visible fallback (no Drawing API needed).
+                        local needsFallback = not Config.ESPOverlay
+                            or not projectionOK or projectionResult ~= true
+                        local wantHighlight = Config.ESPWorldHighlight or needsFallback
+                        if wantHighlight then
                             if not entry.highlight then
-                                local h = Instance.new("Highlight")
-                                h.Adornee = model
-                                h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                                h.FillTransparency = 0.85
-                                h.OutlineTransparency = 0.15
-                                h.Parent = model
-                                entry.highlight = h
+                                local okHighlight, h = pcall(function()
+                                    local item = Instance.new("Highlight")
+                                    item.Adornee = model
+                                    item.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                                    item.FillTransparency = 0.92
+                                    item.OutlineTransparency = 0.05
+                                    item.Parent = model
+                                    return item
+                                end)
+                                if okHighlight then entry.highlight = h
+                                else espStats.lastError = "Highlight: " .. tostring(h):sub(1, 150) end
+                            end
+                            if entry.highlight then
+                                entry.highlight.Enabled = true
+                                espStats.fallback3D += 1
                             end
                         elseif entry.highlight then
-                            entry.highlight:Destroy()
-                            entry.highlight = nil
+                            entry.highlight.Enabled = false
                         end
                         if Config.ESPTracer and c.HasDrawing then
                             if not entry.tracer then
@@ -3233,7 +3268,11 @@ return function(c)
         return {
             markers = espStats.markers, scanned = espStats.scanned,
             eligible = espStats.eligible, refreshes = espStats.refreshes,
-            noHumanoid = espStats.noHumanoid, error = espStats.lastError,
+            noHumanoid = espStats.noHumanoid, noModel = espStats.noModel,
+            noRoot = espStats.noRoot, teamFiltered = espStats.teamFiltered,
+            rangeFiltered = espStats.rangeFiltered, guiFailed = espStats.guiFailed,
+            rendered2D = espStats.rendered2D, fallback3D = espStats.fallback3D,
+            error = espStats.lastError,
             creates = espStats.creates, writes = espStats.writes,
             renderer = Config.ESPOverlay and "Viewport2D+BillboardFallback" or "NativeBillboard",
             overlayCreates = overlayCreates, overlayDraws = overlayDraws,
@@ -3242,6 +3281,51 @@ return function(c)
             thirdPerson = thirdPerson.enabled, thirdOverrides = thirdPerson.overrides,
         }
     end
+    -- Read-only evidence for Android executors: tells us whether the blocker is
+    -- roster discovery, health/team metadata, viewport, or GUI rendering.
+    function Config:DiagnosticText()
+        local state = self:Status()
+        local lines = {
+            "[Vortexion R233 / BloxStrike ESP diagnostic]",
+            "GameId=" .. tostring(game.GameId) .. " PlaceId=" .. tostring(game.PlaceId),
+            "Enabled=" .. tostring(self.ESPEnabled) .. " TeamOnly=" .. tostring(self.ESPTeam)
+                .. " 2D=" .. tostring(self.ESPOverlay) .. " Range=" .. tostring(self.ESPDistance),
+            ("scanned=%d eligible=%d markers=%d 2dVisible=%d nativeFallback=%d"):format(
+                state.scanned, state.eligible, state.markers, state.rendered2D, state.fallback3D),
+            ("noModel=%d noRoot=%d teamFiltered=%d rangeFiltered=%d guiFailed=%d"):format(
+                state.noModel, state.noRoot, state.teamFiltered, state.rangeFiltered, state.guiFailed),
+            "Camera=" .. tostring(Workspace.CurrentCamera ~= nil) .. " ScreenGui="
+                .. tostring(state.overlayParent) .. " lastError=" .. tostring(state.error),
+        }
+        local ok, roster = pcall(function() return type(c.Targets) == "function" and c.Targets() or Players:GetPlayers() end)
+        if not ok or type(roster) ~= "table" then
+            lines[#lines + 1] = "roster failed: " .. tostring(roster)
+        else
+            lines[#lines + 1] = "rosterCount=" .. tostring(#roster)
+            for i, actor in ipairs(roster) do
+                if i > 6 then break end
+                local okActor, info = pcall(function()
+                    local model, vitals = c.Living(actor)
+                    local root = model and renderRoot(model)
+                    local team = type(c.TeamOf) == "function" and c.TeamOf(actor) or nil
+                    local hostile = type(c.Enemy) == "function" and c.Enemy(actor, true) or nil
+                    return tostring(actor.Name or "?") .. " model=" .. tostring(model and model.Name or "nil")
+                        .. " part=" .. tostring(root and root.Name or "nil") .. " team=" .. tostring(team)
+                        .. " enemy=" .. tostring(hostile) .. " hp=" .. tostring(vitals and vitals.Health or "nil")
+                end)
+                lines[#lines + 1] = okActor and info or ("actorError=" .. tostring(info))
+            end
+        end
+        return table.concat(lines, "\n")
+    end
+    local sharedEnv = (getgenv and getgenv()) or _G
+    local diagnose = function() return Config:DiagnosticText() end
+    sharedEnv.VortexionBloxESPDiagnostics = diagnose
+    c.OnCleanup(function()
+        if sharedEnv.VortexionBloxESPDiagnostics == diagnose then
+            sharedEnv.VortexionBloxESPDiagnostics = nil
+        end
+    end)
     function Config.ESPRefreshCount() return espRefreshes end
     function Config.ESPInterval() return espInterval end
 
@@ -3286,10 +3370,48 @@ return function(c)
                 status.noHumanoid, status.markers, status.refreshes, status.error))
         print(("[Vortexion/BloxESP] 渲染=%s 2D创建=%d 2D绘制=%d 2D容器=%s")
             :format(status.renderer, status.overlayCreates, status.overlayDraws, tostring(status.overlayParent)))
+        print(("[Vortexion/BloxESP] 无模型=%d 无根部件=%d 阵营过滤=%d 距离过滤=%d GUI失败=%d 可见2D=%d 3D回退=%d")
+            :format(status.noModel, status.noRoot, status.teamFiltered, status.rangeFiltered,
+                status.guiFailed, status.rendered2D, status.fallback3D))
         if c.Notify then
             c.Notify("ESP 诊断", ("扫描 %d / 合格 %d / 标记 %d / 绘制 %d / %s"):
                 format(status.scanned, status.eligible, status.markers, status.overlayDraws, tostring(status.error)))
         end
+    end})
+    tab:AddButton({Title = "复制完整 ESP 运行诊断", Callback = function()
+        local report = Config:DiagnosticText()
+        print(report)
+        if type(setclipboard) == "function" then
+            local ok = pcall(setclipboard, report)
+            if c.Notify then c.Notify("ESP 诊断", ok and "已复制到剪贴板" or "复制失败，见执行器日志") end
+        elseif c.Notify then
+            c.Notify("ESP 诊断", "执行器不支持剪贴板，请复制控制台的 Vortexion 诊断")
+        end
+    end})
+    tab:AddButton({Title = "ESP 画面自检（独立于敌人识别）", Callback = function()
+        local screen = ensureOverlay()
+        if not screen then
+            espStats.lastError = "ESP 自检无法挂载 ScreenGui: PlayerGui unavailable"
+            if c.Notify then c.Notify("ESP 自检", espStats.lastError) end
+            return
+        end
+        local testFrame = Instance.new("Frame")
+        testFrame.Name = "VortexionESPProbe"
+        testFrame.Position = UDim2.fromOffset(54, 90)
+        testFrame.Size = UDim2.fromOffset(110, 160)
+        testFrame.BackgroundTransparency = 0.85
+        testFrame.BackgroundColor3 = Color3.fromRGB(63, 215, 173)
+        testFrame.BorderSizePixel = 2
+        testFrame.BorderColor3 = Color3.fromRGB(63, 215, 173)
+        testFrame.Active = false
+        testFrame.ZIndex = 150
+        testFrame.Parent = screen
+        screen.Enabled = true
+        if c.Notify then c.Notify("ESP 自检", "左上角应出现 110x160 青色测试框，持续 3 秒") end
+        task.delay(3, function()
+            pcall(function() testFrame:Destroy() end)
+            if overlayGui == screen then screen.Enabled = Config.ESPEnabled and Config.ESPOverlay end
+        end)
     end})
     tab:AddParagraph({ Title = "视觉刷新节流",
         Content = "默认将目标投影到不拦截触控的 2D ScreenGui（独立于 3D Highlight 的可见性）；保留可切换的 BillboardGui 作为兼容兜底。2D 投影约 12Hz、目标文字约 3Hz，最多 24 个，关闭立即清理。" })
