@@ -61,6 +61,8 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
     local client = (getgenv and getgenv()) or _G
     local bridge = client.VortexionWindBridge
     local summary = not ok and tostring(result):sub(1, 500) or nil
+    local failure = client.VortexionBootError
+    if failure and not summary then summary = tostring(failure):sub(1, 800) end
     local window
     if type(bridge) == "table" and bridge.Active ~= false then
         if type(bridge.Window) == "function" then
@@ -84,7 +86,8 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
     end
     if entry then
         reason = "game-initialization-incomplete"
-        summary = summary or "游戏入口提前结束，尚未创建功能界面。通用功能与 UI 设置仍可使用。"
+        summary = summary or "游戏入口提前结束，尚未创建功能界面。"
+        client.VortexionBootError = summary
         warn("[Vortexion/Wind] Game initialization: " .. summary)
     end
     if type(bridge) == "table" and type(bridge.Destroy) == "function" then
@@ -96,7 +99,9 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
         fallback.BootError = summary
         return fallback
     end
-    warn("[Vortexion/Wind] Generic UI initialization: " .. tostring(fallback))
+    client.VortexionBootError = "Generic UI fallback: " .. tostring(fallback)
+        .. (summary and ("; Original failure: " .. summary) or "")
+    warn("[Vortexion/Wind] " .. client.VortexionBootError)
     return nil
 end
 

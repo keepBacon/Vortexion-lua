@@ -40737,6 +40737,13 @@ return function(WindUI, config)
         end)
     end
     env.VortexionWindBridge = bridge
+    -- Diagnostic survives bridge cleanup: loader needs the original WindUI failure,
+    -- not the secondary "No active WindUI bridge" symptom.
+    local function recordStartupFailure(step, reason)
+        local message = "WindUI/" .. tostring(step) .. ": " .. tostring(reason)
+        env.VortexionBootError = message:sub(1, 1500)
+        warn("[Vortexion/Wind/BOOT] " .. message)
+    end
 
     function bridge:Notify(info, content, duration)
         if not self.Active then return end
@@ -41464,19 +41471,29 @@ return function(WindUI, config)
         local existingWindow = WindUI.Window
         local cancelled, acquired = false, false
         local initialized, result = pcall(function()
-            native = WindUI:CreateWindow({Title = info.Title or appName, Author = "- Vortexion", Folder = #missingFileApi == 0 and ((config.Folder or appName) .. "/" .. tostring(game.PlaceId)) or nil, Theme = config.Theme or "Dark", Size = info.Size or UDim2.fromOffset(650, 490), ToggleKey = Enum.KeyCode.K, Background = "", Acrylic = true, Transparent = false, AutoScale = false, SideBarWidth = input.TouchEnabled and 160 or 200})
+            native = WindUI:CreateWindow({Title = info.Title or appName, Author = "- Vortexion", Folder = #missingFileApi == 0 and ((config.Folder or appName) .. "/" .. tostring(game.PlaceId)) or nil, Theme = config.Theme or "Dark", Size = info.Size or UDim2.fromOffset(650, 490), ToggleKey = Enum.KeyCode.K, Background = "", Acrylic = not input.TouchEnabled, Transparent = false, AutoScale = false, SideBarWidth = input.TouchEnabled and 160 or 200})
             assert(native, "WindUI CreateWindow returned no window")
             if not self.Active then cancelled = true; return nil end
             acquired = true
             self.GUI = WindUI.ScreenGui
             native.Debug = config.Debug == true
-            WindUI:SetTheme(config.Theme or "Dark")
+            local themeOK, themeErr = pcall(function() WindUI:SetTheme(config.Theme or "Dark") end)
+            if not themeOK then
+                self.LastError = "Theme: " .. tostring(themeErr)
+                warn("[Vortexion/Wind] " .. self.LastError)
+            end
             if not originalToggleAcrylic and type(WindUI.ToggleAcrylic) == "function" then
                 originalToggleAcrylic = WindUI.ToggleAcrylic
                 WindUI.ToggleAcrylic = acrylicWrapper
             end
             native:OnDestroy(cleanup)
-            native:EditOpenButton({Title = appName, Enabled = true, Draggable = true, OnlyMobile = false})
+            local buttonOK, buttonErr = pcall(function()
+                native:EditOpenButton({Title = appName, Enabled = true, Draggable = true, OnlyMobile = false})
+            end)
+            if not buttonOK then
+                self.LastError = "OpenButton: " .. tostring(buttonErr)
+                warn("[Vortexion/Wind] " .. self.LastError)
+            end
             local groups = {Common = native:Section({Title = "通用", Opened = true}), Game = native:Section({Title = "游戏功能", Opened = true}), UI = native:Section({Title = "UI", Opened = false})}
             local win = {Native = native, Root = native.UIElements.Main, Groups = groups, GameTabs = self.GameTabs}
             function win:AddTab(c)
@@ -41542,7 +41559,12 @@ return function(WindUI, config)
             return win
         end)
         if not initialized or cancelled then
-            if not initialized then self.LastError = tostring(result) end
+            if not initialized then
+                self.LastError = tostring(result)
+                recordStartupFailure("CreateWindow", result)
+            elseif cancelled then
+                recordStartupFailure("CreateWindow", "Bridge was cancelled during initialization")
+            end
             local lateNative = not self.Active and ((cancelled and not acquired) or native == nil)
             if not existingWindow then native = native or WindUI.Window end
             self:Destroy()
@@ -41635,6 +41657,8 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
     local client = (getgenv and getgenv()) or _G
     local bridge = client.VortexionWindBridge
     local summary = not ok and tostring(result):sub(1, 500) or nil
+    local failure = client.VortexionBootError
+    if failure and not summary then summary = tostring(failure):sub(1, 800) end
     local window
     if type(bridge) == "table" and bridge.Active ~= false then
         if type(bridge.Window) == "function" then
@@ -41658,7 +41682,8 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
     end
     if entry then
         reason = "game-initialization-incomplete"
-        summary = summary or "游戏入口提前结束，尚未创建功能界面。通用功能与 UI 设置仍可使用。"
+        summary = summary or "游戏入口提前结束，尚未创建功能界面。"
+        client.VortexionBootError = summary
         warn("[Vortexion/Wind] Game initialization: " .. summary)
     end
     if type(bridge) == "table" and type(bridge.Destroy) == "function" then
@@ -41670,7 +41695,9 @@ function Router.Run(WindUI, WindBridgeFactory, entry, universe, place, reason)
         fallback.BootError = summary
         return fallback
     end
-    warn("[Vortexion/Wind] Generic UI initialization: " .. tostring(fallback))
+    client.VortexionBootError = "Generic UI fallback: " .. tostring(fallback)
+        .. (summary and ("; Original failure: " .. summary) or "")
+    warn("[Vortexion/Wind] " .. client.VortexionBootError)
     return nil
 end
 
@@ -41706,6 +41733,7 @@ return function(scene, WindUI, Bridge)
         end)
         for _,bad in ipairs({"Xeno","Velocity","LX63"}) do
             if string.find(executorName,bad,1,true) then
+                client.VortexionBootError = "AOTR executor unsupported: " .. executorName
                 warn("[Vortexion/AOTR] unsupported executor: "..executorName)
                 return
             end
@@ -42006,7 +42034,13 @@ return function(scene, WindUI, Bridge)
         local ok,ui=pcall(function()
             return Bridge(WindUI,{Name="AOTR",Folder="VortexionAOTR",Section="A T T A C K  O N  T I T A N"})
         end)
-        if not ok or not ui then warn("[Vortexion/AOTR] WindUI initialization failed: "..tostring(ui));cleanup();return end
+        if not ok or not ui then
+            local reason="AOTR Bridge: "..tostring(ui)
+            client.VortexionBootError = reason
+            warn("[Vortexion/AOTR] "..reason)
+            cleanup()
+            return
+        end
         -- Bridge may yield while cleanup retires this app; reclaim the late UI.
         if not self:Alive() then pcall(function() ui:Destroy() end);return end
         self.ui=ui
@@ -42017,7 +42051,9 @@ return function(scene, WindUI, Bridge)
         end)
         if not initialized or not window then
             if not initialized or self:Alive() then
-                warn("[Vortexion/AOTR] WindUI initialization failed: "..tostring(window))
+                local reason="AOTR Window: "..tostring(window)
+                client.VortexionBootError = client.VortexionBootError or reason
+                warn("[Vortexion/AOTR] "..reason)
             end
             cleanup()
             return

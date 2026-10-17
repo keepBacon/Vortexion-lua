@@ -171,6 +171,13 @@ return function(WindUI, config)
         end)
     end
     env.VortexionWindBridge = bridge
+    -- Diagnostic survives bridge cleanup: loader needs the original WindUI failure,
+    -- not the secondary "No active WindUI bridge" symptom.
+    local function recordStartupFailure(step, reason)
+        local message = "WindUI/" .. tostring(step) .. ": " .. tostring(reason)
+        env.VortexionBootError = message:sub(1, 1500)
+        warn("[Vortexion/Wind/BOOT] " .. message)
+    end
 
     function bridge:Notify(info, content, duration)
         if not self.Active then return end
@@ -898,19 +905,29 @@ return function(WindUI, config)
         local existingWindow = WindUI.Window
         local cancelled, acquired = false, false
         local initialized, result = pcall(function()
-            native = WindUI:CreateWindow({Title = info.Title or appName, Author = "- Vortexion", Folder = #missingFileApi == 0 and ((config.Folder or appName) .. "/" .. tostring(game.PlaceId)) or nil, Theme = config.Theme or "Dark", Size = info.Size or UDim2.fromOffset(650, 490), ToggleKey = Enum.KeyCode.K, Background = "", Acrylic = true, Transparent = false, AutoScale = false, SideBarWidth = input.TouchEnabled and 160 or 200})
+            native = WindUI:CreateWindow({Title = info.Title or appName, Author = "- Vortexion", Folder = #missingFileApi == 0 and ((config.Folder or appName) .. "/" .. tostring(game.PlaceId)) or nil, Theme = config.Theme or "Dark", Size = info.Size or UDim2.fromOffset(650, 490), ToggleKey = Enum.KeyCode.K, Background = "", Acrylic = not input.TouchEnabled, Transparent = false, AutoScale = false, SideBarWidth = input.TouchEnabled and 160 or 200})
             assert(native, "WindUI CreateWindow returned no window")
             if not self.Active then cancelled = true; return nil end
             acquired = true
             self.GUI = WindUI.ScreenGui
             native.Debug = config.Debug == true
-            WindUI:SetTheme(config.Theme or "Dark")
+            local themeOK, themeErr = pcall(function() WindUI:SetTheme(config.Theme or "Dark") end)
+            if not themeOK then
+                self.LastError = "Theme: " .. tostring(themeErr)
+                warn("[Vortexion/Wind] " .. self.LastError)
+            end
             if not originalToggleAcrylic and type(WindUI.ToggleAcrylic) == "function" then
                 originalToggleAcrylic = WindUI.ToggleAcrylic
                 WindUI.ToggleAcrylic = acrylicWrapper
             end
             native:OnDestroy(cleanup)
-            native:EditOpenButton({Title = appName, Enabled = true, Draggable = true, OnlyMobile = false})
+            local buttonOK, buttonErr = pcall(function()
+                native:EditOpenButton({Title = appName, Enabled = true, Draggable = true, OnlyMobile = false})
+            end)
+            if not buttonOK then
+                self.LastError = "OpenButton: " .. tostring(buttonErr)
+                warn("[Vortexion/Wind] " .. self.LastError)
+            end
             local groups = {Common = native:Section({Title = "通用", Opened = true}), Game = native:Section({Title = "游戏功能", Opened = true}), UI = native:Section({Title = "UI", Opened = false})}
             local win = {Native = native, Root = native.UIElements.Main, Groups = groups, GameTabs = self.GameTabs}
             function win:AddTab(c)
@@ -976,7 +993,12 @@ return function(WindUI, config)
             return win
         end)
         if not initialized or cancelled then
-            if not initialized then self.LastError = tostring(result) end
+            if not initialized then
+                self.LastError = tostring(result)
+                recordStartupFailure("CreateWindow", result)
+            elseif cancelled then
+                recordStartupFailure("CreateWindow", "Bridge was cancelled during initialization")
+            end
             local lateNative = not self.Active and ((cancelled and not acquired) or native == nil)
             if not existingWindow then native = native or WindUI.Window end
             self:Destroy()

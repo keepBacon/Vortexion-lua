@@ -2597,6 +2597,7 @@ do
     end)
     for _, bad in ipairs({ "Xeno", "Velocity", "LX63" }) do
         if string.find(executorName, bad, 1, true) then
+            global.VortexionBootError = "SCP executor unsupported: " .. executorName
             warn("[Vortexion/SCP] unsupported executor: " .. executorName)
             return
         end
@@ -2610,6 +2611,7 @@ end
 --=========================================================================
 local ok, ui = pcall(function() return WindBridgeFactory(WindUI) end)
 if not ok or not ui then
+    global.VortexionBootError = "SCP Bridge: " .. tostring(ui)
     warn("[Vortexion/SCP] WindUI initialization failed: " .. tostring(ui))
     return
 end

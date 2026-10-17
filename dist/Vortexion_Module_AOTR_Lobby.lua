@@ -34,6 +34,7 @@ return function(scene, WindUI, Bridge)
         end)
         for _,bad in ipairs({"Xeno","Velocity","LX63"}) do
             if string.find(executorName,bad,1,true) then
+                client.VortexionBootError = "AOTR executor unsupported: " .. executorName
                 warn("[Vortexion/AOTR] unsupported executor: "..executorName)
                 return
             end
@@ -334,7 +335,13 @@ return function(scene, WindUI, Bridge)
         local ok,ui=pcall(function()
             return Bridge(WindUI,{Name="AOTR",Folder="VortexionAOTR",Section="A T T A C K  O N  T I T A N"})
         end)
-        if not ok or not ui then warn("[Vortexion/AOTR] WindUI initialization failed: "..tostring(ui));cleanup();return end
+        if not ok or not ui then
+            local reason="AOTR Bridge: "..tostring(ui)
+            client.VortexionBootError = reason
+            warn("[Vortexion/AOTR] "..reason)
+            cleanup()
+            return
+        end
         -- Bridge may yield while cleanup retires this app; reclaim the late UI.
         if not self:Alive() then pcall(function() ui:Destroy() end);return end
         self.ui=ui
@@ -345,7 +352,9 @@ return function(scene, WindUI, Bridge)
         end)
         if not initialized or not window then
             if not initialized or self:Alive() then
-                warn("[Vortexion/AOTR] WindUI initialization failed: "..tostring(window))
+                local reason="AOTR Window: "..tostring(window)
+                client.VortexionBootError = client.VortexionBootError or reason
+                warn("[Vortexion/AOTR] "..reason)
             end
             cleanup()
             return

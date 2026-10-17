@@ -3144,6 +3144,7 @@ do
     end)
     for _, bad in ipairs({ "Xeno", "Velocity", "LX63" }) do
         if string.find(executorName, bad, 1, true) then
+            global.VortexionBootError = "BloxStrike executor unsupported: " .. executorName
             warn("[Vortexion/BloxStrike] unsupported executor: " .. executorName)
             return
         end
@@ -3155,6 +3156,7 @@ end
 --=========================================================================
 local ok,ui=pcall(function() return WindBridgeFactory(WindUI) end)
 if not ok or not ui then
+    global.VortexionBootError = "BloxStrike Bridge: " .. tostring(ui)
     warn("[Vortexion/BloxStrike] WindUI initialization failed: "..tostring(ui))
     return
 end
