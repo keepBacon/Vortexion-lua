@@ -20,7 +20,7 @@ end
 
 local bridge = WindBridgeFactory(WindUI, {Name = "Forsaken", Folder = "VortexionForsaken"})
 assert(bridge and bridge.Active, "Forsaken: WindUI bridge unavailable")
-local window = bridge:CreateWindow({Title = "Forsaken · R2.13"})
+local window = bridge:CreateWindow({Title = "Forsaken · R2.14"})
 assert(window, "Forsaken: window creation failed")
 local tabs = {
     vision = window:AddTab({Title = "感知", Icon = "lucide-eye"}),
@@ -35,6 +35,10 @@ local enhancements = ForsakenEnhancementsFactory({Player=user, Bridge=bridge, Ta
 
 local state = {alive = true, killers = false, survivors = false,
     generators = false, alert = false, fovEnabled = false, fov = 80,
+    killerInfo = false, survivorInfo = false, survivorHP = false,
+    traps = false, helpers = false, danger = false,
+    dangerText = nil, dangerGui = nil, lastDanger = "none", lastDangerAt = 0,
+    hazardCache = {}, hazardCacheAt = 0, labels = {},
     maxDistance = 400, alertDistance = 35, markers = {}, lastAlert = 0,
     occludedTransparency = 65, visibleTransparency = 20,
     markerSeen = setmetatable({}, {__mode = "k"}),
@@ -66,6 +70,8 @@ local function clearMarker(model)
         state.visibilityCache[model] = nil
         safe("marker cleanup", function() marker:Destroy() end)
     end
+    local label = state.labels[model]
+    if label then state.labels[model] = nil; safe("label cleanup", function() label:Destroy() end) end
 end
 local function clearMarkers()
     for model in pairs(state.markers) do clearMarker(model) end
@@ -113,19 +119,182 @@ local function addCandidate(target, model, kind)
     if not model or not model:IsA("Model") or model == user.Character then return end
     if getRoot(model) then target[model] = kind end
 end
+-- Game-specific visual discovery; bounded and cached to avoid scanning all Workspace at 4Hz.
+-- Name patterns are evidence of visible objects, not a proof that a hidden skill fired.
+local HAZARD_NAMES = {"subspace", "tripmine", "tripwire", "trap", "spike", "snare", "landmine", "beartrap", "johnspike"}
+local HELPER_NAMES = {"pizza", "delivery", "minion", "summoned", "summon", "helpernpc", "deliveryguy"}
+local function matchesAny(name, names)
+    local low = name:lower()
+    for _, needle in ipairs(names) do if low:find(needle, 1, true) then return true end end
+    return false
+end
+local function sceneryCandidates()
+    local now = os.clock()
+    if now - state.hazardCacheAt < 1.0 then return state.hazardCache end
+    state.hazardCacheAt = now
+    local found = {}
+    local map = Workspace:FindFirstChild("Map")
+    local ingame = map and map:FindFirstChild("Ingame")
+    local roots = {
+        ingame and ingame:FindFirstChild("Map"),
+        ingame and ingame:FindFirstChild("Effects"),
+        Workspace:FindFirstChild("Effects"),
+        Workspace:FindFirstChild("NPCs"),
+        Workspace:FindFirstChild("Minions"),
+        Workspace:FindFirstChild("Traps"),
+        Workspace:FindFirstChild("Projectiles"),
+    }
+    local visited, budget = {}, 650
+    for _, root in pairs(roots) do
+        if root then
+            local stack = {root}
+            while #stack > 0 and budget > 0 do
+                local node = table.remove(stack)
+                if not visited[node] then
+                    visited[node] = true
+                    budget -= 1
+                    if node:IsA("Model") or node:IsA("BasePart") then
+                        local kind = matchesAny(node.Name, HAZARD_NAMES) and "Trap"
+                            or matchesAny(node.Name, HELPER_NAMES) and "Helper" or nil
+                        if kind == "Helper" and not (node:IsA("Model")
+                            and (node:FindFirstChildOfClass("Humanoid")
+                                or node:FindFirstChild("HumanoidRootPart"))) then
+                            kind = nil -- Do not mistake pizza decals and particles for NPCs.
+                        end
+                        if kind and (node:IsA("BasePart") or node.PrimaryPart
+                            or node:FindFirstChildWhichIsA("BasePart")) then
+                            found[node] = kind
+                        end
+                    end
+                    if #stack < 700 then
+                        for _, child in ipairs(node:GetChildren()) do
+                            -- Inspect BasePart children too, but don't descend into their
+                            -- large decorative attachments; still bounded to 650 objects.
+                            table.insert(stack, child)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    state.hazardCache = found
+    return found
+end
+local function infoValue(model, keys)
+    for _, key in ipairs(keys) do
+        local att = model:GetAttribute(key)
+        if type(att) == "string" and att ~= "" then return att end
+        local child = model:FindFirstChild(key)
+        if child and child:IsA("StringValue") and child.Value ~= "" then return child.Value end
+    end
+    return nil
+end
+local function ensureLabel(model, anchorPart)
+    local label = state.labels[model]
+    if label and label.Parent and label.Adornee == anchorPart then return label end
+    if label then label:Destroy() end
+    label = Instance.new("BillboardGui")
+    label.Name = "VortexionInfo"
+    label.Adornee = anchorPart
+    label.AlwaysOnTop = true
+    label.Size = UDim2.fromOffset(190, 46)
+    label.StudsOffsetWorldSpace = Vector3.new(0, 3.2, 0)
+    label.MaxDistance = math.min(state.maxDistance, 450)
+    local text = Instance.new("TextLabel")
+    text.Name = "Content"
+    text.BackgroundTransparency = 1
+    text.TextScaled = false
+    text.TextSize = 13
+    text.Font = Enum.Font.GothamBold
+    text.TextStrokeTransparency = 0.35
+    text.TextColor3 = Color3.fromRGB(245, 245, 245)
+    text.Size = UDim2.fromScale(1, 1)
+    text.TextWrapped = true
+    text.Parent = label
+    label.Parent = anchorPart
+    state.labels[model] = label
+    return label
+end
+local function updateLabel(model, kind, part)
+    local show = (kind == "Killer" and state.killerInfo)
+        or (kind == "Survivor" and (state.survivorInfo or state.survivorHP))
+        or ((kind == "Trap" or kind == "Helper") and true)
+    if not show then
+        local old = state.labels[model]
+        if old then old:Destroy(); state.labels[model] = nil end
+        return
+    end
+    local parts = {}
+    if kind == "Killer" or kind == "Survivor" then
+        if (kind == "Killer" and state.killerInfo) or (kind == "Survivor" and state.survivorInfo) then
+            local role = infoValue(model, {"CharacterName", "Character", "Role", "Class"}) or model.Name
+            local skin = infoValue(model, {"SkinName", "Skin", "EquippedSkin", "CurrentSkin"})
+            table.insert(parts, role .. (skin and ("  /  " .. skin) or "  /  皮肤未公开"))
+        end
+        if kind == "Survivor" and state.survivorHP then
+            local hum = model:FindFirstChildOfClass("Humanoid")
+            if hum then table.insert(parts, string.format("HP %.0f/%.0f", hum.Health, hum.MaxHealth)) end
+        end
+    else
+        table.insert(parts, (kind == "Trap" and "陷阱: " or "召唤物: ") .. model.Name)
+    end
+    if #parts == 0 then
+        local old = state.labels[model]
+        if old then old:Destroy(); state.labels[model] = nil end
+        return
+    end
+    local label = ensureLabel(model, part)
+    local content = label:FindFirstChild("Content")
+    if content then
+        local value = table.concat(parts, "\n")
+        if content.Text ~= value then content.Text = value end
+    end
+end
+local function ensureDangerBanner()
+    if state.dangerGui and state.dangerGui.Parent then return end
+    local screen = Instance.new("ScreenGui")
+    screen.Name = "VortexionDangerNotice"
+    screen.ResetOnSpawn = false
+    screen.IgnoreGuiInset = false
+    screen.DisplayOrder = 3
+    local label = Instance.new("TextLabel")
+    label.Name = "Warning"
+    label.AnchorPoint = Vector2.new(0.5, 0)
+    label.Position = UDim2.fromScale(0.5, 0.09)
+    label.Size = UDim2.fromOffset(310, 34)
+    label.BackgroundColor3 = Color3.fromRGB(45, 15, 15)
+    label.BackgroundTransparency = 0.25
+    label.TextColor3 = Color3.fromRGB(255, 205, 170)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 14
+    label.Active = false
+    label.Selectable = false
+    label.Visible = false
+    label.Parent = screen
+    screen.Parent = gui
+    state.dangerGui, state.dangerText = screen, label
+end
 local function candidates()
     local selected = {}
     local killers, survivors = sourceFolders()
-    if state.killers or state.alert then
+    if state.killers or state.alert or state.killerInfo or state.danger then
         if killers then for _, model in ipairs(killers:GetChildren()) do addCandidate(selected, model, "Killer") end end
     end
-    if state.survivors then
+    if state.survivors or state.survivorInfo or state.survivorHP then
         if survivors then for _, model in ipairs(survivors:GetChildren()) do addCandidate(selected, model, "Survivor") end end
     end
     if state.generators and enhancements and type(enhancements.EnumerateGenerators) == "function" then
         for _, model in ipairs(enhancements.EnumerateGenerators()) do
             if model.Parent and (model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")) then
                 selected[model] = "Generator"
+            end
+        end
+    end
+    if state.traps or state.helpers or state.danger then
+        for obj, kind in pairs(sceneryCandidates()) do
+            if obj.Parent and ((kind == "Trap" and (state.traps or state.danger))
+                or (kind == "Helper" and state.helpers)) then
+                selected[obj] = kind
             end
         end
     end
@@ -190,6 +359,8 @@ local function markerFor(model, kind, part, camera)
         highlight.Adornee = model
         highlight.FillColor = kind == "Killer" and Color3.fromRGB(235, 78, 78)
             or kind == "Survivor" and Color3.fromRGB(78, 176, 121)
+            or kind == "Trap" and Color3.fromRGB(255, 120, 45)
+            or kind == "Helper" and Color3.fromRGB(186, 109, 240)
             or Color3.fromRGB(245, 191, 85)
         highlight.OutlineColor = highlight.FillColor
         highlight.Parent = model
@@ -199,6 +370,7 @@ local function markerFor(model, kind, part, camera)
     highlight.FillTransparency = alpha
     highlight.OutlineTransparency = alpha
     state.markerKinds[model] = kind
+    updateLabel(model, kind, part)
     return highlight
 end
 local function tickVisual()
@@ -232,17 +404,26 @@ local function tickVisual()
     local now = os.clock()
     local budget = 32 -- Bound per-refresh allocations on mobile.
     local nearestThreat
+    local nearestHazard, nearestHazardName
     for model, kind in pairs(required) do
         state.candidateCount += 1
-        local root = getRoot(model) or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+        -- Trap candidates can be BasePart instances; only Model has PrimaryPart.
+        local root = model:IsA("BasePart") and model
+            or (getRoot(model) or (model:IsA("Model") and model.PrimaryPart)
+                or model:FindFirstChildWhichIsA("BasePart"))
         if root and root:IsA("BasePart") then
             local distance = (root.Position - origin).Magnitude
             if kind == "Killer" and distance <= state.alertDistance then
                 nearestThreat = math.min(nearestThreat or math.huge, distance)
             end
-            local show = (kind == "Killer" and state.killers)
-                or (kind == "Survivor" and state.survivors)
+            if kind == "Trap" and distance <= 85 and (not nearestHazard or distance < nearestHazard) then
+                nearestHazard, nearestHazardName = distance, model.Name
+            end
+            local show = (kind == "Killer" and (state.killers or state.killerInfo))
+                or (kind == "Survivor" and (state.survivors or state.survivorInfo or state.survivorHP))
                 or (kind == "Generator" and state.generators)
+                or (kind == "Trap" and state.traps)
+                or (kind == "Helper" and state.helpers)
             local exitHysteresis = state.markers[model] and 40 or 0
             if show and distance <= state.maxDistance + exitHysteresis then
                 state.inRangeCount += 1
@@ -261,9 +442,11 @@ local function tickVisual()
         -- A temporary missing model, camera switch, or distance crossing should
         -- not destroy/recreate the highlight on every 250 ms scan.
         local kind = state.markerKinds[model]
-        local enabled = (kind == "Killer" and state.killers)
-            or (kind == "Survivor" and state.survivors)
+        local enabled = (kind == "Killer" and (state.killers or state.killerInfo))
+            or (kind == "Survivor" and (state.survivors or state.survivorInfo or state.survivorHP))
             or (kind == "Generator" and state.generators)
+            or (kind == "Trap" and state.traps)
+            or (kind == "Helper" and state.helpers)
         if not model.Parent or not enabled or
             (not visible[model] and now - (state.markerSeen[model] or 0) > state.stalenessGrace) then
             clearMarker(model)
@@ -272,6 +455,22 @@ local function tickVisual()
     local count = 0
     for _ in pairs(state.markers) do count += 1 end
     state.objects = count
+    if state.danger then
+        ensureDangerBanner()
+        local warning = nil
+        if nearestHazard then
+            warning = string.format("疑似陷阱 %s（%.0f studs）", nearestHazardName, nearestHazard)
+        elseif nearestThreat and nearestThreat <= state.alertDistance then
+            warning = string.format("杀手接近（%.0f studs）", nearestThreat)
+        end
+        if state.dangerText then
+            state.dangerText.Visible = warning ~= nil
+            if warning and state.dangerText.Text ~= warning then state.dangerText.Text = warning end
+        end
+        state.lastDanger = warning or "none"
+    elseif state.dangerText then
+        state.dangerText.Visible = false
+    end
     if state.alert and nearestThreat and os.clock() - state.lastAlert > 5 then
         state.lastAlert = os.clock()
         bridge:Notify({Title="附近有杀手", Content=("距离约 %d studs"):format(nearestThreat), Duration=2})
@@ -279,6 +478,7 @@ local function tickVisual()
 end
 local function refreshScheduler()
     local enabled = state.killers or state.survivors or state.generators or state.alert or state.fovEnabled
+        or state.traps or state.helpers or state.danger or state.killerInfo or state.survivorInfo or state.survivorHP
     if not enabled and state.ticker then state.ticker:Disconnect(); state.ticker=nil end
     if not enabled then
         state.scanMode = "off"
@@ -295,7 +495,9 @@ local function refreshScheduler()
         accumulated = 0
         safe("refresh", function()
             applyFov()
-            if state.killers or state.survivors or state.generators or state.alert then tickVisual() end
+            if state.killers or state.survivors or state.generators or state.alert
+                or state.traps or state.helpers or state.danger or state.killerInfo
+                or state.survivorInfo or state.survivorHP then tickVisual() end
         end)
     end)
 end
@@ -310,6 +512,7 @@ local function shutdown()
     end
     table.clear(state.lifecycleConnections)
     clearMarkers()
+    if state.dangerGui then state.dangerGui:Destroy(); state.dangerGui = nil; state.dangerText = nil end
     restoreFov()
     if env.VortexionForsakenCleanup == shutdown then env.VortexionForsakenCleanup = nil end
 end
@@ -331,6 +534,19 @@ tabs.vision:AddToggle("FsSurvivorESP", {Title="幸存者高亮", Default=false,
     Callback=function(v) state.survivors=v; refreshScheduler() end})
 tabs.vision:AddToggle("FsGeneratorESP", {Title="发电机高亮", Default=false,
     Callback=function(v) state.generators=v; refreshScheduler() end})
+tabs.vision:AddToggle("FsKillerIdentityR214", {Title="杀手角色及皮肤", Default=false,
+    Callback=function(v) state.killerInfo=v; refreshScheduler() end})
+tabs.vision:AddToggle("FsSurvivorIdentityR214", {Title="幸存者角色及皮肤", Default=false,
+    Callback=function(v) state.survivorInfo=v; refreshScheduler() end})
+tabs.vision:AddToggle("FsSurvivorHPR214", {Title="幸存者血量", Default=false,
+    Callback=function(v) state.survivorHP=v; refreshScheduler() end})
+tabs.vision:AddToggle("FsTrapsR214", {Title="陷阱显示（仅已复制对象）", Default=false,
+    Callback=function(v) state.traps=v; refreshScheduler() end})
+tabs.vision:AddToggle("FsHelpersR214", {Title="杀手帮手机器人显示", Default=false,
+    Callback=function(v) state.helpers=v; refreshScheduler() end})
+tabs.vision:AddToggle("FsDangerR214", {Title="危险提示（已复制的危险对象）", Default=false,
+    Callback=function(v) state.danger=v; if not v and state.dangerText then state.dangerText.Visible=false end; refreshScheduler() end})
+tabs.vision:AddParagraph({Title="危险判断范围", Content="根据地图中实际复制的陷阱模型和附近杀手提供提示；服务器隐藏的技能释放不可直接判断。"})
 -- Reconcile the three layers (native WindUI, bridge option, gameplay state).
 -- The user's preference is intentionally NOT cleared on CharacterRemoving,
 -- Humanoid.Died or spectator camera transitions.
@@ -340,6 +556,12 @@ local function synchronizeVisionOptions()
         {"FsSurvivorESP", "survivors"},
         {"FsGeneratorESP", "generators"},
         {"FsKillerWarning", "alert"},
+        {"FsKillerIdentityR214", "killerInfo"},
+        {"FsSurvivorIdentityR214", "survivorInfo"},
+        {"FsSurvivorHPR214", "survivorHP"},
+        {"FsTrapsR214", "traps"},
+        {"FsHelpersR214", "helpers"},
+        {"FsDangerR214", "danger"},
     }
     local changed = false
     for _, entry in ipairs(settings) do
@@ -403,7 +625,7 @@ tabs.system:AddButton({Title="检查游戏结构", Callback=function()
     local killers,survivors=sourceFolders()
     local kTotal,kReady=countReadyCharacters(killers)
     local sTotal,sReady=countReadyCharacters(survivors)
-    local enabled=state.killers or state.survivors or state.generators or state.alert
+    local enabled=state.killers or state.survivors or state.generators or state.alert or state.traps or state.helpers or state.danger
     synchronizeVisionOptions()
     enabled=state.killers or state.survivors or state.generators or state.alert
     local mode=enabled and "扫描中" or "感知开关关闭（不扫描）"
@@ -427,6 +649,7 @@ tabs.system:AddButton({Title="检查游戏结构", Callback=function()
             state.scanMode, state.lastScanReason, state.stateRepairs,
             state.characterGeneration, state.spectatorScans,
             state.candidateCount, state.inRangeCount, state.markerFailures)
+    msg = msg .. string.format("\n危险=%s 标签=%s", tostring(state.lastDanger), tostring(state.labels ~= nil))
     msg = msg .. string.format("\n遮挡检测=%d 无遮挡检测=%d 遮挡透明度=%d%% 无遮挡透明度=%d%%",
         state.blockedCount, state.clearCount, state.occludedTransparency, state.visibleTransparency)
     bridge:Notify({Title="Forsaken 诊断", Content=msg, Duration=12})
@@ -440,4 +663,4 @@ tabs.system:AddButton({Title="卸载 Forsaken 功能", Callback=function()
 end})
 tabs.system:AddParagraph({Title="运行限制", Content="场景结构可能随游戏更新变化。检测不到目标时会保持空状态，不会伪造功能成功；未进行 Roblox 安卓实测。"})
 window:SelectTab(1)
-bridge:Notify({Title="Forsaken", Content="R2.13 已加载；感知功能需手动开启，菜单场景没有角色模型时不会生成标记", Duration=5})
+bridge:Notify({Title="Forsaken", Content="R2.14 已加载；感知功能需手动开启，菜单场景没有角色模型时不会生成标记", Duration=5})

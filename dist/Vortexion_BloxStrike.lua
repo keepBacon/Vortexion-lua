@@ -40625,7 +40625,7 @@ return function(WindUI, config)
     local sliderFlushQueued = false
     -- Non-critical visual refresh pacing. Pure: allocates nothing and reads no control per call.
     local VISUAL_HZ_MIN, VISUAL_HZ_MAX = 5, 60
-    local PERF_TIER_HZ = {["原速"] = 60, ["均衡"] = 15, ["省电"] = 5}
+    local PERF_TIER_HZ = {["原速"] = 60, ["均衡"] = 30, ["省电"] = 10}
     local defaultPerfTier = input.TouchEnabled and "均衡" or "原速"
     bridge.VisualHz = PERF_TIER_HZ[defaultPerfTier]
     -- Optional budget only affects non-critical visual refresh loops. Disabled by default.
@@ -40709,7 +40709,9 @@ return function(WindUI, config)
     local function requestLayout()
         if not bridge.Active or layoutQueued then return end
         layoutQueued = true
-        task.defer(function()
+        -- 50 ms coalescing prevents repeated expensive viewport tree reads during
+        -- touch dragging / soft keyboard appearance, without gating control callbacks.
+        task.delay(input.TouchEnabled and 0.05 or 0.01, function()
             layoutQueued = false
             if bridge.Active and bridge.FitViewport then bridge:FitViewport() end
         end)
@@ -41277,7 +41279,7 @@ return function(WindUI, config)
             end
         end
         view:AddDropdown("wind_perf_tier", {Title = "视觉刷新档位", Values = {"原速", "均衡", "省电", "自定义"}, Default = defaultPerfTier, Callback = function() computeVisualHz() end})
-        view:AddSlider("wind_visual_hz", {Title = "自定义刷新率 (Hz)", Min = VISUAL_HZ_MIN, Max = VISUAL_HZ_MAX, Default = clampHz(input.TouchEnabled and 15 or 60), Rounding = 0, Callback = function() computeVisualHz() end})
+        view:AddSlider("wind_visual_hz", {Title = "自定义刷新率 (Hz)", Min = VISUAL_HZ_MIN, Max = VISUAL_HZ_MAX, Default = clampHz(input.TouchEnabled and 30 or 60), Rounding = 0, Callback = function() computeVisualHz() end})
         view:AddParagraph({Title = "视觉刷新", Content = "仅限制非关键视觉刷新（ESP/轨迹/高亮等），不改变移动、输入、回收或战斗/冷却频率。档位越高刷新越勤、耗电越高；\"原速\" 只把刷新限制到不高于 60Hz，不会把旧有节拍加速。"})
         computeVisualHz()
         view:AddToggle("wind_adaptive_visual", {Title = "自适应视觉调度（实验）", Default = false,
@@ -41372,7 +41374,7 @@ return function(WindUI, config)
         local function probeClientRuntime()
             if runtimeProbeBusy or not bridge.Active then return end
             runtimeProbeBusy = true
-            local lines = {"Vortexion R2.13 / CLIENT PROBE", "Route-PlaceId=" .. tostring(game.PlaceId)}
+            local lines = {"Vortexion R2.14 / CLIENT PROBE", "Route-PlaceId=" .. tostring(game.PlaceId)}
             local function put(key, value) lines[#lines + 1] = key .. "=" .. tostring(value) end
             local heartbeatProbe = nil
             local cameraProbe, cameraOriginal, cameraTarget = nil, nil, nil

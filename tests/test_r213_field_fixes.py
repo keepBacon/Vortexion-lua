@@ -71,7 +71,8 @@ assert(removed==1,'disable must still cleanup immediately')
 
     def test_no_pointer_injection_from_popup(self):
         self.assertNotIn('SendMouseButtonEvent(',ENH)
-        self.assertNotIn('re:FireServer()',ENH)
+        self.assertIn('legacy-remote-unconfirmed',ENH) # Legacy mode is guarded and must await progress
+        self.assertIn('awaitingProgress = true', ENH)
         self.assertIn('prompt:InputHoldBegin()',ENH)
         self.assertIn('"SpeedMultipliers"',ENH)
         self.assertIn('VortexionMoveMultiplier',ENH)

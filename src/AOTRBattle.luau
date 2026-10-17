@@ -78,6 +78,8 @@ end
 local budgets={Titans=0.4,Combat=1.5,ESP=1.0,Farm=0.2}
 local costs={Titans=0,Combat=0,ESP=0,Farm=0}
 local slowLoops=0
+local throttled = {Titans=0, ESP=0, Farm=0}
+local farmBusy = false
 app:OnStop(function()
     app.Services.RunService:UnbindFromRenderStep("VortexionAOTRFrame")
 end)
@@ -89,7 +91,11 @@ app.Services.RunService:BindToRenderStep("VortexionAOTRFrame",Enum.RenderPriorit
         local espOn = ESP and ESP.Config.Enabled
         local movementOn = Movement and Movement.Config.FollowEnabled
         if not (combatOn or espOn or movementOn or (Farm and (Farm.Config.AutoReload or Farm.Config.AutoRefill))) then return end
-        if Titans then
+        throttled.Titans = throttled.Titans + math.min(dt, 0.2)
+        throttled.ESP = throttled.ESP + math.min(dt, 0.2)
+        throttled.Farm = throttled.Farm + math.min(dt, 0.2)
+        if Titans and throttled.Titans >= 0.10 then
+            throttled.Titans = 0
             local t0=tick()
             app.Guard("Titans",function() Titans:Update(dt) end)
             costs.Titans=tick()-t0
@@ -99,15 +105,25 @@ app.Services.RunService:BindToRenderStep("VortexionAOTRFrame",Enum.RenderPriorit
             app.Guard("Combat",function() Combat:Update(dt) end)
             costs.Combat=tick()-t0
         end
-        if ESP then
+        if ESP and throttled.ESP >= 0.05 then
+            throttled.ESP = 0
             local t0=tick()
             app.Guard("ESP",function() ESP:Update(dt) end)
             costs.ESP=tick()-t0
         end
-        if Farm then
-            local t0=tick()
-            app.Guard("Farm",function() Farm:Update(dt) end)
-            costs.Farm=tick()-t0
+        if Farm and throttled.Farm >= 0.25 then
+            throttled.Farm = 0
+            if not farmBusy then
+                farmBusy = true
+                task.spawn(function()
+                    local t0=tick()
+                    if app:Alive() then
+                        app.Guard("Farm",function() Farm:Update(0.25) end)
+                    end
+                    costs.Farm=tick()-t0
+                    farmBusy = false
+                end)
+            end
         end
         for name,cost in pairs(costs) do
             if cost*1000>budgets[name] then slowLoops+=1 end
@@ -158,13 +174,13 @@ if Combat then
         Callback=function(v) c.Smoothness=v end})
     tab:AddSlider("AOTRAimPrediction",{Title="预瞄（浮动补偿）",Min=0,Max=0.5,Default=0.12,Rounding=2,
         Callback=function(v) c.Prediction=v end})
-    tab:AddSlider("AOTRAimHitChance",{Title="注册命中率（%）",Min=10,Max=100,Default=85,Rounding=0,
+    tab:AddSlider("AOTRAimHitChance",{Title="注册命中率（%）",Min=10,Max=100,Default=100,Rounding=0,
         Callback=function(v) c.HitChance=v/100 end})
     tab:AddDropdown("AOTRAimKey",{Title="触发键",Values={"Always","Hold"},Default="Always",
         Callback=function(v) c.TriggerKey=v end})
     tab:AddSlider("AOTRAttackCd",{Title="攻击间隔（秒）",Min=0.08,Max=1.5,Default=0.25,Rounding=2,
         Callback=function(v) c.AttackCooldown=v end})
-    tab:AddSlider("AOTRAttackJitter",{Title="节奏抖动（±）",Min=0,Max=0.8,Default=0.4,Rounding=2,
+    tab:AddSlider("AOTRAttackJitter",{Title="节奏抖动（±）",Min=0,Max=0.8,Default=0.05,Rounding=2,
         Callback=function(v) c.CooldownJitter=v end})
     tab:AddDropdown("AOTRWeapon",{Title="武器",Values={"Auto","Blades","Spears"},Default="Auto",
         Callback=function(v) c.Weapon=v end})
@@ -338,13 +354,22 @@ tabs.settings:AddParagraph({Title="场景识别",
 tabs.settings:AddButton({Title="子模块初始化诊断",Callback=function()
     app:Notify(#bootFailures > 0 and table.concat(bootFailures, " / ") or "已调用全部子模块工厂；玩法有效性仍需实机测试")
 end})
+local combatStatusParagraph=tabs.settings:AddParagraph({Title="战斗运行状态",Content="点击运行状态查看请求计数；发送不代表服务器命中"})
 tabs.settings:AddButton({Title="运行状态",Callback=function()
     local Titans,Combat,Farm=app.Titans,app.Combat,app.Farm
     local remotes=app.Remotes
     local titanInfo=Titans and ("巨人 "..tostring(Titans:Count())) or "巨人池未加载"
-    local combatInfo=Combat and ("锁定 "..tostring(Combat:DebugSnapshot().locked)) or "战斗未加载"
-    app:Notify(("GET=%s POST=%s / %s / %s"):format(
-        tostring(remotes.GET~=nil),tostring(remotes.POST~=nil),titanInfo,combatInfo))
+    local snapshot=Combat and Combat:DebugSnapshot() or {}
+    local text=("GET=%s POST=%s / %s / 锁定=%s\n尝试=%s 发送=%s 排队=%s 本地失败=%s\n原因=%s\n服务器命中尚未确认")
+        :format(tostring(remotes.GET~=nil),tostring(remotes.POST~=nil),titanInfo,
+            tostring(snapshot.locked or "-"), tostring(snapshot.attempts or 0),
+            tostring(snapshot.attacks or 0),tostring(snapshot.queuedRequests or 0),
+            tostring(snapshot.failedRequests or 0),tostring(snapshot.lastRequestError or "unknown"))
+    if combatStatusParagraph and type(combatStatusParagraph.SetDesc)=="function" then
+        combatStatusParagraph:SetDesc(text)
+    else
+        print("[Vortexion/AOTR] "..text)
+    end
 end})
 tabs.settings:AddButton({Title="卸载全部 AOTR 功能",Callback=function()
     local client=(getgenv and getgenv()) or _G

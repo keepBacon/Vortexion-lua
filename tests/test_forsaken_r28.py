@@ -96,6 +96,7 @@ local function tab()
  local t={}
  function t:AddToggle(k,v) __callbacks[k]=v.Callback end
  function t:AddSlider(k,v) __callbacks[k]=v.Callback end
+ function t:AddDropdown(k,v) __callbacks[k]=v.Callback end
  function t:AddButton(v) __buttons[v.Title]=v.Callback end
  function t:AddParagraph()end
  return t
@@ -109,7 +110,7 @@ end)()
 __enh=factory({Player=__player,Bridge=__bridge,Tabs=__tabs})
 assert(__enh.State.alive)
 local n=0 for _ in pairs(__callbacks)do n=n+1 end
-assert(n==8,'seven requested plus auto approach = 8, got '..n)
+assert(n==9,'seven requested plus auto approach and protocol selection = 9, got '..n)
 local function beat()
  for _,e in ipairs(__events) do if e.owner==__beat and not e.disconnected then e.callback(.3) end end
 end
@@ -178,9 +179,9 @@ assert(__enh.State.repairDelay==2.5)
 __callbacks.FsAutoRepairR28(true)
 __enh.State.nextRepair=0
 __beat_tick()
-assert(__fires==0,'undocumented empty RE call must not be sent')
-assert(__enh.State.repairPhase=='no-prompt',__enh.State.lastAction)
-assert(__enh.State.repairPaused==true)
+assert(__fires==1,'guarded legacy RE compatibility should attempt exactly once')
+assert(__enh.State.repairPhase=='legacy-remote-unconfirmed',__enh.State.lastAction)
+assert(__enh.State.progressSeen==0,'unconfirmed remote is not successful repair')
 __enh:Destroy()
 assert(__connected==__disconnected)
 '''
@@ -210,7 +211,7 @@ __enh:Destroy()
         self.assertIn('ForsakenEnhancementsFactory',CORE)
         self.assertIn('"ForsakenEnhancements.luau"',BUILD)
         r=json.loads((ROOT/'dist/runtime-manifest.json').read_text())
-        self.assertTrue('r2.8' in r['build_tag'] or 'r2.10' in r['build_tag'] or 'r2.11' in r['build_tag'] or 'r2.12' in r['build_tag'] or 'r2.13' in r['build_tag'])
+        self.assertTrue('r2.8' in r['build_tag'] or 'r2.10' in r['build_tag'] or 'r2.11' in r['build_tag'] or 'r2.12' in r['build_tag'] or 'r2.13' in r['build_tag'] or 'r2.14' in r['build_tag'])
         for k in ['core',*r['modules'].keys()]:
             d=r[k] if k=='core' else r['modules'][k]
             raw=(ROOT/d['path']).read_bytes()

@@ -31,11 +31,11 @@ return function(app)
         MaxDistance=1200,
         Smoothness=0.85,
         MaxAngle=30,
-        HitChance=0.85,
+        HitChance=1,
         Prediction=0.12,
         TriggerKey="Always",      -- Always | Hold
         AttackCooldown=0.25,
-        CooldownJitter=0.4,       -- +/- fraction of the cooldown
+        CooldownJitter=0.05,       -- +/- fraction of the cooldown
         Weapon="Auto",            -- Auto | Blades | Spears
         DamageMin=625,
         DamageMax=850,
@@ -64,6 +64,10 @@ return function(app)
         aimSmooth=Vector3.zero,
         cost=0,
         attacks=0,
+        attempts=0,
+        failedRequests=0,
+        queuedRequests=0,
+        lastRequestError="none",
         errors=0,
         windowFocused=true,
     }
@@ -172,8 +176,8 @@ return function(app)
     end
 
     --=========================================================================
-    -- Remote registration. The server trusts the nape instance, so "tracking"
-    -- here means choosing which nape to register on, not steering a bullet.
+    -- Remote registration: each request can fail locally and may be rejected by
+    -- the game server. Track request errors without claiming hit confirmation.
     --=========================================================================
     local function rollDamage()
         local lo=math.min(Config.DamageMin,Config.DamageMax)
@@ -195,14 +199,15 @@ return function(app)
 
     local function registerBlades(entry)
         local Remotes=app.Remotes
-        if not Remotes.POST then return false end
-        if not (entry.nape and entry.nape.Parent) then return false end
-        local ok=pcall(function()
+        if not Remotes.POST then state.lastRequestError="POST missing"; return false end
+        if not (entry.nape and entry.nape.Parent) then state.lastRequestError="Nape missing"; return false end
+        local ok,err=pcall(function()
             Remotes.POST:FireServer("Attacks","Slash",true)
             local combo=Config.ComboCycle and state.comboIndex or nil
             Remotes.POST:FireServer("Hitboxes","Register",entry.nape,rollDamage(),rollCrit(),combo)
         end)
-        if not ok then return false end
+        if not ok then state.lastRequestError=tostring(err):sub(1,220); return false end
+        state.lastRequestError="none (server not acknowledged)"
         local combo=Config.ComboCycle and state.comboIndex or nil
         if combo then
             state.comboIndex+=1
@@ -214,21 +219,32 @@ return function(app)
     local spearBursting = false
     local function registerSpears(entry)
         local Remotes=app.Remotes
-        if not (Remotes.POST and Remotes.GET) then return false end
-        if spearBursting then return false end
+        if not (Remotes.POST and Remotes.GET) then state.lastRequestError="GET/POST missing"; return false end
+        if spearBursting then return "busy" end
         spearBursting = true
-        local ok = pcall(function()
-            local slot=spearSlot()
-            Remotes.GET:InvokeServer("Spears","S_Fire",tostring(slot))
-            local burst=entry.boss and Config.SpearBurst or 1
-            for i=1,burst do
-                if not (entry.nape and entry.nape.Parent) then break end
-                Remotes.POST:FireServer("Spears","S_Explode",entry.nape.Position)
-                if i<burst then task.wait(Config.SpearInterval) end
-            end
+        -- InvokeServer and multi-shot delays must never yield a RenderStep callback.
+        -- Keep exactly one active burst, fence teardown and record actual local send.
+        task.spawn(function()
+            local sent=0
+            local ok,err = pcall(function()
+                if not app:Alive() or not Config.Enabled then return end
+                local slot=spearSlot()
+                Remotes.GET:InvokeServer("Spears","S_Fire",tostring(slot))
+                local burst=entry.boss and Config.SpearBurst or 1
+                for i=1,burst do
+                    if not app:Alive() or not Config.Enabled
+                        or not (entry.nape and entry.nape.Parent) then break end
+                    Remotes.POST:FireServer("Spears","S_Explode",entry.nape.Position)
+                    sent+=1
+                    if i<burst then task.wait(Config.SpearInterval) end
+                end
+            end)
+            if sent>0 then state.attacks+=1 end
+            if not ok then state.failedRequests+=1 end
+            state.lastRequestError = ok and "none (server not acknowledged)" or tostring(err):sub(1,220)
+            spearBursting = false
         end)
-        spearBursting = false
-        return ok
+        return "queued"
     end
 
     -- Human gate: with probability 1-HitChance the shot misses by a few
@@ -360,7 +376,9 @@ return function(app)
         state.lastLocked=state.locked
 
         -- Window focus gate: a focused window is the only human state.
-        if not state.windowFocused then
+        -- On Android the executor overlay can cause WindowFocusReleased even
+        -- though the Roblox scene is still running. The focus gate is desktop-only.
+        if not state.windowFocused and not UserInputService.TouchEnabled then
             state.locked=nil
             fovTick()
             return
@@ -392,6 +410,7 @@ return function(app)
                 state.lastAttack=now
                 state.nextCooldown=jitteredCooldown()
                 if attackRoll() then
+                    state.attempts += 1
                     app.Guard("Combat.Register",function()
                         local weapon=currentWeapon()
                         local okRegister
@@ -400,7 +419,15 @@ return function(app)
                         else
                             okRegister=registerBlades(entry)
                         end
-                        if okRegister then state.attacks+=1 end
+                        if okRegister == "queued" then
+                            state.queuedRequests += 1
+                        elseif okRegister == "busy" then
+                            -- Existing async burst owns the remote; not a failure.
+                        elseif okRegister then
+                            state.attacks += 1
+                        else
+                            state.failedRequests += 1
+                        end
                     end)
                 end
             end
@@ -423,6 +450,13 @@ return function(app)
             locked=state.locked and state.locked.model.Name or "-",
             dist=state.locked and math.floor(state.locked.worldDist or 0) or 0,
             attacks=state.attacks,
+            attempts=state.attempts,
+            queuedRequests=state.queuedRequests,
+            failedRequests=state.failedRequests,
+            lastRequestError=state.lastRequestError,
+            windowFocused=state.windowFocused,
+            lockAvailable=state.locked ~= nil,
+            serverConfirmed=false, -- FireServer is one-way; no damage acknowledgement.
             weapon=currentWeapon(),
             costMs=math.floor(state.cost*100000)/100,
         }

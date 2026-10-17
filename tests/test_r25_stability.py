@@ -94,7 +94,7 @@ assert(type(__callbacks.FsKillerESP)=='function')
 assert(type(__callbacks.FsCameraFov)=='function')
 assert(type(__buttons['检查游戏结构'])=='function')
 local all=0 for _ in pairs(__callbacks) do all=all+1 end
-assert(all==10,'expected 10 vision/character controls: '..all)
+assert(all==16,'expected 16 vision/character controls after six R2.14 additions: '..all)
 local c,d=__connections() assert(c==1 and d==0,'one low-frequency sync listener')
 __callbacks.FsCameraFov(true)
 assert(__camera.FieldOfView==80,'FOV enabled')
@@ -178,13 +178,13 @@ assert(a==1 and b==1, 'killer marker not destroyed')
 
     def test_distribution_hashes(self):
         manifest = json.loads((ROOT/'dist/runtime-manifest.json').read_text())
-        self.assertRegex(manifest['build_tag'], r'r2\.(5|6|7|8|10|11|12|13)')
+        self.assertRegex(manifest['build_tag'], r'r2\.(5|6|7|8|10|11|12|13|14)')
         for entry in [manifest['core'], *manifest['modules'].values()]:
             file = ROOT / entry['path']
             data = file.read_bytes()
             self.assertEqual(entry['bytes'], len(data))
             self.assertEqual(entry['sha256'], hashlib.sha256(data).hexdigest())
-        self.assertLess(manifest['modules']['Forsaken']['bytes'], 60000)
+        self.assertLess(manifest['modules']['Forsaken']['bytes'], 90000) # New ESP details require bounded extra code
         self.assertLess(manifest['modules']['AOTR_Battle']['bytes'], 110000)
 
 if __name__ == '__main__': unittest.main()

@@ -1,16 +1,16 @@
 {
-  "build_tag": "loader-v2-modular-r2.13-touch-esp-speed",
+  "build_tag": "loader-v2-modular-r2.14-forsaken-aotr-performance",
   "core": {
-    "bytes": 1475143,
+    "bytes": 1475352,
     "path": "dist/Vortexion_Core.lua",
-    "sha256": "064aab008030c69b92ffc89184d46d64fd9c3d34a3b839a4ed1e4e22d228cfbc"
+    "sha256": "d0a4c32fb785b254ce31a054ff2e89a47a30de63a0931b0ccc0f8d20373268e4"
   },
   "fallback": "standalone-bundle-manual-only",
   "modules": {
     "AOTR_Battle": {
-      "bytes": 91163,
+      "bytes": 94532,
       "path": "dist/Vortexion_Module_AOTR_Battle.lua",
-      "sha256": "15d784d117cf10934e8be37d87e6b313793e41e4731932de46eed421eaa5280f"
+      "sha256": "c64c9601ebf7ab246e653995356983f7ccbaf3ed17f887305adac22f1277aa88"
     },
     "AOTR_Lobby": {
       "bytes": 25377,
@@ -23,9 +23,9 @@
       "sha256": "151fb4fae930a1c902ad452657709433de9a96b7fb3451f68d58480733a1cbdb"
     },
     "Forsaken": {
-      "bytes": 49764,
+      "bytes": 66345,
       "path": "dist/Vortexion_Module_Forsaken.lua",
-      "sha256": "3e0bc6822da1bca8d756249b79c5deee432087219f93a25913a7363998f7c3f3"
+      "sha256": "c37c78c1d93d106327cc5a01e239806f5e9185143c015bd3cfc9d9c953570cae"
     },
     "SCP": {
       "bytes": 127959,

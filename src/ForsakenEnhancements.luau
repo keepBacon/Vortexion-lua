@@ -11,7 +11,7 @@ return function(options)
     local state = {
         alive = true, stamina = false, antiSlow = false, antiTaph = false,
         autoPopup = false, moveMultiplier = 1, autoRepair = false,
-        repairDelay = 4, approach = false,
+        repairDelay = 4, approach = false, repairProtocol = "Auto",
         repairsSent = 0, progressSeen = 0, popupsClosed = 0,
         lastError = "none", lastAction = "idle", lastWarning = -math.huge,
         repairPaused = false,
@@ -391,6 +391,28 @@ return function(options)
     end
     local function repairOnce()
         if not state.autoRepair or promptInFlight then return end
+        -- Legacy RemoteEvent mode is documented in several independently published
+        -- scripts, but actual server acceptance is VERSION DEPENDENT. Verify progress
+        -- after every attempt and stop after three unchanged observations.
+        if awaitingProgress and lastTarget and lastProgress ~= nil then
+            local progress = lastTarget:FindFirstChild("Progress")
+            if progress and (progress:IsA("IntValue") or progress:IsA("NumberValue"))
+                and progress.Value > lastProgress then
+                state.progressSeen += 1
+                stagnant = 0
+                awaitingProgress = false
+                state.repairPhase = "progress-confirmed"
+            else
+                stagnant += 1
+                awaitingProgress = false
+                if stagnant >= 3 then
+                    state.repairPaused = true
+                    state.repairPhase = "no-progress-after-remote"
+                    state.lastAction = "旧版 RE 请求连续三次未观察到进度变化，已暂停以避免无效请求"
+                    return
+                end
+            end
+        end
         local gen, distance, part = nearestGenerator()
         if not gen then
             state.repairPhase = "no-target"
@@ -415,23 +437,50 @@ return function(options)
             state.lastAction = "正在尝试使用 Humanoid:MoveTo 接近发电机"
             return
         end
-        if stagnant >= 3 then
-            state.repairPhase = "interaction-unconfirmed"
-            state.repairPaused = true
-            state.lastAction = "连续 3 次尝试交互仍未观察到拼图；已停止重试"
-            return
-        end
         if puzzleIsOpen() then
             state.repairPhase = "puzzle-open"
             state.repairPaused = true
             state.lastAction = "已出现发电机拼图；未适配拼图节点与连线协议，不能谎报自动完成"
             return
         end
+        if stagnant >= 3 then
+            state.repairPhase = "interaction-unconfirmed"
+            state.repairPaused = true
+            state.lastAction = "连续 3 次尝试交互仍未观察到拼图；已停止重试"
+            return
+        end
         local prompt = findGeneratorPrompt(gen)
+        if state.repairProtocol == "Legacy RE" or (not prompt and state.repairProtocol == "Auto") then
+            local remotes = gen:FindFirstChild("Remotes")
+            local re = remotes and remotes:FindFirstChild("RE")
+            if not (re and re:IsA("RemoteEvent")) then
+                state.repairPhase = "no-known-interface"
+                state.repairPaused = true
+                state.lastAction = "没有交互提示，也没有旧版 Generator.Remotes.RE；已暂停"
+                return
+            end
+            if distance > 12 then
+                state.repairPhase = "remote-out-of-range"
+                state.lastAction = "旧版 RE 兼容尝试只允许发电机附近；请靠近目标"
+                return
+            end
+            local ok = safe("legacy Generator.RE", function() re:FireServer() end)
+            if not ok then
+                state.repairPhase = "legacy-remote-error"
+                state.repairPaused = true
+                return
+            end
+            state.repairsSent += 1
+            state.repairPhase = "legacy-remote-unconfirmed"
+            state.lastAction = "已发送单次旧版请求；等待 Progress 变化验证，失败自动停止"
+            lastTarget, lastProgress = gen, progress and progress.Value or nil
+            awaitingProgress = true
+            return
+        end
         if not prompt then
             state.repairPhase = "no-prompt"
             state.repairPaused = true
-            state.lastAction = "未找到可交互 ProximityPrompt；旧版无参数 RE 协议不可用"
+            state.lastAction = "当前模式要求原生交互，但没有找到 ProximityPrompt"
             return
         end
         local maxDistance = tonumber(prompt.MaxActivationDistance) or 10
@@ -589,8 +638,11 @@ return function(options)
     tabs.defense:AddToggle("FsPopupR28", {Title="自动关闭 1x1x1x1 弹窗", Default=false,
         Callback=function(v) switch("autoPopup", v) end})
     tabs.defense:AddParagraph({Title="防御范围", Content="塔夫处理本地 Subspaced 视觉效果；不声称免疫服务器 Helpless 状态。弹窗仅在本地隐藏，不模拟鼠标点击以免抢占触控。"})
-    tabs.generators:AddToggle("FsAutoRepairR28", {Title="自动尝试发电机交互（连线解谜待适配）", Default=false,
+    tabs.generators:AddToggle("FsAutoRepairR28", {Title="自动修发电机（兼容协议＋进度检测）", Default=false,
         Callback=function(v) switch("autoRepair", v) end})
+    tabs.generators:AddDropdown("FsGeneratorProtocolR214", {Title="修理协议", Values={"Auto", "Prompt", "Legacy RE"}, Default="Auto",
+        Callback=function(v) if v == "Auto" or v == "Prompt" or v == "Legacy RE" then state.repairProtocol = v end end})
+    tabs.generators:AddParagraph({Title="自动修理协议说明", Content="Auto 优先游戏原生交互；无提示时尝试公开脚本使用的旧版 RE。每次发出请求必须观察 Progress 增长，三次失败自动暂停；拼图界面仍需实际解谜。"})
     tabs.generators:AddSlider("FsRepairDelayR28", {Title="修发电机延迟（秒）", Min=2.5, Max=10,
         Default=4, Rounding=1, Callback=function(v)
             state.repairDelay = math.clamp(tonumber(v) or 4, 2.5, 10)
@@ -608,12 +660,58 @@ return function(options)
         if state.autoRepair then manageScheduler() end
         notify("发电机", "已重置失败计数，等待下一次修理")
     end})
+    local repairStatusParagraph=tabs.generators:AddParagraph({Title="修理诊断", Content="点击查看修理与防御诊断，状态在此显示，不覆盖手机触控"})
     tabs.generators:AddButton({Title="查看修理与防御诊断", Callback=function()
-        notify("Forsaken 修理诊断", ("交互尝试=%d 进度变化=%d 弹窗=%d 交互阶段=%s\n%s\n移动模式=%s 实际WalkSpeed=%.2f\n错误：%s")
+        local detail=("交互尝试=%d 进度变化=%d 弹窗=%d 阶段=%s\n%s\n速度模式=%s 实测WalkSpeed=%.2f\n错误：%s")
             :format(state.repairsSent, state.progressSeen, state.popupsClosed,
                 state.repairPhase, state.lastAction, state.speedMode,
-                state.speedObserved, state.lastError))
+                state.speedObserved, state.lastError)
+        if repairStatusParagraph and type(repairStatusParagraph.SetDesc)=="function" then
+            repairStatusParagraph:SetDesc(detail)
+        else
+            print("[Vortexion/Forsaken] "..detail)
+        end
     end})
-    tabs.generators:AddParagraph({Title="修理限制", Content="现已改为原生 ProximityPrompt 交互；完整自动修理还需要识别 6×6 连线拼图并求解，目前不可用。不会发送无依据的 RE 远程请求。"})
+    tabs.generators:AddButton({Title="复制当前连线谜题结构（供适配）", Callback=function()
+        -- Diagnostic only. Puzzle layouts are not guaranteed across updates.
+        -- Read bounded GUI geometry; never synthesize global touch/mouse events.
+        local pg = player:FindFirstChildOfClass("PlayerGui")
+        if not pg then state.lastAction = "PlayerGui 尚未出现"; return end
+        local puzzle
+        for _, entry in ipairs(pg:GetChildren()) do
+            if entry.Name:lower():find("puzzle", 1, true)
+                or entry.Name:lower():find("generator", 1, true) then
+                puzzle = entry; break
+            end
+        end
+        if not puzzle then
+            state.lastAction = "找不到可见谜题界面，请先手动打开发电机谜题"
+            return
+        end
+        local output = {"[Vortexion] PuzzleUI: " .. puzzle:GetFullName()}
+        local count = 0
+        for _, item in ipairs(puzzle:GetDescendants()) do
+            if item:IsA("GuiObject") then
+                count += 1
+                if count > 160 then break end
+                local ok, desc = pcall(function()
+                    return string.format("%s | %s | pos=%s | size=%s | visible=%s",
+                        item.Name, item.ClassName, tostring(item.AbsolutePosition),
+                        tostring(item.AbsoluteSize), tostring(item.Visible))
+                end)
+                if ok then output[#output + 1] = desc end
+            end
+        end
+        local text = table.concat(output, "\n")
+        local env = (getgenv and getgenv()) or _G
+        local clipboard = env.setclipboard or env.toclipboard or setclipboard or toclipboard
+        if type(clipboard) == "function" then
+            safe("copy puzzle", function() clipboard(text) end)
+        else
+            print(text)
+        end
+        state.lastAction = string.format("已采集 %d 个谜题 GUI 节点；用于验证当前版本结构", count)
+    end})
+    tabs.generators:AddParagraph({Title="修理限制", Content="旧版 RE 仅在兼容模式下限距尝试，并以真实 Progress 验证；原生 Prompt 会进入拼图，但完整 6×6 自动解谜尚未适配。请在打开谜题后复制结构供验证。"})
     return {Destroy = shutdown, State = state, EnumerateGenerators = enumerateGenerators}
 end
