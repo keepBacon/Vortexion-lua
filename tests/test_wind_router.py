@@ -302,43 +302,55 @@ assert(route == nil and reason == 'unsupported-aotr-scene')
 
 
 class LoaderTests(unittest.TestCase):
-    def run_loader(self, base, code="__loaded = true", transport_error=False):
+    """V2 P0 loader contracts; do not expect the pre-publication warning."""
+
+    def run_loader(self, base, code="getgenv().VortexionWindBridge = {Active=true}", transport_error=False):
         loader = (ROOT / "loader.lua").read_text(encoding="utf-8")
         encoded_base = "nil" if base is None else json.dumps(base)
+        source = code + "\n" + "-- padding for HTTP payload\n" * 10
         setup = (
             "local env = {VortexionSourceBase = " + encoded_base + "}\n"
             "getgenv = function() return env end\n"
-            "loadstring = load\n__requests, __warnings = {}, {}\n"
+            "loadstring = load\n"
+            "Instance = nil\n"
+            "task = {spawn = function(f) f() end, wait = function() end}\n"
+            "__requests, __warnings = {}, {}\n"
             "warn = function(message) table.insert(__warnings, message) end\n"
-            "game = {HttpGet = function(_, url) table.insert(__requests, url)\n"
+            "game = {GameId=6331902150, PlaceId=18687417158, IsLoaded=function() return true end,"
+            "HttpGet = function(_, url) table.insert(__requests, url)\n"
         )
-        setup += "error('transport failed')\n" if transport_error else "return " + json.dumps(code) + "\n"
+        setup += "error('transport failed')\n" if transport_error else "return " + json.dumps(source) + "\n"
         return setup + "end}\n(function()\n" + loader + "\nend)()\n"
 
     def test_base_override_and_only_unified_download(self):
         LuaRuntime().run(self.run_loader("https://example.test/wind///") + """
 assert(#__requests == 1 and __requests[1] == 'https://example.test/wind/dist/Vortexion_Wind.lua')
-assert(__loaded and #__warnings == 0)
+assert(env.VortexionLoaderV2.status == 'success' and env.VortexionLoaderV2.stage == 'complete')
 """)
 
-    def test_default_is_explicitly_unpublished(self):
+    def test_default_uses_published_repository_url(self):
         LuaRuntime().run(self.run_loader(None) + """
 assert(#__requests == 1 and __requests[1] == 'https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/dist/Vortexion_Wind.lua')
-assert(#__warnings == 1 and string.find(__warnings[1], 'not published', 1, true))
+assert(env.VortexionLoaderV2.status == 'success')
 """)
 
     def test_invalid_base_does_not_download(self):
         lua = LuaRuntime()
         for base in ("", "file:///tmp", "ftp://example.test", 123, False):
             with self.subTest(base=base):
-                lua.run(self.run_loader(base) + "assert(#__requests == 0 and #__warnings == 1)\n")
+                lua.run(self.run_loader(base) + """
+assert(#__requests == 0 and env.VortexionLoaderV2.status == 'failed')
+assert(env.VortexionLoaderV2.stage == 'source')
+""")
 
-    def test_transport_compile_and_runtime_errors_are_reported(self):
+    def test_transport_compile_and_runtime_errors_are_separate(self):
         lua = LuaRuntime()
-        for code, transport in (("", True), ("this is not lua", False), ("error('entry failed')", False)):
+        for code, transport, expected in (("", True, "download"), ("this is not lua", False, "compile"),
+                                          ("error('entry failed')", False, "runtime")):
             with self.subTest(code=code, transport=transport):
                 lua.run(self.run_loader("https://example.test", code, transport) +
-                        "assert(#__requests == 1 and #__warnings == 1 and string.find(__warnings[1], 'Load failed', 1, true))\n")
+                        "assert(#__requests == 1 and env.VortexionLoaderV2.status == 'failed' "
+                        "and env.VortexionLoaderV2.stage == '" + expected + "')\n")
 
 
 if __name__ == "__main__":
