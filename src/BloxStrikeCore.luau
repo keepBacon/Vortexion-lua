@@ -1,4 +1,4 @@
--- Vortexion - BloxStrike v2: game-specific entry, unified Starlight UI.
+-- Vortexion - BloxStrike v3: game-specific entry, unified WindUI UI.
 -- Do not copy source implementations: use lifecycle-managed services in separate modules.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -7,11 +7,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
+local BloxCommonFactory = nil
+local BloxCloakFactory = nil
 local BloxCombatFactory = nil
+local BloxBulletFactory = nil
 local BloxVisualFactory = nil
 local BloxCosmeticFactory = nil
-local StarlightBridgeFactory = nil
-local Starlight = nil
+local WindBridgeFactory = nil
+local WindUI = nil
 
 local global = (getgenv and getgenv()) or _G
 if type(global.VortexionBloxCleanup) == "function" then
@@ -31,7 +34,10 @@ end
 local function ownCleanup(fn)
     table.insert(cleanups,fn)
 end
+local cleaned = false
 local function cleanup()
+    if cleaned then return end
+    cleaned = true
     if global.VortexionBloxGeneration == generation then
         global.VortexionBloxGeneration += 1
     end
@@ -46,21 +52,88 @@ local function cleanup()
 end
 global.VortexionBloxCleanup=cleanup
 
--- BloxStrike uses Workspace.Characters/Terrorists and Counter-Terrorists;
--- Player.Character alone is not a reliable source while spectating/spawning.
-local function getCharacterRoot()
-    return Workspace:FindFirstChild("Characters")
+--=========================================================================
+-- Executor floor: blacklist the known-incompatible executors early, the same
+-- policy Forsaken and SCP use, so a broken environment fails loudly instead
+-- of half-loading subsystems.
+--=========================================================================
+do
+    local executorName = "unknown"
+    pcall(function()
+        if type(identifyexecutor) == "function" then
+            executorName = tostring(identifyexecutor() or "unknown")
+        end
+    end)
+    for _, bad in ipairs({ "Xeno", "Velocity", "LX63" }) do
+        if string.find(executorName, bad, 1, true) then
+            warn("[Vortexion/BloxStrike] unsupported executor: " .. executorName)
+            return
+        end
+    end
+end
+
+--=========================================================================
+-- UI: WindUI bridge (vendored, zero network).
+--=========================================================================
+local ok,ui=pcall(function() return WindBridgeFactory(WindUI) end)
+if not ok or not ui then
+    warn("[Vortexion/BloxStrike] WindUI initialization failed: "..tostring(ui))
+    return
+end
+global.VortexionBloxNotify=function(title,content)
+    pcall(function() ui:Notify({Title=title, Content=content, Duration=4}) end)
+end
+local function notify(title, content)
+    if global.VortexionBloxNotify then
+        global.VortexionBloxNotify(title,content)
+    end
+end
+local window=ui:CreateWindow({Title="BloxStrike", Size=UDim2.fromOffset(580,460)})
+ui:OnDestroy(cleanup)
+ownCleanup(function()
+    if global.VortexionBloxCleanup == cleanup then
+        global.VortexionBloxCleanup = nil
+        global.VortexionBloxNotify = nil
+    end
+    pcall(function() ui:Destroy() end)
+end)
+local tabs={
+    Combat=window:AddTab({Title="战斗",Icon="lucide-crosshair"}),
+    Weapon=window:AddTab({Title="武器",Icon="lucide-target"}),
+    Visual=window:AddTab({Title="视觉",Icon="lucide-eye"}),
+    Appearance=window:AddTab({Title="枪械皮肤",Icon="lucide-palette"}),
+    Knife=window:AddTab({Title="刀具与手套",Icon="lucide-swords"}),
+    Movement=window:AddTab({Title="移动",Icon="lucide-activity"}),
+    Settings=window:AddTab({Title="设置",Icon="lucide-settings"}),
+}
+window:InstallSettings(tabs.Settings)
+
+--=========================================================================
+-- Team folder cache: the old code re-walked Workspace.Characters twice per
+-- player per frame. One 250ms map rebuild serves every caller.
+--=========================================================================
+local folderCache = { at = 0, map = {} }
+local function rebuildFolderMap()
+    folderCache.map = {}
+    local root=Workspace:FindFirstChild("Characters")
+    if root then
+        for _,name in ipairs({"Terrorists","Counter-Terrorists"}) do
+            local folder=root:FindFirstChild(name)
+            if folder then
+                for _,child in ipairs(folder:GetChildren()) do
+                    folderCache.map[child.Name]=folder
+                end
+            end
+        end
+    end
+    folderCache.at = tick()
 end
 local function teamFolder(player)
-    local root=getCharacterRoot()
-    if not root then return nil end
-    for _,name in ipairs({"Terrorists","Counter-Terrorists"}) do
-        local folder=root:FindFirstChild(name)
-        if folder and folder:FindFirstChild(player.Name) then return folder end
-    end
-    return nil
+    if tick()-folderCache.at > 0.25 then rebuildFolderMap() end
+    return folderCache.map[player.Name]
 end
 local function characterOf(player)
+    if not player then return LocalPlayer and LocalPlayer.Character end
     local team=teamFolder(player)
     local candidate=team and team:FindFirstChild(player.Name)
     if candidate and candidate:IsA("Model") then return candidate end
@@ -90,35 +163,6 @@ local function playerFromModel(model)
     if byName and byName:IsA("Player") then return byName end
     return Players:GetPlayerFromCharacter(model)
 end
-local function notify(title, content)
-    if global.VortexionBloxNotify then
-        global.VortexionBloxNotify(title,content)
-    end
-end
-
-local ok,ui=pcall(function() return StarlightBridgeFactory(Starlight) end)
-if not ok or not ui then
-    warn("[Vortexion/BloxStrike] Starlight initialization failed: "..tostring(ui))
-    return
-end
-global.VortexionBloxNotify=function(title,content)
-    pcall(function() ui:Notify({Title=title, Content=content, Duration=4}) end)
-end
-local window=ui:CreateWindow({Title="BloxStrike", Size=UDim2.fromOffset(580,460)})
-pcall(function()
-    local header=Starlight.Instance.MainWindow.Sidebar.Header
-    header.Text="BloxStrike"
-end)
-local tabs={
-    Combat=window:AddTab({Title="战斗",Icon="lucide-crosshair"}),
-    Weapon=window:AddTab({Title="武器",Icon="lucide-target"}),
-    Visual=window:AddTab({Title="视觉",Icon="lucide-eye"}),
-    Appearance=window:AddTab({Title="枪械皮肤",Icon="lucide-palette"}),
-    Knife=window:AddTab({Title="刀具与手套",Icon="lucide-swords"}),
-    Movement=window:AddTab({Title="移动",Icon="lucide-activity"}),
-    Settings=window:AddTab({Title="设置",Icon="lucide-settings"}),
-}
-window:InstallSettings(tabs.Settings)
 
 local ctx={
     Players=Players,RunService=RunService,Workspace=Workspace,
@@ -128,31 +172,147 @@ local ctx={
     Character=characterOf,Living=livingCharacter,TeamFolder=teamFolder,
     Enemy=isEnemy,PlayerFromModel=playerFromModel,
 }
-local function setup(name,factory)
-    local passed,err=pcall(factory,ctx)
+
+--=========================================================================
+-- Module assembly. Common first (capability probe, guards, cloak target),
+-- then cloak, then features. A failed factory leaves a no-op stub behind so
+-- one broken subsystem never takes the UI down.
+--=========================================================================
+local function emptyModule()
+    local empty = {}
+    function empty:Update() end
+    function empty:Start() end
+    function empty:Stop() end
+    function empty:GetLock() return nil end
+    function empty:GetCandidates() return {} end
+    function empty:PredictPoint(_, part) return part and part.Position or nil end
+    function empty:GetEnvelope() return Vector3.zero end
+    function empty:GetEnvelopeMargin() return 0.5 end
+    function empty:Status() return {} end
+    function empty:Rescan() end
+    function empty:DebugSnapshot() return {} end
+    return empty
+end
+
+local function setup(name, factory, key)
+    if type(factory) ~= "function" then
+        if key then ctx[key] = emptyModule() end
+        return
+    end
+    local passed, result = pcall(factory, ctx)
     if not passed then
-        warn("[Vortexion/BloxStrike] "..name.." failed: "..tostring(err))
-        notify(name.." 模块失败",tostring(err))
+        warn("[Vortexion/BloxStrike] "..name.." failed: "..tostring(result))
+        notify(name.." 模块失败", tostring(result))
+        if key then ctx[key] = emptyModule() end
+    elseif type(result) == "table" and key then
+        ctx[key] = result
     end
 end
-setup("战斗",BloxCombatFactory)
-setup("视觉",BloxVisualFactory)
-setup("皮肤",BloxCosmeticFactory)
+
+setup("Common", BloxCommonFactory)
+local common = ctx
+ownCleanup(function()
+    if type(common.Cloak) == "table" and type(common.Cloak.Stop) == "function" then pcall(common.Cloak.Stop) end
+    for i = #(common.Disposers or {}), 1, -1 do
+        pcall(common.Disposers[i])
+        common.Disposers[i] = nil
+    end
+end)
+local passedCloak, cloak = pcall(BloxCloakFactory, common)
+if passedCloak and type(cloak) == "table" then
+    common.Cloak = cloak
+else
+    warn("[Vortexion/BloxStrike] cloak failed: "..tostring(cloak))
+    common.Cloak = nil
+end
+
+setup("战斗", BloxCombatFactory, "Combat")
+setup("子弹追踪", BloxBulletFactory, "Bullet")
+setup("视觉", BloxVisualFactory)
+setup("皮肤", BloxCosmeticFactory)
+
+-- Cloak must be explicitly started: an unstarted cloak means the enumeration
+-- filter is not installed while every module already trusts Protect().
+if type(common.Cloak) == "table" and type(common.Cloak.Start) == "function" then
+    common.Guard("Cloak", common.Cloak.Start)
+end
+
+--=========================================================================
+-- Shared render loop: one BindToRenderStep(Last) drives Combat and Bullet.
+-- Per-frame dt below 4ms-worth is skipped (physics hiccups), each subsystem
+-- is guard-wrapped, and over-budget frames are counted for the debug channel.
+--=========================================================================
+local budgets = { Combat = 1.2, Bullet = 0.6 }
+local costs = { Combat = 0, Bullet = 0 }
+local slowLoops = 0
+local frameName = "VortexionBloxFrame_" .. tostring(generation)
+RunService:BindToRenderStep(frameName, Enum.RenderPriority.Last.Value, function(dt)
+    if not isCurrent() then return end
+    if dt < 0.004 then return end
+    if ctx.Combat then
+        local t0 = tick()
+        common.Guard("Frame.Combat", function() ctx.Combat:Update(dt) end)
+        costs.Combat = tick() - t0
+    end
+    if ctx.Bullet then
+        local t0 = tick()
+        common.Guard("Frame.Bullet", function() ctx.Bullet:Update(dt) end)
+        costs.Bullet = tick() - t0
+    end
+    for name, cost in pairs(costs) do
+        if cost * 1000 > budgets[name] then slowLoops += 1 end
+    end
+end)
+ownCleanup(function() RunService:UnbindFromRenderStep(frameName) end)
+
+task.spawn(function()
+    while isCurrent() do
+        task.wait(2)
+        if not isCurrent() then break end
+        if common.Debug then
+            local combat = ctx.Combat and ctx.Combat:DebugSnapshot() or {}
+            local bullet = ctx.Bullet and ctx.Bullet:Status() or {}
+            print(("[Vortexion/BloxStrike] frame combat=%s cand=%d hit=%d(%.2fms) bullet path=%s bullets=%d(%.2fms) slow=%d hooks=%d remotes=%d/%d"):format(
+                tostring(combat.locked or "-"), tonumber(combat.candidates) or 0, tonumber(combat.hitEntries) or 0, costs.Combat * 1000,
+                tostring(bullet.path or "-"), tonumber(bullet.bullets) or 0, costs.Bullet * 1000,
+                slowLoops,
+                tonumber(bullet.hooks) or 0,
+                tonumber(bullet.remotes) or 0, tonumber(bullet.totalRemotes) or 0))
+        end
+    end
+end)
+
+--=========================================================================
+-- Settings tab: debug channel, performance readout, environment probe,
+-- unload.
+--=========================================================================
+tabs.Settings:AddToggle("BloxDebug",{Title="调试日志",Default=false,Callback=function(v)
+    common.Debug = v
+end})
 tabs.Settings:AddParagraph({Title="BloxStrike 兼容说明",
-    Content="独立模块；角色优先识别 Workspace.Characters。所有皮肤仅本地预览；服务器命中与武器模块兼容性依赖游戏版本。"})
+    Content="独立模块；角色优先识别 Workspace.Characters。自瞄带预测与锁定重验；子弹追踪四条路径（预测/武器射线/远程参数/投射物）自动选择；皮肤仅本地预览。"})
 tabs.Settings:AddButton({Title="检查运行状态",Callback=function()
     local assets=ReplicatedStorage:FindFirstChild("Assets")
     local skins=assets and assets:FindFirstChild("Skins")
-    local characters=getCharacterRoot()
+    local characters=Workspace:FindFirstChild("Characters")
     local components=ReplicatedStorage:FindFirstChild("Components")
     local weapon=components and components:FindFirstChild("Weapon")
+    local bullet=weapon and weapon:FindFirstChild("Classes") and weapon.Classes:FindFirstChild("Bullet")
+    local status=ctx.Bullet and ctx.Bullet:Status() or {}
     notify("运行环境检查",(characters and "角色目录正常" or "角色目录未加载")
         .." / "..(skins and "皮肤目录正常" or "皮肤目录未加载")
-        .." / "..(weapon and "武器组件正常" or "武器组件未加载"))
+        .." / "..(weapon and "武器组件正常" or "武器组件未加载")
+        .." / "..(bullet and "Bullet 模块存在" or "Bullet 模块未找到")
+        .." / 追踪路径 "..tostring(status.path or "-"))
+end})
+tabs.Settings:AddButton({Title="性能状态",Callback=function()
+    notify("性能状态",("战斗 %.2fms / 子弹 %.2fms，超预算帧 %d"):format(
+        costs.Combat*1000, costs.Bullet*1000, slowLoops))
 end})
 tabs.Settings:AddButton({Title="卸载全部 BloxStrike 功能",Callback=function()
     cleanup()
     pcall(function() ui:Destroy() end)
 end})
+
 window:SelectTab(1)
 notify("Vortexion - BloxStrike","功能模块已加载；进入对局后启用对应功能")

@@ -1,0 +1,108 @@
+{
+  "pack": "forsaken-audio",
+  "generatedBy": "asset delivery, read-only verification then file_copy; originals untouched",
+  "files": [
+    {
+      "name": "coagulate.mp3",
+      "bytes": 41760,
+      "sha256": "6a46e12c76812c437d86336d2b8b1272b76fd9d6af5b02f3ab809f11f254124e",
+      "sourceRelativePath": "reference-inputs/forsaken/Forsaken-Scripts-main/Forsaken-Scripts-main/TerioThings/coagulate.mp3",
+      "identicalTwinRelativePath": "work/attachments/Forsaken/Forsaken-Scripts-main/TerioThings/coagulate.mp3",
+      "executorWorkspacePath": "TerioThings/coagulate.mp3",
+      "wiredInReferences": true,
+      "wiredEvidence": "Terio_Survivor.lua:240 defines coagulatesfx = \"TerioThings/coagulate.mp3\"; used at :1082-1088 in the E-key Coagulate ability (Sound parented to PlayerGui, PlaybackSpeed 1.5, Volume 1.5, Debris 2s, after freezePlayer + task.wait(2))",
+      "wiredStatus": "manual_local_preview_only",
+      "wiredNote": "reference script uses it for its own Coagulate ability; in this project it stays manual local preview only, not presented as an in-game coagulate ability"
+    },
+    {
+      "name": "lance_swing.mp3",
+      "bytes": 50688,
+      "sha256": "2e4742e14585772e8f0c2ea0834150df95f0c973f97b540a88370e109b0135e5",
+      "sourceRelativePath": "reference-inputs/forsaken/Forsaken-Scripts-main/Forsaken-Scripts-main/TerioThings/lance_swing.mp3",
+      "identicalTwinRelativePath": "work/attachments/Forsaken/Forsaken-Scripts-main/TerioThings/lance_swing.mp3",
+      "executorWorkspacePath": "TerioThings/lance_swing.mp3",
+      "wiredInReferences": true,
+      "wiredEvidence": "Terio_Survivor.lua:239 defines piercesfx = \"TerioThings/lance_swing.mp3\"; used at :1158-1164 in the slash ability (Sound parented to PlayerGui, PlaybackSpeed 2, Volume 1.5, Debris 2s, task.wait(0.5) occurs before both this sound and the immediately following slashTrack:Play(); applyVelocity(0.27,55) follows the animation)",
+      "wiredStatus": "local_animation_hook_mock_verified",
+      "wiredNote": "Terio_Survivor.lua:965-966 defines slashAnim as 84413781229733; :1153 loads it and :1157-1165 waits 0.5s before sound and animation together. Project observation uses zero extra delay; local presentation only, not the original ability."
+    },
+    {
+      "name": "sil_whip.mp3",
+      "bytes": 61440,
+      "sha256": "7f35d7cc07d52d3cb770f9b85d06feee41339e9234ea11f7e5510752c08b8a7b",
+      "sourceRelativePath": "reference-inputs/forsaken/Forsaken-Scripts-main/Forsaken-Scripts-main/TerioThings/sil_whip.mp3",
+      "identicalTwinRelativePath": "work/attachments/Forsaken/Forsaken-Scripts-main/TerioThings/sil_whip.mp3",
+      "executorWorkspacePath": "TerioThings/sil_whip.mp3",
+      "wiredInReferences": true,
+      "wiredEvidence": "Sil_Raw.lua:253-264 plays it 0.45s after AnimationId 116814116277716, Sound parented to PlayerGui, PlaybackSpeed 1, Volume 1.5, Debris 2s",
+      "wiredStatus": "local_animation_hook_mock_verified",
+      "wiredNote": "Sil animation 116814116277716 queues this local sound after 0.45s. Real-function offline mocks verify matching, delay, cancellation and cleanup; Roblox playback remains unverified."
+    }
+  ],
+  "missing": [
+    {
+      "name": "resentment.mp3",
+      "referencedBy": "1x4TwoTimeSkin.lua:20",
+      "note": "workspace.Themes child rbxassetid://97690757653206 theme music"
+    },
+    {
+      "name": "phoenix.mp3",
+      "referencedBy": "1x4TwoTimeSkin.lua:22",
+      "note": "workspace.Themes.LastSurvivor music"
+    },
+    {
+      "name": "sil_layer4.mp3",
+      "referencedBy": "Sil_Raw.lua:318",
+      "note": "TerioThings/sil_layer4.mp3"
+    },
+    {
+      "name": "sil_layer1.wav",
+      "referencedBy": "Sil_Raw.lua:320",
+      "note": "TerioThings/sil_layer1.wav"
+    },
+    {
+      "name": "sil_layer2.wav",
+      "referencedBy": "Sil_Raw.lua:322",
+      "note": "TerioThings/sil_layer2.wav"
+    },
+    {
+      "name": "sil_layer3.wav",
+      "referencedBy": "Sil_Raw.lua:324",
+      "note": "TerioThings/sil_layer3.wav"
+    },
+    {
+      "name": "sil_terio_lms.mp3",
+      "referencedBy": "Sil_Raw.lua:327",
+      "note": "TerioThings/sil_terio_lms.mp3"
+    },
+    {
+      "name": "lmsan_e.mp3",
+      "referencedBy": "Terio_Survivor.lua:31",
+      "note": "TerioThings/lmsan_e.mp3, workspace.Themes LastSurvivor SoundId, Volume 1.8"
+    },
+    {
+      "name": "ena_pierce1.mp3",
+      "referencedBy": "Terio_Survivor.lua:45",
+      "note": "TerioThings/ena_pierce1.mp3, voicelines v==0 VampireShedletsky, Volume 1.5, Debris 4s"
+    },
+    {
+      "name": "ena_pierce2.mp3",
+      "referencedBy": "Terio_Survivor.lua:52",
+      "note": "TerioThings/ena_pierce2.mp3, voicelines v==0 VampireShedletsky, Volume 1.5, Debris 4s"
+    },
+    {
+      "name": "ena_coagulate1.mp3",
+      "referencedBy": "Terio_Survivor.lua:63",
+      "note": "TerioThings/ena_coagulate1.mp3, voicelines v==1 VampireShedletsky, Volume 1.5, Debris 4s"
+    },
+    {
+      "name": "ena_coagulate2.mp3",
+      "referencedBy": "Terio_Survivor.lua:70",
+      "note": "TerioThings/ena_coagulate2.mp3, voicelines v==1 VampireShedletsky, Volume 1.5, Debris 4s"
+    }
+  ],
+  "missingCount": 12,
+  "verificationNote": "Terio_Survivor.lua read in both copies (reference-inputs and work/attachments, identical sha256 4b9360a972bec78c6ec4cad645010eddea382400c6259f09d9c65c94920d8e1f): lines 239-240 define piercesfx/coagulatesfx, 1082-1088 and 1158-1164 are the usages; all references carry the TerioThings/ prefix",
+  "networkRequired": false,
+  "notes": "getcustomasset resolves relative to the executor workspace folder. dist build is a single lua and carries no binaries; ship these files next to the user's workspace as TerioThings/. Not a complete audio rework."
+}

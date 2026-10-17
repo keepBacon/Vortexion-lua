@@ -1,0 +1,74 @@
+{
+  "build_tag": "wind-unified-v1",
+  "unified_entry": "dist/Vortexion_Wind.lua",
+  "unified_sha256": "786ecf82836f4cab39b9128cb101aeaefb519db5e5bb900ad3540d49808eb164",
+  "bundles": {
+    "Vortexion_AOTR_Battle.lua": {
+      "bytes": 1476626,
+      "sha256": "9628f033ab97e4aa955c475483929333fd71819f74b3284241ada68982524c13"
+    },
+    "Vortexion_AOTR_Lobby.lua": {
+      "bytes": 1414726,
+      "sha256": "ccc12d06b12e25eb220e1051c333b4b8b4ae746dafed3b774570e4f4d32b2ce2"
+    },
+    "Vortexion_BloxStrike.lua": {
+      "bytes": 1509202,
+      "sha256": "af30c613e95e14d62a05c812ca7c3c52523ce4af06702ca7b0c6106a194139ae"
+    },
+    "Vortexion_Forsaken.lua": {
+      "bytes": 1572295,
+      "sha256": "bf44a0a987aeea0eb196333c33c85cb46725d64cb4a3fc7bca5cf867b51c15a9"
+    },
+    "Vortexion_SCP.lua": {
+      "bytes": 1495467,
+      "sha256": "84db8a5ef57120af15f2c5a5ff716a17c1a18f9bdd82efcbd1e3cbcbf92bc240"
+    },
+    "Vortexion_Wind.lua": {
+      "bytes": 1868076,
+      "sha256": "786ecf82836f4cab39b9128cb101aeaefb519db5e5bb900ad3540d49808eb164"
+    }
+  },
+  "checks": {
+    "luau_compile": {
+      "engine": "luau-web",
+      "version": "1.5.1",
+      "files": 42,
+      "passed": true
+    },
+    "wind_adapter_luau_mock": {
+      "passed": true
+    },
+    "server_switch_lua54_mock": {
+      "tests": 22,
+      "passed": true
+    },
+    "router_build_loader_lua54_mock": {
+      "tests": 14,
+      "passed": true
+    },
+    "router_build_luau_mock": {
+      "tests": 10,
+      "passed": true
+    },
+    "attachment_option_ids": {
+      "preserved": 203,
+      "passed": true
+    },
+    "forsaken_attachment_check": {
+      "core_ids": 59,
+      "guest_ids": 3,
+      "esp_segment_unchanged": true,
+      "passed": true
+    },
+    "source_and_output_hashes": {
+      "passed": true
+    }
+  },
+  "roblox_android_tested": false,
+  "github_published": false,
+  "notes": [
+    "Compilation and mocks do not establish Roblox visual or live game correctness.",
+    "Wind vendor remains byte-identical to the supplied attachment.",
+    "Optional external tools retain their own third-party interfaces."
+  ]
+}

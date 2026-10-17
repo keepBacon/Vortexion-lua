@@ -1,11 +1,219 @@
--- Lifecycle and UI shared by AOTR lobby and battle.
-return function(scene, Starlight, Bridge)
+-- Lifecycle, capability probe and UI shared by AOTR lobby and battle.
+-- Modules receive this app table and register features against it.
+return function(scene, WindUI, Bridge)
     local Players=game:GetService("Players")
     local RunService=game:GetService("RunService")
     local Workspace=game:GetService("Workspace")
+    local ReplicatedStorage=game:GetService("ReplicatedStorage")
+    local Lighting=game:GetService("Lighting")
+    local UserInputService=game:GetService("UserInputService")
+    local Stats=game:GetService("Stats")
     local client=(getgenv and getgenv()) or _G
     if type(client.VortexionAOTRCleanup)=="function" then pcall(client.VortexionAOTRCleanup) end
     local app={scene=scene, connections={}, disposers={}, active=true, flags={}, player=Players.LocalPlayer}
+    app.Services={Players=Players,RunService=RunService,Workspace=Workspace,
+        ReplicatedStorage=ReplicatedStorage,Lighting=Lighting,Input=UserInputService,
+        UserInputService=UserInputService,Stats=Stats}
+
+    --=========================================================================
+    -- Executor floor: same policy as Forsaken/SCP/BloxStrike.
+    --=========================================================================
+    do
+        local executorName="unknown"
+        pcall(function()
+            if type(identifyexecutor)=="function" then executorName=tostring(identifyexecutor() or "unknown") end
+        end)
+        for _,bad in ipairs({"Xeno","Velocity","LX63"}) do
+            if string.find(executorName,bad,1,true) then
+                warn("[Vortexion/AOTR] unsupported executor: "..executorName)
+                return
+            end
+        end
+    end
+
+    --=========================================================================
+    -- Capability probe: every optional integration checks these, never guesses.
+    --=========================================================================
+    local Caps={
+        Drawing=type(Drawing)=="table" or type(Drawing)=="userdata",
+        DrawingUserdata=type(Drawing)=="userdata",
+        hookfunction=type(hookfunction)=="function",
+        replaceclosure=type(replaceclosure)=="function",
+        hookmetamethod=type(hookmetamethod)=="function",
+        getrawmetatable=type(getrawmetatable)=="function",
+        newcclosure=type(newcclosure)=="function",
+        checkcaller=type(checkcaller)=="function",
+        getnamecallmethod=type(getnamecallmethod)=="function",
+        mousemoverel=type(mousemoverel)=="function",
+        mouse1press=type(mouse1press)=="function",
+        mouse1release=type(mouse1release)=="function",
+        VirtualUser=type(VirtualUser)=="table",
+        gethui=type(gethui)=="function",
+        getgenv=type(getgenv)=="function",
+    }
+    app.Caps=Caps
+    app.HasDrawing=(Caps.Drawing or Caps.DrawingUserdata) and true or false
+    app.CanCloak=Caps.hookmetamethod and Caps.checkcaller and Caps.getnamecallmethod
+
+    --=========================================================================
+    -- Guarded logging: Debug flag gates verbose output; warn is throttled so a
+    -- stuck subsystem cannot flood the console.
+    --=========================================================================
+    app.Debug=false
+    local lastWarn={}
+    local function Log(fmt,...)
+        if not app.Debug then return end
+        local ok,msg=pcall(string.format,fmt,...)
+        print("[Vortexion/AOTR/"..tostring(scene).."] "..(ok and msg or tostring(fmt)))
+    end
+    local function Guard(tag,fn,...)
+        local ok,err=pcall(fn,...)
+        if not ok then
+            local now=tick()
+            if now-(lastWarn[tag] or 0)>5 then
+                lastWarn[tag]=now
+                warn("[Vortexion/AOTR/"..tostring(tag).."] "..tostring(err))
+            end
+        end
+        return ok,err
+    end
+    local function RandomName()
+        local s={}
+        for i=1,14 do s[i]=string.char(math.random(65,90)) end
+        return table.concat(s)
+    end
+    local function GetGuiParent()
+        if Caps.gethui then
+            local ok,h=pcall(gethui)
+            if ok and h then return h end
+        end
+        local ok,cg=pcall(function() return game:GetService("CoreGui") end)
+        if ok and cg then return cg end
+        -- Render callers already retry on nil; never suspend a visual tick.
+        local lp=Players.LocalPlayer
+        if not lp then return nil end
+        local okPG,pg=pcall(function() return lp:FindFirstChild("PlayerGui") end)
+        if okPG and pg then return pg end
+        return nil
+    end
+    local function Ping()
+        local ok,item=pcall(function() return Stats.Network.ServerStatsItem["Data Ping"] end)
+        if ok and item then
+            local okv,v=pcall(function() return item:GetValue() end)
+            if okv and type(v)=="number" and v>0 then return math.clamp(v/1000,0.02,0.4) end
+        end
+        return 0.08
+    end
+    app.Log=Log
+    app.Guard=Guard
+    app.RandomName=RandomName
+    app.GetGuiParent=GetGuiParent
+    app.Ping=Ping
+    app.OnCleanup=function(fn)
+        if type(fn)=="function" then return app:OnStop(fn) end
+        return fn
+    end
+    app.Notify=app.Notify -- keep original signature (message)
+
+    --=========================================================================
+    -- Remote surface: one probe, every consumer. AOTR protocol is stable across
+    -- the known scripts (GET RemoteFunction + POST RemoteEvent under
+    -- ReplicatedStorage.Assets.Remotes); missing pieces degrade per feature.
+    --=========================================================================
+    local Remotes={ready=false,GET=nil,POST=nil}
+    local function probeRemotes()
+        local ok,res=pcall(function()
+            local folder=ReplicatedStorage:FindFirstChild("Assets")
+            folder=folder and folder:FindFirstChild("Remotes")
+            if not folder then return nil end
+            return folder
+        end)
+        if ok and res then
+            Remotes.GET=res:FindFirstChild("GET")
+            Remotes.POST=res:FindFirstChild("POST")
+        end
+        Remotes.ready=(Remotes.GET~=nil) or (Remotes.POST~=nil)
+        Log("remotes GET=%s POST=%s",tostring(Remotes.GET~=nil),tostring(Remotes.POST~=nil))
+        return Remotes.ready
+    end
+    app.Remotes=Remotes
+    app.ProbeRemotes=probeRemotes
+
+    --=========================================================================
+    -- HUD reader: blade/spear counters live in deeply nested labels whose
+    -- intermediate names drift between versions. Probe a candidate chain once,
+    -- cache the resolved labels, re-probe on nil text.
+    --=========================================================================
+    local HUD={blades=nil,spears=nil,lastProbe=0}
+    local function findLabel(root,path)
+        local cur=root
+        for _,name in ipairs(path) do
+            if not cur then return nil end
+            cur=cur:FindFirstChild(name,true)
+        end
+        if cur and cur:IsA("TextLabel") then return cur end
+    end
+    -- Gas sits at an exact non-recursive path (Top["7"].Gas.Percentage); a
+    -- missing hop, a raised error or a non-TextLabel terminal all resolve nil.
+    local function findExactLabel(root,path)
+        local cur=root
+        for _,name in ipairs(path) do
+            if not cur then return nil end
+            local ok,child=pcall(function() return cur:FindFirstChild(name) end)
+            if not ok or not child then return nil end
+            cur=child
+        end
+        if not cur then return nil end
+        local okText,isText=pcall(function() return cur:IsA("TextLabel") end)
+        if okText and isText then return cur end
+        return nil
+    end
+    local function probeHUD(force)
+        if not force and tick()-HUD.lastProbe<2 then return HUD end
+        HUD.lastProbe=tick()
+        local ok,gui=pcall(function()
+            local lp=Players.LocalPlayer
+            return lp and lp:FindFirstChild("PlayerGui")
+        end)
+        if not ok or not gui then HUD.blades=nil; HUD.spears=nil; HUD.gas=nil; return HUD end
+        HUD.blades=findLabel(gui,{"Interface","HUD","Main","Top","Blades","Sets"})
+        HUD.spears=findLabel(gui,{"Interface","HUD","Main","Top","Spears","Spears"})
+        HUD.gas=findExactLabel(gui,{"Interface","HUD","Main","Top","7","Gas","Percentage"})
+        return HUD
+    end
+    local function readCount(label)
+        if not label or not label.Parent then return nil end
+        local ok,text=pcall(function() return label.Text end)
+        if not ok or not text then return nil end
+        local have,max=string.match(text,"(%d+)%s*/%s*(%d+)")
+        if have then return tonumber(have),tonumber(max) end
+        local m=string.match(text,"(%d+)")
+        if m then local n=tonumber(m); return n,n end
+        return nil
+    end
+    -- Strict decimal percentage: "42%", "42.5%", bare 0/100 with surrounding
+    -- whitespace. Rejects negatives, nan/inf, >100 and mixed text. Never
+    -- reuses readCount, which would truncate a leading minus into digits.
+    local function readPercent(label)
+        if not label then return nil end
+        local okParent,parent=pcall(function() return label.Parent end)
+        if not okParent or not parent then return nil end
+        local okText,text=pcall(function() return label.Text end)
+        if not okText or type(text)~="string" then return nil end
+        local trimmed=string.match(text,"^%s*(.-)%s*$")
+        local body=string.match(trimmed,"^(.-)%s*%%$")
+        if body==nil then body=trimmed end
+        if not string.match(body,"^%d+$") and not string.match(body,"^%d+%.%d+$") then return nil end
+        local value=tonumber(body)
+        if not value or value~=value or value==math.huge or value==-math.huge then return nil end
+        if value<0 or value>100 then return nil end
+        return value
+    end
+    app.HUD=HUD
+    app.ProbeHUD=probeHUD
+    app.ReadCount=readCount
+    app.ReadPercent=readPercent
+
     local function cleanup()
         if not app.active then return end
         app.active=false
@@ -15,22 +223,125 @@ return function(scene, Starlight, Bridge)
     end
     client.VortexionAOTRCleanup=cleanup
     function app:Track(con) table.insert(self.connections,con);return con end
-    function app:OnStop(fn) table.insert(self.disposers,fn) end
+    function app:OnStop(fn) table.insert(self.disposers,fn);return fn end
+
+    --=========================================================================
+    -- Touch layer: mobile trigger + fly drag. Single finger held = trigger;
+    -- single finger drag = horizontal fly; two fingers = vertical fly.
+    --=========================================================================
+    app.Touch = { Enabled = false, Held = false, RightSideOnly = true }
+    do
+        local UIS = app.Services and app.Services.UserInputService
+        if not UIS then
+            local ok, svc = pcall(function() return game:GetService("UserInputService") end)
+            if ok then UIS = svc end
+        end
+        if UIS and UIS.TouchEnabled then
+            app.Touch.Enabled = true
+            local touchPoints = {}
+            local touchOrder = {}
+            local touchConns = {}
+            local touchType = Enum and Enum.UserInputType and Enum.UserInputType.Touch
+            local function isTouch(input)
+                return input and (not touchType or input.UserInputType==touchType)
+            end
+            local function beginTouch(input, processed)
+                if not app.active or processed or not isTouch(input) or touchPoints[input] then return end
+                local position=input.Position
+                if not position then return end
+                local camera=Workspace.CurrentCamera
+                local viewport=camera and camera.ViewportSize
+                if app.Touch.RightSideOnly and viewport and viewport.X>0 and position.X<viewport.X*0.5 then return end
+                touchPoints[input]={start=position,current=position}
+                table.insert(touchOrder,input)
+                app.Touch.Held=true
+            end
+            local function moveTouch(input)
+                local point=touchPoints[input]
+                if point and input.Position then point.current=input.Position end
+            end
+            local function endTouch(input)
+                if not touchPoints[input] then return end
+                touchPoints[input]=nil
+                local index=table.find(touchOrder,input)
+                if index then table.remove(touchOrder,index) end
+                app.Touch.Held=#touchOrder>0
+            end
+            if UIS.InputBegan then
+                table.insert(touchConns, UIS.InputBegan:Connect(beginTouch))
+                table.insert(touchConns, UIS.InputChanged:Connect(moveTouch))
+                table.insert(touchConns, UIS.InputEnded:Connect(endTouch))
+            else
+                table.insert(touchConns, UIS.TouchStarted:Connect(beginTouch))
+                table.insert(touchConns, UIS.TouchMoved:Connect(moveTouch))
+                table.insert(touchConns, UIS.TouchEnded:Connect(endTouch))
+            end
+            function app.Touch:Drag()
+                local first=touchPoints[touchOrder[1]]
+                local second=touchPoints[touchOrder[2]]
+                if not first then return Vector2.zero,0 end
+                local delta=first.current-first.start
+                local vertical=0
+                if second then vertical=second.current.Y-second.start.Y end
+                return Vector2.new(delta.X,delta.Y),vertical
+            end
+            local function clearTouches()
+                table.clear(touchPoints)
+                table.clear(touchOrder)
+                app.Touch.Held=false
+            end
+            if UIS.WindowFocusReleased then
+                table.insert(touchConns,UIS.WindowFocusReleased:Connect(clearTouches))
+            end
+            app.OnCleanup(function()
+                for _,cn in ipairs(touchConns) do pcall(function() cn:Disconnect() end) end
+                clearTouches()
+            end)
+        end
+    end
     function app:Alive() return self.active and client.VortexionAOTRCleanup==cleanup end
+    -- Bounded visual cadence from the shared bridge (app.ui). Degrades to the
+    -- caller's base interval when the bridge or method is absent, so pre-bridge
+    -- cadence is preserved and the fixture path keeps its original frequency.
+    function app:GetVisualInterval(base)
+        base=tonumber(base) or 0.1
+        -- Reject non-finite or non-positive bases: math.huge freezes visuals
+        -- forever, NaN or <=0 stalls the cadence.
+        if base~=base or base==math.huge or base==-math.huge or base<=0 then base=0.1 end
+        local ui=self.ui
+        if ui and type(ui.GetVisualInterval)=="function" then
+            local ok,value=pcall(function() return ui:GetVisualInterval(base) end)
+            if ok and type(value)=="number" and value==value and value~=math.huge and value~=-math.huge and value>0 then
+                return math.max(base,value)
+            end
+        end
+        return base
+    end
     function app:Notify(message)
         if self.ui and self:Alive() then self.ui:Notify({Title="AOTR",Content=message,Duration=3}) end
     end
     function app:Open()
+        if not self:Alive() then return end
         local ok,ui=pcall(function()
-            return Bridge(Starlight,{Name="AOTR",Folder="VortexionAOTR",Section="A T T A C K  O N  T I T A N"})
+            return Bridge(WindUI,{Name="AOTR",Folder="VortexionAOTR",Section="A T T A C K  O N  T I T A N"})
         end)
-        if not ok or not ui then warn("[AOTR] Starlight initialization failed: "..tostring(ui));cleanup();return end
+        if not ok or not ui then warn("[Vortexion/AOTR] WindUI initialization failed: "..tostring(ui));cleanup();return end
+        -- Bridge may yield while cleanup retires this app; reclaim the late UI.
+        if not self:Alive() then pcall(function() ui:Destroy() end);return end
         self.ui=ui
-        local window=ui:CreateWindow({Title="AOTR"})
-        pcall(function()
-            local header=Starlight.Instance.MainWindow.Sidebar.Header
-            header.Text="AOTR"
+        local initialized,window=pcall(function()
+            ui:OnDestroy(cleanup)
+            if not self:Alive() then return end
+            return ui:CreateWindow({Title=scene=="lobby" and "AOTR 大厅" or "AOTR 战斗"})
         end)
+        if not initialized or not window then
+            if not initialized or self:Alive() then
+                warn("[Vortexion/AOTR] WindUI initialization failed: "..tostring(window))
+            end
+            cleanup()
+            return
+        end
+        if not self:Alive() then return end
         return window
     end
     function app:Loop(id, interval, work)

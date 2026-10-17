@@ -1,0 +1,14 @@
+{
+  "stage": "android_runtime_probe",
+  "status": "runtime_not_verified",
+  "package": "com.roblox.client",
+  "running": false,
+  "visible_pids": [],
+  "adb_available": false,
+  "adb_error": "adb: execl returned -1: Permission denied; ADB server did not ACK; failed to start daemon",
+  "notes": [
+    "Package inspection found no visible running Roblox process; this does not prove package absence.",
+    "No live Roblox functionality or rendering was exercised.",
+    "This probe evidence accompanies the verified archive and was created after packaging."
+  ]
+}

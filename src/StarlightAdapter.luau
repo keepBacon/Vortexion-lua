@@ -175,6 +175,15 @@ return function(Starlight, config)
             created += 1
             local idx = "goon_cn_tab_" .. tostring(created)
             local nativeTab = group:CreateTab({Name = info.Title or idx, Columns = isTouch and 1 or 2, Icon = ""}, idx)
+            -- Starlight parents the tab button at CreateTab tail; if that wiring is
+            -- ever lost, the tab silently never appears in sidebar navigation.
+            -- Re-assert it here so every tab stays reachable.
+            do
+                local button = nativeTab and nativeTab.Instances and nativeTab.Instances.Button
+                if button and not button.Parent and group and group.Instance then
+                    button.Parent = group.Instance
+                end
+            end
             local handle = {Native = nativeTab, Key = idx, Title = info.Title, Count = 0, GroupCount = 0}
             local groupbox
             local function pickBox()
@@ -193,7 +202,20 @@ return function(Starlight, config)
                     while (not groupbox.ParentingItem or not groupbox.Instance) and os.clock() < untilAt do
                         task.wait()
                     end
-                    if not groupbox.ParentingItem then error("Starlight 分组初始化超时: " .. name) end
+                    if not groupbox.ParentingItem then
+                        -- One dead groupbox must never abort the whole tab build;
+                        -- an error() here would silently drop every later section.
+                        warn("[" .. appName .. "/Starlight] 分组初始化超时: " .. name)
+                        return nil, nil
+                    end
+                    -- Starlight parents the groupbox instance at CreateGroupbox tail,
+                    -- which can race the async template init; re-assert so controls render.
+                    if groupbox.Instance and not groupbox.Instance.Parent then
+                        local page = nativeTab and nativeTab.Instances and nativeTab.Instances.Page
+                        local columnName = "Column_" .. tostring(isTouch and 1 or (handle.GroupCount % 2 == 1 and 1 or 2))
+                        local column = page and (page:FindFirstChild(columnName) or page:FindFirstChild("Column_1"))
+                        if column then groupbox.Instance.Parent = column end
+                    end
                 end
                 handle.Count += 1
                 return groupbox, idx .. "_control_" .. handle.Count
@@ -214,6 +236,7 @@ return function(Starlight, config)
             end
             function handle:AddToggle(id, c)
                 local box, key = pickBox()
+                if not box then return end
                 local option
                 local function onChange(v)
                     if option then option.Value = not not v end
@@ -229,6 +252,7 @@ return function(Starlight, config)
             end
             function handle:AddSlider(id, c)
                 local box, key = pickBox()
+                if not box then return end
                 local default = math.clamp(tonumber(c.Default) or c.Min or 0, c.Min or 0, c.Max or 100)
                 local option
                 local function onChange(v)
@@ -244,10 +268,12 @@ return function(Starlight, config)
             end
             function handle:AddButton(c)
                 local box, key = pickBox()
+                if not box then return end
                 return box:CreateButton({Name=c.Title, Style=2, Tooltip=c.Description or "", Callback=function() safeCallback(c.Callback) end}, key)
             end
             function handle:AddInput(id, c)
                 local box,key=pickBox()
+                if not box then return end
                 local default = tostring(c.Default or "")
                 local option
                 local function changed(v)
@@ -262,6 +288,7 @@ return function(Starlight, config)
             end
             function handle:AddDropdown(id,c)
                 local box,key=pickBox()
+                if not box then return end
                 local vals = c.Values or {}
                 local chosen = type(c.Default)=="number" and vals[c.Default] or c.Default or vals[1]
                 local option
@@ -278,10 +305,24 @@ return function(Starlight, config)
             end
             function handle:AddParagraph(c)
                 local box,key=pickBox()
+                if not box then return end
                 return box:CreateParagraph({Name=c.Title or "说明",Content=c.Content or ""},key)
             end
-            bridge.Tabs[created] = handle
-            task.defer(function() repairScroll(nativeTab) end)
+            -- A single failing control must never abort the remaining controls of
+            -- this tab; without this guard one bad call silently drops whole sections.
+            for _, methodName in ipairs({"AddToggle", "AddSlider", "AddButton", "AddInput", "AddDropdown", "AddParagraph"}) do
+                local rawMethod = handle[methodName]
+                if type(rawMethod) == "function" then
+                    handle[methodName] = function(_, ...)
+                        local packed = table.pack(pcall(rawMethod, handle, ...))
+                        if not packed[1] then
+                            warn("[" .. appName .. "/Starlight] 控件创建失败 " .. methodName .. ": " .. tostring(packed[2]))
+                        end
+                        if packed.n > 1 then return table.unpack(packed, 2, packed.n) end
+                    end
+                end
+            end
+            bridge.Tabs[created] = handle            task.defer(function() repairScroll(nativeTab) end)
             return handle
         end
         function win:InstallSettings(tab)

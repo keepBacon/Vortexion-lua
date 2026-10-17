@@ -1,0 +1,707 @@
+{
+  "stage": "wind_release_checks",
+  "status": "offline_verified_runtime_unverified",
+  "generatedAt": "2026-10-17T00:22:53.409Z",
+  "expectedStages": 34,
+  "passedStages": 34,
+  "engine": "luau-web 1.5.1",
+  "router_and_server_switch_engine": "Lua 5.4",
+  "inputsStable": true,
+  "outputsStable": true,
+  "testsStable": true,
+  "source_sha256": {
+    "src/AOTRBattle.luau": "79773bb50c5c3cea9f37ea6dbd53d9e0f99046be5741afdcdb55f784b9dbb6e4",
+    "src/AOTRCloak.lua": "0fdf01dc2022edd90b5733105026c4a88e75fb329cdac1af15324f61c92596ed",
+    "src/AOTRCombat.luau": "0fa29d14107677debd6b7ccc48ccba8ca63a455eee690b06d022f8a986234979",
+    "src/AOTRCommon.luau": "ef802c843511515d83d316d99a3f623183b4192ddc866802d6e970839a909370",
+    "src/AOTRESP.luau": "257d004647c1518f9cef26eccfabf0325b28e479293f322f45bb592996695de4",
+    "src/AOTRFarm.luau": "7146f18bbb5fc4ce7dc7ed72fe60739acdf2a9328391e4ed0dc75f820632b11b",
+    "src/AOTRLobby.luau": "87ad2e8c82226ebcd8b0783ac3ce24a1ef902d662343a517176bf21cbab218f9",
+    "src/AOTRMovement.luau": "4de9b57f0caf09fd6c072df12698e2a10f40b3242f25378beb9d7d64428078ec",
+    "src/AOTRTitans.luau": "8c55c4ecf8b91e4e44239cead676fda1113fda17a7541220796a707104921160",
+    "src/BloxStrikeBullet.luau": "801612328f9e1516ba37fb1b347fbd26cc145880219aca6d97181b33fd0df995",
+    "src/BloxStrikeCloak.lua": "e2ae697b026ac5f0bed64ab84f0f022d41b166b193897ce22a6680c0383189c4",
+    "src/BloxStrikeCombat.luau": "a797bafedd1a995fe35e48bf3926460a5febb809f49b7d824f335086105ab1d4",
+    "src/BloxStrikeCommon.luau": "63b1f197e95348946332980f7a823bed792437b79845503fdaa1c26df71984bb",
+    "src/BloxStrikeCore.luau": "d151550644e6ae38f557254d535431566dd6ca679355fa2d49e4f3a70cfcac15",
+    "src/BloxStrikeCosmetic.luau": "15fc3a6a478e9c10335b5e3f48f815f60e5a2a8936c460a92e1c279c78609213",
+    "src/BloxStrikeVisual.luau": "3b2137cc998f16a97c99faba8a5c60fd129e6f07e2fdff6ddc09305609b8fde4",
+    "src/ForsakenCombat.luau": "8a2209ee52a6b07abc9958d31e1c09f79772c925dc48020053ecd41db9132a24",
+    "src/ForsakenCore.luau": "fbb08750adb05928a352941818182625b1e2a0378cd1f885c8f84268f27d698e",
+    "src/ForsakenGuest.luau": "557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4",
+    "src/ForsakenSurvival.luau": "072462b6cb51e3395a2aebbf6359badd04a1262299a64ebafa19138344704645",
+    "src/ForsakenVisual.luau": "106877a9866171fe2c2392d92689414b21e0be0803216b71df9ae24b36fb1517",
+    "src/GameRouter.luau": "d38f4117ea6aec535d03460a681e39ff009c238c09360fb14876f78b1959d7a6",
+    "src/SCPCamera.luau": "dcb1afda4dc974a315a4a278e5e894c756b5e72aa9d5a71052e3780417a90274",
+    "src/SCPCandidates.luau": "66731652f08aecedc50d37b6c080a77565d7e599b192bd1baf3ced18792146e9",
+    "src/SCPCloak.lua": "6a3640e73ef4dd2f532f73b64aa970a1d6abb2e77e88e175ec7b86a0d6c4c7c8",
+    "src/SCPCommon.luau": "54c065a9527c3db68966d4149952e3482ba8e796cc69a1da0a135f18d97e0966",
+    "src/SCPCore.luau": "be094f67920fc91adf1db648a21d5d6329900039aae2d0da4995416b219cef90",
+    "src/SCPESP.luau": "3336b54a6e371ae891692612a343f50dc9f649b3684e66b18afed0ec70e01aa3",
+    "src/SCPHitbox.luau": "92bcfe9fa2a60823872d393fd70d1b59d1ae944133f9eb8e8c5a4cc75c98f5e6",
+    "src/SCPMovement.luau": "ae97afebe8523a9063e1598b455c0088bc2ebaf2573118264504e98fd152d47d",
+    "src/SCPSilentAim.luau": "c26edcc01c5506ff058daeec8b72c102be02a185c9401213efd676d721de544f",
+    "src/ServerSwitch.luau": "f5569973815af65392956ef811ea07b9bad4877af28d98a3566fa085973b994f",
+    "src/WindAdapter.luau": "4fc20bb39b9a5410e0619d3fd65d41644e5203b162cbd052f12811ec7b9b14df",
+    "vendor/WindUI/Source.lua": "e29ebad6907d6293731d1de042d6aec4a9428fcddbed8a8f19ef5f4ce05c6d05"
+  },
+  "test_sha256": {
+    "tests/.__dbg_scp.luau": "d8817b40dc7ed0a43249596f17c4f1a098f13c59143dbf17136fa43c0fb80f5c",
+    "tests/run_animation_r23.mjs": "893e1215847926e8e4e07e07be74a430c79d9381d9176f622b9aebbe2fccb7e7",
+    "tests/run_aotr_entry_lifecycle.mjs": "0b2311c72648e6821d13dc77f17e8dc2de406a02f4ea35c46f836b32c049fd8e",
+    "tests/run_aotr_hud_contract_r18.mjs": "ac58759c13b55e67f4ecad59e1e43346e8dad1e289ceb611d2551ad7f940dc60",
+    "tests/run_audio_r34.mjs": "9eb95654bdd1b8a903914dc010bdb39bbd12a43dbb6f33958e5c40c232a1fbc4",
+    "tests/run_bloxstrike_enrichment.mjs": "476561687103a944a7002292ad64db6fcda72a1da65f1f56d2d6bfc0df771fb8",
+    "tests/run_forsaken_enrichment.mjs": "49c795e4e1479c9bfe049697ba7892047e98262f64ffaf94bd2cb40eb840be44",
+    "tests/run_local_features_r19.mjs": "c3b17cdaf03f7b1746d5af626e61de95ec38c6ac4781069d03f5c097351c3886",
+    "tests/run_luau.mjs": "58dcff580a2b2b36e210177cf6b82e71ebf84fa7cab098363165f32ab4e78882",
+    "tests/run_release_checks.mjs": "18b5c505bad96765b4d3435ad1581f2624dd9e9077199e21614bb98c5f509230",
+    "tests/run_scp_enrichment.mjs": "42af14d89db5c2d0039acfbb0b745c81750ce3aa8a42f22bcba6d57db19ceebf",
+    "tests/run_sil_animation_r39.mjs": "ff1c2aa85d0003b73908f3551bf39a042c00767e8498bc50e117b8efa73bc2d9",
+    "tests/run_sync_r35.mjs": "7b77b3bc40cad1d5fb9325297f62166a466a1fb04eb46f98707522f59460842f",
+    "tests/run_visual_resources_r20.mjs": "308ef69c817cd2c86eec15ace37c2381d7c2b7e3b281a81c456440b36f7d50e1",
+    "tests/run_wind_acrylic_policy_r16.mjs": "c6120d65bd84f94fdb5d6350df9fae1b9f834fbedb4cde7325c0d58e3dda0db2",
+    "tests/run_wind_input_queue_r14.mjs": "2d99660bd8b98972424269fde21fbc51f5c6c5785b247fc4fb509e1828e52179",
+    "tests/run_wind_native_contracts.mjs": "67de318c113a5835762a6d6fb0cab2f311c3995620af8e560ce6633747e40946",
+    "tests/run_wind_viewport_edges_r14.mjs": "b811217f0d119e05dec100ede334ad69455c8d12faf7324cf9308faff37679bd",
+    "tests/run_wind_visual_budget_r14.mjs": "f08fb3809c53b4cdbb73a15bb67aa9b8baf02a34d841248cd4e207b05532c6ea",
+    "tests/run_world_r34.mjs": "565d3ea0c5dab86c63c7af77cc02271896728dc7acdcf4fd9f5a134a3cbbbf0d",
+    "tests/test_aotr.py": "d85618b49d3b915be9d9004ac8df5370012029d1846e01a6d45459902181602a",
+    "tests/test_aotr_common_lifecycle.luau": "62ae6209de5016dfcbe07cc964f79c22fbe583827f43e8586cbdc1533de51037",
+    "tests/test_aotr_enrichment.luau": "aaf3c28a3a19613573ed6d76f930eaed220517bc25e65dc798a936041dffcd85",
+    "tests/test_aotr_entry_lifecycle.luau": "fb0ebfd14862b11bfb31f1a7f3d9d6b2c4f72c4b03eadb127b60ced4201cd0e7",
+    "tests/test_aotr_esp_lifecycle.luau": "feacb09387adb2462782a8b43f19586ff4dd275a59bd6a61a0d29481d3ae4d9d",
+    "tests/test_aotr_hud_contract_r18.luau": "f3c7e00af65c5172eecce2c60eb4aa5e1aece5efc7605dfe0f0f79c6887eb6a3",
+    "tests/test_aotr_lobby_runtime.luau": "9ddb77b36b0d7e9772ffe8001c5c98bc3f4885f9a334151c198ae75edd42f331",
+    "tests/test_aotr_movement_lifecycle.luau": "08ef74b80e6fe7e43b5997f741b98b6f898eaccd77672b8ad6a96f255da8133d",
+    "tests/test_aotr_titans_lifecycle.luau": "a0e17069730403a5a7c5f60d819fdd65544f2d0641a8cd89226b4d1dacb81033",
+    "tests/test_audio_r34.luau": "d4b493f88482b4e408e8472dd0a12638abbd16f85d8da64960302b28b19ad075",
+    "tests/test_bloxstrike_enrichment.luau": "bb439ab3a656981f3b375bb09fdd119e0de9dc2e6c802f28b8147d90558fc3b8",
+    "tests/test_bloxstrike_v2.py": "b1d850b809ba20e795833619257f21564c42f8d66309093020bb4a048910b104",
+    "tests/test_forsaken_enrichment.luau": "1d3b28089ae0f5c7101817f9fa3c79cf3811158158481ad0fe753ded8b910830",
+    "tests/test_forsaken_sidebar_v10.py": "4c53729e78115ca522dfa8fc400dece7c6311888a58222596c9ed07e03633ed8",
+    "tests/test_forsaken_wind.py": "d16ed8ba9516e55495bf88bb74dd4668df6c99e6475c427efad89e53e7fee08e",
+    "tests/test_game_router.py": "fccb2ee3ed2695b7feab13a1563fe13ee66d3d508cdc232d823d27e3b7917498",
+    "tests/test_guest_animation_r23.luau": "522377c46fb87252663f1c4d1595f44f42f56e92956873d168c31b4adc2cd990",
+    "tests/test_local_features_r19.luau": "64d9c1656149f8ccbf6d3c14b9e7a05aa89a3f584f57dd851490ffa72038dd5f",
+    "tests/test_mobile_v6.py": "1b0f1d8f9f7ab3607cb1690718fc461918f023682b353c69d13bdc8bac073a5e",
+    "tests/test_native_animation_r23.luau": "c11382e8a4bcdf03a449d44758209a821befb819f8b8a6865bd62414fa211d62",
+    "tests/test_package_release.py": "e5a0e019c27013b7817cc23bcf0647de29b585ad89a81eed7c7f6cf9fb6a9df5",
+    "tests/test_release_runner.mjs": "bdfaf4b397f23feeddb23adb801ab837949273aa1a6cfacd614eff0097540f81",
+    "tests/test_scp_enrichment.luau": "addf0bd3f89995e04fba7dc6e63262fa4b92b21e3fd2b84ff1925971bd547f75",
+    "tests/test_server_switch.lua": "5d7b426928505bac2274def24d5a6d3901419a5b839a628ed9f9fac12774c1dd",
+    "tests/test_sil_animation_r39.luau": "9e219fa271866e5d8ef6fa744ec0c008b5fe34c6cddcc29dccbbb2f4a8023937",
+    "tests/test_stage2.py": "e9c27ce5674b0c0d2559b30d59b32cad2aeea88599359f1065a4263518893303",
+    "tests/test_sync_r35.luau": "33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196",
+    "tests/test_toggle_v7.py": "1b0f1d8f9f7ab3607cb1690718fc461918f023682b353c69d13bdc8bac073a5e",
+    "tests/test_touch_v8.py": "4c4fcf15e98cf2b6202fdc0b0be83bb29de8339e8408a5061f89d5afa8f58d6f",
+    "tests/test_visual_resources_r20.luau": "94e88034456a6d6a9d474ff099910f24ea8c71c6b83f2bb7ed2b35928408658e",
+    "tests/test_wind_acrylic_policy_r16.luau": "3ce0787012a0a25f03df244a47de533dc30ab2e5b023aefeeca7073c31808def",
+    "tests/test_wind_adapter.luau": "f022bb8836d103a4b110f7be488f8af00920bae13ae0bc82293c24a0601ee5af",
+    "tests/test_wind_input_queue_r14.luau": "af36154394ac60d563474e9cfad41f49f03aacb3c02d032ccf3c10707132cf07",
+    "tests/test_wind_migration.py": "15dbc907d2dbe41b05b778509a07a250148baabe4843714221c011b81aec333e",
+    "tests/test_wind_native_contracts.luau": "ff5b9f781935504efca9a1c618c474acb468167c27a9d8fbffaff56a930be978",
+    "tests/test_wind_router.py": "a3854a13b4e03d114376455724d8624e9910198ec8bdc0c39d3a32a4d4a5068a",
+    "tests/test_wind_viewport_edges_r14.luau": "bbb0a3efde98354da66188168bc6522eeebf1dfc03bd7e450c95548ec1785a07",
+    "tests/test_wind_visual_budget_r14.luau": "a729384fbab7b3b6965f0d715e330f0cca988534cf8a23d3bfc746404a290cf3",
+    "tests/test_world_r34.luau": "296fd0d6696200b4ef0772f354b6ed6efca6bf827022d935fc0981466d0848d5",
+    "tests/wind_native_harness.luau": "09d86aa6a3820f6e53167e79a1d429ad16d918c258cf3c0f82619270403443c5",
+    "tests/wind_option_ids_baseline.json": "3da56386c1bccc88467a40a833c27c2ca169ff61a0a806993887763d93f993df",
+    "build.py": "17a96766c184f4fb4f324c6f8de1045d39a7188b48a36f65f3bcfcd2aa06ad7a",
+    "tools/package_release.py": "b5a97996e774a56c000d7c40c0d4870664698550b99ba4516f34303ede076762"
+  },
+  "bundles": {
+    "Vortexion_AOTR_Battle.lua": {
+      "bytes": 1536193,
+      "sha256": "68f2136202a7694db466b1f4ab169ce806d2865436369856906487f92209c6a6"
+    },
+    "Vortexion_AOTR_Lobby.lua": {
+      "bytes": 1465064,
+      "sha256": "0a6c5de1868c26d117033bb9e03a96ff40f1fbf4048f63c12c69663f15f0d71e"
+    },
+    "Vortexion_BloxStrike.lua": {
+      "bytes": 1592717,
+      "sha256": "1533ea80c55279f8e4a93284a4058b37a1940bdc5716498ca54cc88d4d8f4706"
+    },
+    "Vortexion_Forsaken.lua": {
+      "bytes": 1755657,
+      "sha256": "73e38394d837c94d340c9332d4c6d559a98e90c6c528bde9e7fec453a8679c80"
+    },
+    "Vortexion_SCP.lua": {
+      "bytes": 1567301,
+      "sha256": "54aa1c8d2f47bee4d9683a1cd541faec7c46de8496ea6c96701ef3dffd30741b"
+    },
+    "Vortexion_Wind.lua": {
+      "bytes": 2154180,
+      "sha256": "ba80865b4a741f8a57a8490be5d449d926aad757dea53fc8295372de8c6076e3"
+    }
+  },
+  "build_manifest_sha256": "5f7c3d28b349c2ee956244a2a1593af2927842dff99219a3f64ee3953ec4063a",
+  "results": [
+    {
+      "name": "build-six-bundles",
+      "command": "/data/user/0/com.dshmobile.shell/files/usr/bin/python3",
+      "args": [
+        "build.py"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 383,
+      "stdout": "Vortexion_Forsaken.lua 1755657 73e38394d837c94d340c9332d4c6d559a98e90c6c528bde9e7fec453a8679c80\nVortexion_BloxStrike.lua 1592717 1533ea80c55279f8e4a93284a4058b37a1940bdc5716498ca54cc88d4d8f4706\nVortexion_AOTR_Lobby.lua 1465064 0a6c5de1868c26d117033bb9e03a96ff40f1fbf4048f63c12c69663f15f0d71e\nVortexion_AOTR_Battle.lua 1536193 68f2136202a7694db466b1f4ab169ce806d2865436369856906487f92209c6a6\nVortexion_SCP.lua 1567301 54aa1c8d2f47bee4d9683a1cd541faec7c46de8496ea6c96701ef3dffd30741b\nVortexion_Wind.lua 2154180 ba80865b4a741f8a57a8490be5d449d926aad757dea53fc8295372de8c6076e3\nPASS 6 offline outputs; GitHub unpublished; Roblox Android unverified\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "release-runner-contracts",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/test_release_runner.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 770,
+      "stdout": "PASS stable input snapshot promotes compiler evidence\nPASS test changed during execution\nPASS baseline changed during execution\nPASS new unexecuted test appeared\nPASS packager changed during verification\nPASS builder changed during verification\nPASS source input changed\nPASS bundle output changed\nPASS nonzero stage exits stop the pipeline\nPASS omitted tests never count as verification\nPASS direct registers the local-feature gate once and preserves all 33 prior stages\nPASS direct wind-visual-budget-r14 nonzero blocks promotion\nPASS direct wind-visual-budget-r14 skip blocks promotion\nPASS direct run_wind_visual_budget_r14.mjs changes during its stage block promotion\nPASS direct test_wind_visual_budget_r14.luau changes during its stage block promotion\nPASS direct wind-viewport-edges-r14 nonzero blocks promotion\nPASS direct wind-viewport-edges-r14 skip blocks promotion\nPASS direct run_wind_viewport_edges_r14.mjs changes during its stage block promotion\nPASS direct test_wind_viewport_edges_r14.luau changes during its stage block promotion\nPASS direct wind-input-queue-r14 nonzero blocks promotion\nPASS direct wind-input-queue-r14 skip blocks promotion\nPASS direct run_wind_input_queue_r14.mjs changes during its stage block promotion\nPASS direct test_wind_input_queue_r14.luau changes during its stage block promotion\nPASS direct wind-acrylic-policy-r16 nonzero blocks promotion\nPASS direct wind-acrylic-policy-r16 skip blocks promotion\nPASS direct run_wind_acrylic_policy_r16.mjs changes during its stage block promotion\nPASS direct test_wind_acrylic_policy_r16.luau changes during its stage block promotion\nPASS direct aotr-hud-contract-r18 nonzero blocks promotion\nPASS direct aotr-hud-contract-r18 skip blocks promotion\nPASS direct run_aotr_hud_contract_r18.mjs changes during its stage block promotion\nPASS direct test_aotr_hud_contract_r18.luau changes during its stage block promotion\nPASS direct local-features-r19 nonzero blocks promotion\nPASS direct local-features-r19 skip blocks promotion\nPASS direct run_local_features_r19.mjs changes during its stage block promotion\nPASS direct test_local_features_r19.luau changes during its stage block promotion\nPASS direct visual-resources-r20 nonzero blocks promotion\nPASS direct visual-resources-r20 skip blocks promotion\nPASS direct run_visual_resources_r20.mjs changes during its stage block promotion\nPASS direct test_visual_resources_r20.luau changes during its stage block promotion\nPASS launcher registers the local-feature gate once and preserves all 33 prior stages\nPASS launcher wind-visual-budget-r14 nonzero blocks promotion\nPASS launcher wind-visual-budget-r14 skip blocks promotion\nPASS launcher run_wind_visual_budget_r14.mjs changes during its stage block promotion\nPASS launcher test_wind_visual_budget_r14.luau changes during its stage block promotion\nPASS launcher wind-viewport-edges-r14 nonzero blocks promotion\nPASS launcher wind-viewport-edges-r14 skip blocks promotion\nPASS launcher run_wind_viewport_edges_r14.mjs changes during its stage block promotion\nPASS launcher test_wind_viewport_edges_r14.luau changes during its stage block promotion\nPASS launcher wind-input-queue-r14 nonzero blocks promotion\nPASS launcher wind-input-queue-r14 skip blocks promotion\nPASS launcher run_wind_input_queue_r14.mjs changes during its stage block promotion\nPASS launcher test_wind_input_queue_r14.luau changes during its stage block promotion\nPASS launcher wind-acrylic-policy-r16 nonzero blocks promotion\nPASS launcher wind-acrylic-policy-r16 skip blocks promotion\nPASS launcher run_wind_acrylic_policy_r16.mjs changes during its stage block promotion\nPASS launcher test_wind_acrylic_policy_r16.luau changes during its stage block promotion\nPASS launcher aotr-hud-contract-r18 nonzero blocks promotion\nPASS launcher aotr-hud-contract-r18 skip blocks promotion\nPASS launcher run_aotr_hud_contract_r18.mjs changes during its stage block promotion\nPASS launcher test_aotr_hud_contract_r18.luau changes during its stage block promotion\nPASS launcher local-features-r19 nonzero blocks promotion\nPASS launcher local-features-r19 skip blocks promotion\nPASS launcher run_local_features_r19.mjs changes during its stage block promotion\nPASS launcher test_local_features_r19.luau changes during its stage block promotion\nPASS launcher visual-resources-r20 nonzero blocks promotion\nPASS launcher visual-resources-r20 skip blocks promotion\nPASS launcher run_visual_resources_r20.mjs changes during its stage block promotion\nPASS launcher test_visual_resources_r20.luau changes during its stage block promotion\nPASS unset NODE_BINARY preserves the desktop current-Node default\nGREEN 69 release-runner contract suites\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "release-package-contracts",
+      "command": "/data/user/0/com.dshmobile.shell/files/usr/bin/python3",
+      "args": [
+        "tests/test_package_release.py"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 468,
+      "stdout": "",
+      "stderr": "test_archive_and_sidecar_match (__main__.PackageContracts.test_archive_and_sidecar_match) ... ok\ntest_asset_absolute_path_is_rejected (__main__.PackageContracts.test_asset_absolute_path_is_rejected) ... ok\ntest_asset_bytes_drift_is_rejected (__main__.PackageContracts.test_asset_bytes_drift_is_rejected) ... ok\ntest_asset_intermediate_dir_symlink_is_rejected (__main__.PackageContracts.test_asset_intermediate_dir_symlink_is_rejected) ... ok\ntest_asset_manifest_entry_incomplete_is_rejected (__main__.PackageContracts.test_asset_manifest_entry_incomplete_is_rejected) ... ok\ntest_asset_manifest_symlink_is_rejected (__main__.PackageContracts.test_asset_manifest_symlink_is_rejected) ... ok\ntest_asset_missing_file_is_rejected (__main__.PackageContracts.test_asset_missing_file_is_rejected) ... ok\ntest_asset_pack_root_symlink_is_rejected (__main__.PackageContracts.test_asset_pack_root_symlink_is_rejected) ... ok\ntest_asset_pack_root_symlink_without_manifest_is_rejected (__main__.PackageContracts.test_asset_pack_root_symlink_without_manifest_is_rejected) ... ok\ntest_asset_parent_dir_symlink_is_rejected (__main__.PackageContracts.test_asset_parent_dir_symlink_is_rejected) ... ok\ntest_asset_path_traversal_is_rejected (__main__.PackageContracts.test_asset_path_traversal_is_rejected) ... ok\ntest_asset_sha_drift_is_rejected (__main__.PackageContracts.test_asset_sha_drift_is_rejected) ... ok\ntest_asset_snapshot_drift_is_rejected (__main__.PackageContracts.test_asset_snapshot_drift_is_rejected) ... ok\ntest_asset_symlink_is_rejected (__main__.PackageContracts.test_asset_symlink_is_rejected) ... ok\ntest_assets_and_followup_are_archived (__main__.PackageContracts.test_assets_and_followup_are_archived) ... ok\ntest_changed_input_is_rejected (__main__.PackageContracts.test_changed_input_is_rejected) ... ok\ntest_existing_archive_is_preserved (__main__.PackageContracts.test_existing_archive_is_preserved) ... ok\ntest_existing_sidecar_is_preserved_before_archive_creation (__main__.PackageContracts.test_existing_sidecar_is_preserved_before_archive_creation) ... ok\ntest_missing_asset_manifest_is_allowed (__main__.PackageContracts.test_missing_asset_manifest_is_allowed) ... ok\ntest_snapshot_race_is_rejected (__main__.PackageContracts.test_snapshot_race_is_rejected) ... ok\ntest_symlinks_are_rejected (__main__.PackageContracts.test_symlinks_are_rejected) ... ok\ntest_unstable_tests_are_rejected (__main__.PackageContracts.test_unstable_tests_are_rejected) ... ok\n\n----------------------------------------------------------------------\nRan 22 tests in 0.228s\n\nOK\n",
+      "error": null
+    },
+    {
+      "name": "shared-adapter",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/WindAdapter.luau",
+        "tests/test_wind_adapter.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1038,
+      "stdout": "wind adapter native navigation PASS\n[Fixture/WindUI] [string \"test_wind_adapter.luau\"]:1146: fixture callback failure\nwind adapter numeric bounds, dropdown deduplication, burst layout, manual/fullscreen/nil camera, camera churn PASS\nwind adapter callbacks, settings, config callback, rotation, cleanup PASS\nwind adapter colorpicker default, silent native Set, immediate sync, dedupe, stale echo, OnChanged, invalid input, config registration, unload PASS\nwind adapter manual config, storage failures, file capability, legacy autoload gate, desktop/mobile defaults PASS\nPASS execute tests/test_wind_adapter.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "native-contracts",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_wind_native_contracts.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1508,
+      "stdout": "PASS contract color vendor Set is silent but bridge SetValue synchronizes once\nPASS contract color config round trip synchronizes business state and contains bad entries\nPASS contract settings AllConfigs failure leaves a usable window\nPASS contract slider rejects busy native writes\nPASS contract slider rejects focusing native writes\nPASS contract slider clamps after vendor CalculateValue\nPASS contract vendor aq suppresses duplicate callbacks\nPASS contract synchronous callback reentry preserves latest value\nPASS contract config child failures stay contained\nPASS contract latest pending writes survive shared busy and coalesce releases\nPASS contract textbox release applies pending focus write\nPASS contract locked native writes never enqueue retries\nPASS contract destroy cancels queued slider flush\nPASS contract new native input supersedes deferred programmatic value\nPASS contract reentrant listener suppresses stale outer notification\nPASS contract constructor failure reclaims owned GUI and creator signals\nFIXTURE HEALTH: suspended real WindAdapter construction completed\nPASS contract suspended native constructor resumes into a healthy complete window\nPASS contract cleanup reclaims suspended native constructor before\nPASS contract cleanup reclaims suspended native constructor after\nPASS contract cleanup reclaims suspended native constructor error\nPASS contract cleanup reclaims suspended native constructor nil\nPASS contract constructor failure preserves pre-existing native GUI ownership\nFIXTURE HEALTH: server setup suspension resumed into complete UI\nPASS contract suspended server page setup completes when active\nPASS contract closed bridge never returns its cached window handle\nPASS contract inflight server setup does not expose a partial window\nPASS contract cancelled server page setup stops late worker before installing settings\nFIXTURE HEALTH: suspended config listing completed real settings\nPASS contract suspended config listing completes when active\nPASS contract cancelled config listing never installs late controls or listeners\nFIXTURE HEALTH: suspended config creation completed a save\nPASS contract suspended config creation completes a healthy save\nPASS contract closed config action stops after suspended create\nPASS contract closed config action stops after suspended prepare\nPASS contract closed config action stops after suspended register\nPASS contract closed config action stops after suspended publish\nPASS contract failed config preparation retries a fresh complete candidate\nPASS contract overlapping config clicks share one inflight file operation\nPASS contract legacy autoload stays blocked during a suspended manual load\nPASS contract late saved config does not refresh or write closed UI status\nPASS contract closed config action stops after suspended load\nPASS contract closed config action stops after suspended list\nPASS contract closed config action stops after suspended delete\nPASS contract suspended config manual load resumes once with healthy UI status\nPASS contract cancelled config creation disables the late legacy loader\nPASS contract failed config register retries with every native option registered\nPASS contract failed config publish retries with every native option registered\nPASS contract failed config rename preserves previous bridge config until successful retry\nPASS contract config save exception releases operation gate for retry\nPASS contract config load exception releases operation gate for retry\nPASS contract config delete exception releases operation gate for retry\nPASS contract config list exception releases operation gate for retry\nPASS contract config save false result surfaces error and permits retry\nPASS contract config load false result surfaces error and permits retry\nPASS contract config delete false result surfaces error and permits retry\nPASS contract cancelled manual load false result does not mutate closed error state\nPASS contract cancelled manual load throw result does not mutate closed error state\nPASS contract destroy in primary callback stops listener fanout\nPASS contract destroy in first listener stops remaining fanout\nPASS contract cancelled suspended primary success does not dispatch or overwrite errors\nPASS contract cancelled suspended primary throw does not dispatch or overwrite errors\nPASS contract cancelled suspended listener success does not dispatch or overwrite errors\nPASS contract cancelled suspended listener throw does not dispatch or overwrite errors\nPASS contract ABA primary reentry suppresses superseded outer event\nPASS contract ABA listener reentry suppresses superseded outer event\nPASS contract listener added during primary dispatch initializes exactly once\nPASS contract listener added during listener dispatch initializes exactly once\nPASS contract cleanup releases pending values and listener closures and ignores late registration\nPASS contract healthy suspended callback continues existing listeners once\nPASS contract cleanup reset listeners run once and cleanup failures remain diagnostic\nPASS contract late failed notification does not overwrite closed error state\nPASS contract late native setter return never reads destroyed native value\nPASS contract cancelled primary cannot resume fanout during yielded cleanup\nPASS contract cancelled listener cannot resume fanout during yielded cleanup\nPASS contract same-value setter reentry preserves the one genuine listener event\nPASS contract repeated ABA callback bursts preserve latest values without duplicate fanout\nPASS contract active callback failure stays diagnostic and permits remaining listeners\nPASS contract layout listener destroy cancels remaining automatic center\nPASS contract layout listener manual cancels remaining automatic center\nPASS contract layout listener fullscreen cancels remaining automatic center\nPASS contract suspended scale destroy cancels remaining automatic center\nPASS contract suspended scale manual cancels remaining automatic center\nPASS contract suspended scale fullscreen cancels remaining automatic center\nPASS contract healthy suspended scale completes one center and caches layout\nPASS contract nested same-geometry fit supersedes outer center\nPASS contract layout viewport changes requeue before old center\nPASS contract layout camera changes requeue before old center\nPASS contract layout size changes requeue before old center\nPASS contract failed center does not cache an incomplete layout\nPASS contract healthy suspended center commits cache only after completion\nPASS contract geometry changed during center queues one replacement after entered call\nPASS contract old suspended center cannot overwrite newer completed layout cache\nPASS contract suspended center manual does not commit cancelled cache\nPASS contract suspended center fullscreen does not commit cancelled cache\nPASS contract replacement camera prevents stale viewport reads after scale callback\nPASS contract repeated viewport reentry coalesces one completed fit per rotation\nPASS contract destroyed suspended center makes no late geometry reads or cache updates\nPASS contract healthy dropdown refresh commits and deduplicates independent snapshots\nPASS contract failed dropdown refresh preserves committed list and permits identical retry\nPASS contract partial dropdown failure can rebuild unchanged last committed list\nPASS contract suspended dropdown refresh publishes only after native return\nPASS contract destroyed suspended dropdown refresh success keeps cache closed\nPASS contract destroyed suspended dropdown refresh throw keeps cache closed\nPASS contract nested dropdown refresh coalesces latest request without native overlap\nPASS contract concurrent suspended dropdown requests settle to newest list\nPASS contract invalid dropdown lists fail before native work and leave gate reusable\nPASS contract nil dropdown list clears once without inventing a selection event\nPASS contract rich dropdown cache does not alias caller or native list metadata\nPASS contract same inflight dropdown request does not schedule a redundant rebuild\nPASS contract nested request for previous committed list is not suppressed during refresh\nPASS contract failed refresh clears nested pending work and explicit retry restores latest intent\nPASS contract dropdown refresh batches bound synchronous rebuilds and eventually settle\nPASS contract one queued dropdown continuation consumes only newest independent snapshot\nPASS contract destroy clears queued dropdown intent and cancels continuation\nPASS contract deferred dropdown failure stays diagnostic and permits explicit retry\nPASS contract vendor dropdown Select still publishes exactly one compatible selection event\nPASS contract five hundred nested dropdown requests coalesce to one final list rebuild\nPASS contract suspended dropdown select serializes cross-operation refresh\nPASS contract suspended dropdown list serializes cross-operation refresh\nPASS contract visual refresh tier restore drives GetVisualInterval and survives reset\nPASS contract GetVisualInterval stays bounded and schedule-free after Destroy\nPASS contract safe-area controlled centering: async tail, same-inset rotation, inset-only change, rapid toggle/destroy\nPASS contract safe-area degrade: Create/Play failure cancels owned tail, missing Main defers, tiny viewport safe\nPASS contract owned center tween lifecycle: pending tail cancelled on auto-fit off / safe-area off / fullscreen, same geometry re-runs, stable geometry never cancels\nPASS contract topbar inset watch: healthy async connect relocates on the real signal, burst coalesces, disabled flags stay quiet, teardown inert\nPASS contract topbar inset watch: a throwing GetPropertyChangedSignal or Connect never breaks init or explicit Fit\nPASS contract topbar inset watch: install fences stop after a teardown raised inside GetService/GetSignal/Connect; late connection disconnects exactly once\nPASS contract topbar inset watch: synchronous-executor install that reentrant-destroys makes CreateWindow return nil and clears the cache\nPASS contract topbar inset watch: a real coroutine.yield pause in Connect lets CreateWindow return first; healthy resume relocates, cancel-after-yield disconnects exactly once\nWIND_NATIVE_CONTRACTS: passed=126 failed=0 checks=126\nWIND_NATIVE_CONTRACTS_GREEN\nR37_NC color-config-sync CAPTURED sha256=99f103827d5c2d10ba2b6c62becc5ef8dad18dd538610e6a6c09cf1270b37aab bytes=197225 by: RED contract color config round trip synchronizes business state and contains bad entries: [string \"wind_native_contracts\"]:1484: color config restores business callback, option and native swatch\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "wind-visual-budget-r14",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_wind_visual_budget_r14.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1304,
+      "stdout": "phase1 factory-no-gui PASS\nphase2 tiers-5-15-60 PASS\nphase3 custom-bounds PASS\nphase4 base-contract PASS\nphase5 controls-not-read PASS\nphase6 consistency-150000 PASS\nphase7 post-destroy PASS\nwind visual budget r14 PASS assertions=300068 fixtureElapsedMs=573 createWindowCalls=0 scheduleCalls=0 getServiceExtra=0\nR14-EVIDENCE {\"command\":\"node tests/run_wind_visual_budget_r14.mjs\",\"cwd\":\"/data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/\",\"exitCode\":0,\"wallMs\":893,\"node\":\"v24.18.0\",\"luauWeb\":\"/data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-tools/node_modules/luau-web/src/index.js\",\"windAdapterSha256\":\"4fc20bb39b9a5410e0619d3fd65d41644e5203b162cbd052f12811ec7b9b14df\",\"testSha256\":\"a729384fbab7b3b6965f0d715e330f0cca988534cf8a23d3bfc746404a290cf3\",\"runnerSha256\":\"f08fb3809c53b4cdbb73a15bb67aa9b8baf02a34d841248cd4e207b05532c6ea\"}\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "wind-viewport-edges-r14",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_wind_viewport_edges_r14.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1381,
+      "stdout": "r14 runtime: /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-tools/node_modules/luau-web/src/index.js\nr14 snapshot base /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/tests/test_wind_adapter.luau bytes=27785 sha256=f022bb8836d103a4b110f7be488f8af00920bae13ae0bc82293c24a0601ee5af\nr14 snapshot body /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/tests/test_wind_viewport_edges_r14.luau bytes=33944 sha256=bbb0a3efde98354da66188168bc6522eeebf1dfc03bd7e450c95548ec1785a07\nr14 snapshot target /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/WindAdapter.luau bytes=59495 sha256=4fc20bb39b9a5410e0619d3fd65d41644e5203b162cbd052f12811ec7b9b14df\nr14 snapshot assembled bytes=100798 sha256=8b08cd4babd5e92ea606bb638e0744074dbe1a2cb98a89664963a8e10eb681eb\nPASS viewport-edge four-edge userdata inset drives the exact scale, one tween, and the safe-area offset\nPASS viewport-edge continuous portrait/landscape rotation keeps the inset offset and lands the exact scale each time\nPASS viewport-edge camera replacement refits the new viewport, the stale camera signal stays inert, and nil is a no-op\nPASS viewport-edge inset-only changes re-center without a scale write, and released insets fall back to native centering\nPASS viewport-edge auto-fit disabled freezes every late write (tail, signal, fullscreen, in-flight) and recovers on re-enable\nPASS viewport-edge narrow viewport readability floor keeps the documented overflow and the clamp boundaries stay exact\nPASS viewport-edge non-finite viewport-x nan cancels and recovers\nPASS viewport-edge non-finite viewport-x positive-infinity cancels and recovers\nPASS viewport-edge non-finite viewport-x negative-infinity cancels and recovers\nPASS viewport-edge non-finite viewport-y nan cancels and recovers\nPASS viewport-edge non-finite viewport-y positive-infinity cancels and recovers\nPASS viewport-edge non-finite viewport-y negative-infinity cancels and recovers\nPASS viewport-edge non-finite window-x nan cancels and recovers\nPASS viewport-edge non-finite window-x positive-infinity cancels and recovers\nPASS viewport-edge non-finite window-x negative-infinity cancels and recovers\nPASS viewport-edge non-finite window-y nan cancels and recovers\nPASS viewport-edge non-finite window-y positive-infinity cancels and recovers\nPASS viewport-edge non-finite window-y negative-infinity cancels and recovers\nPASS viewport-edge fixture hygiene: every scenario restored the globals it touched\nWIND_VIEWPORT_EDGES_R14: passed=19 failed=0 checks=19\nWIND_VIEWPORT_EDGES_R14_GREEN\nR46_VIEWPORT_ASSEMBLED async-error sha256=08890e959cef99191ca7434f8a84ed04ff5bbb5171c5e8a281e8b11594e20a4a\nRED viewport-edge R46 injected async: async errors leaked: R46_ASYNC_INJECTED\nPASS viewport-edge four-edge userdata inset drives the exact scale, one tween, and the safe-area offset\nPASS viewport-edge continuous portrait/landscape rotation keeps the inset offset and lands the exact scale each time\nPASS viewport-edge camera replacement refits the new viewport, the stale camera signal stays inert, and nil is a no-op\nPASS viewport-edge inset-only changes re-center without a scale write, and released insets fall back to native centering\nPASS viewport-edge auto-fit disabled freezes every late write (tail, signal, fullscreen, in-flight) and recovers on re-enable\nPASS viewport-edge narrow viewport readability floor keeps the documented overflow and the clamp boundaries stay exact\nPASS viewport-edge non-finite viewport-x nan cancels and recovers\nPASS viewport-edge non-finite viewport-x positive-infinity cancels and recovers\nPASS viewport-edge non-finite viewport-x negative-infinity cancels and recovers\nPASS viewport-edge non-finite viewport-y nan cancels and recovers\nPASS viewport-edge non-finite viewport-y positive-infinity cancels and recovers\nPASS viewport-edge non-finite viewport-y negative-infinity cancels and recovers\nPASS viewport-edge non-finite window-x nan cancels and recovers\nPASS viewport-edge non-finite window-x positive-infinity cancels and recovers\nPASS viewport-edge non-finite window-x negative-infinity cancels and recovers\nPASS viewport-edge non-finite window-y nan cancels and recovers\nPASS viewport-edge non-finite window-y positive-infinity cancels and recovers\nPASS viewport-edge non-finite window-y negative-infinity cancels and recovers\nPASS viewport-edge fixture hygiene: every scenario restored the globals it touched\nWIND_VIEWPORT_EDGES_R14: passed=19 failed=1 checks=20\nRED viewport-edge R46 injected async: async errors leaked: R46_ASYNC_INJECTED\nR46_VIEWPORT_NEGATIVE_CAPTURED async-error expected=R46_ASYNC_INJECTED\nR46_VIEWPORT_ASSEMBLED cleanup-error sha256=1c376a2ab46bdf2350acfc23090530ad0eca50583959336aaeda87b8db418ac5\nRED viewport-edge R46 injected cleanup: async errors leaked: cleanup failed: R46_CLEANUP_INJECTED\nPASS viewport-edge four-edge userdata inset drives the exact scale, one tween, and the safe-area offset\nPASS viewport-edge continuous portrait/landscape rotation keeps the inset offset and lands the exact scale each time\nPASS viewport-edge camera replacement refits the new viewport, the stale camera signal stays inert, and nil is a no-op\nPASS viewport-edge inset-only changes re-center without a scale write, and released insets fall back to native centering\nPASS viewport-edge auto-fit disabled freezes every late write (tail, signal, fullscreen, in-flight) and recovers on re-enable\nPASS viewport-edge narrow viewport readability floor keeps the documented overflow and the clamp boundaries stay exact\nPASS viewport-edge non-finite viewport-x nan cancels and recovers\nPASS viewport-edge non-finite viewport-x positive-infinity cancels and recovers\nPASS viewport-edge non-finite viewport-x negative-infinity cancels and recovers\nPASS viewport-edge non-finite viewport-y nan cancels and recovers\nPASS viewport-edge non-finite viewport-y positive-infinity cancels and recovers\nPASS viewport-edge non-finite viewport-y negative-infinity cancels and recovers\nPASS viewport-edge non-finite window-x nan cancels and recovers\nPASS viewport-edge non-finite window-x positive-infinity cancels and recovers\nPASS viewport-edge non-finite window-x negative-infinity cancels and recovers\nPASS viewport-edge non-finite window-y nan cancels and recovers\nPASS viewport-edge non-finite window-y positive-infinity cancels and recovers\nPASS viewport-edge non-finite window-y negative-infinity cancels and recovers\nPASS viewport-edge fixture hygiene: every scenario restored the globals it touched\nWIND_VIEWPORT_EDGES_R14: passed=19 failed=1 checks=20\nRED viewport-edge R46 injected cleanup: async errors leaked: cleanup failed: R46_CLEANUP_INJECTED\nR46_VIEWPORT_NEGATIVE_CAPTURED cleanup-error expected=R46_CLEANUP_INJECTED\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "wind-input-queue-r14",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_wind_input_queue_r14.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1178,
+      "stdout": "R14 snapshot: runtime=/data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-tools/node_modules/luau-web/src/index.js\nR14 snapshot: windAdapterSha256=4fc20bb39b9a5410e0619d3fd65d41644e5203b162cbd052f12811ec7b9b14df bytes=59495\nR14 snapshot: testbodySha256=af36154394ac60d563474e9cfad41f49f03aacb3c02d032ccf3c10707132cf07 bytes=18556\nR14 snapshot: harnessSha256=013df859dd22f5eee0e4936847c6453bf8c5e4129cbd557fe953fbd5f0919a9a bytes=7191\nR14 snapshot: baseSha256=8397a8fc06310a2bd7346fff125b7284c9737c8626ef722f9024cc190d631499 bytes=7351\nR14 snapshot: vendorSha256=e29ebad6907d6293731d1de042d6aec4a9428fcddbed8a8f19ef5f4ce05c6d05 bytes=1350010\nPASS r14 touch drag dense updates land on final value with exact callback count\nPASS r14 busy drag gate parks programmatic write and release flush applies it once\nPASS r14 input text writes normalize and notify business callback and listeners\nPASS r14 suspended dropdown settles batched select and refresh with one business event\nPASS r14 close during drag freezes business state against stray native events\nPASS r14 a newer native input supersedes the parked write and the release flush performs no extra native write\nPASS r14 async business callback errors are captured and never leak into the flush drainer\nR14 RESULT passed=7 failed=0 checked=7\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "wind-acrylic-policy-r16",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_wind_acrylic_policy_r16.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1057,
+      "stdout": "R16_SOURCE_SHA256: a14bf116ac89f6272eb2719b0824ad8d58b0bc40dab2dd576c94ea085a3f7432\nWIND_ACRYLIC_POLICY: passed=9 failed=0 checks=9\nWIND_ACRYLIC_POLICY_GREEN\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-hud-contract-r18",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_aotr_hud_contract_r18.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1309,
+      "stdout": "R18_INPUT_SHA256 common ef802c843511515d83d316d99a3f623183b4192ddc866802d6e970839a909370 bytes 17574\nR18_INPUT_SHA256 lobby 87ad2e8c82226ebcd8b0783ac3ce24a1ef902d662343a517176bf21cbab218f9 bytes 6684\nR18_INPUT_SHA256 battle 79773bb50c5c3cea9f37ea6dbd53d9e0f99046be5741afdcdb55f784b9dbb6e4 bytes 16398\nR18_INPUT_SHA256 body f3c7e00af65c5172eecce2c60eb4aa5e1aece5efc7605dfe0f0f79c6887eb6a3 bytes 24342\ngreen common helper exposes ReadPercent\ngreen lobby HUD button registered\ngreen battle HUD button registered\ngreen battle init forces boolean true (got boolean)\ngreen lobby gas button registered\ngreen battle gas button registered\ngreen lobby refresh button registered\ngreen gasText helper injected\ngreen hudText helper injected\ngreen lobby callback runs on healthy labels\ngreen lobby notifies blades 3/8 spears 2/4 (got: 刀片 3/8 · 雷枪 2/4)\ngreen battle notifies blades 3/8 spears 2/4 (got: 刀片 3/8 · 雷枪 2/4)\ngreen zero counts reported as n/n (got: 刀片 0/5 · 雷枪 0/0)\ngreen single integer reported as n/n (got: 刀片 7/7 · 雷枪 9/9)\ngreen missing blades label reports 未读取 (got: 刀片 未读取 · 雷枪 9/9)\ngreen detached-parent label reports 未读取 (got: 刀片 未读取 · 雷枪 9/9)\ngreen non-numeric text reports 未读取 (got: 刀片 未读取 · 雷枪 9/9)\ngreen nil text reports 未读取 (got: 刀片 未读取 · 雷枪 9/9)\ngreen throwing Text read reports 未读取 (got: 刀片 未读取 · 雷枪 9/9)\ngreen numeric text completes exactly one notification (got 1)\ngreen direct probe resolves blades label\ngreen 0.5s cache hit keeps old label\ngreen 1.99s cache hit keeps old label\ngreen 2s expiry rescans and exposes new label\ngreen lobby button cache hit keeps old label (no forced rescan)\ngreen destroyed: no HUD probe after unload (lobby)\ngreen destroyed: no notify after unload (lobby)\ngreen destroyed: no HUD probe after unload (battle)\ngreen destroyed: no notify after unload (battle)\ngreen exact gas path resolves Percentage label\ngreen missing Top/7 hop rejects gas path\ngreen wrong terminal type rejects gas path\ngreen decoy is reachable only by a recursive search\ngreen gas exact path rejects decoy\ngreen gas button survives throwing Text\ngreen throwing gas Text reports unread\ngreen gas button survives throwing Parent\ngreen throwing gas Parent reports unread\ngreen gas button survives valid value 0\ngreen gas accepts valid value 0 (got: 燃气: 0.0%)\ngreen battle gas button survives valid value 0\ngreen battle gas accepts valid value 0 (got: 燃气: 0.0%)\ngreen gas button survives valid value 100\ngreen gas accepts valid value 100 (got: 燃气: 100.0%)\ngreen battle gas button survives valid value 100\ngreen battle gas accepts valid value 100 (got: 燃气: 100.0%)\ngreen gas button survives valid value 42.5\ngreen gas accepts valid value 42.5 (got: 燃气: 42.5%)\ngreen battle gas button survives valid value 42.5\ngreen battle gas accepts valid value 42.5 (got: 燃气: 42.5%)\ngreen gas button survives valid value  42.5 \ngreen gas accepts valid value  42.5  (got: 燃气: 42.5%)\ngreen battle gas button survives valid value  42.5 \ngreen battle gas accepts valid value  42.5  (got: 燃气: 42.5%)\ngreen gas button survives valid value  42.5 %\ngreen gas accepts valid value  42.5 % (got: 燃气: 42.5%)\ngreen battle gas button survives valid value  42.5 %\ngreen battle gas accepts valid value  42.5 % (got: 燃气: 42.5%)\ngreen gas button survives valid value \t42.5%\n\ngreen gas accepts valid value \t42.5%\n (got: 燃气: 42.5%)\ngreen battle gas button survives valid value \t42.5%\n\ngreen battle gas accepts valid value \t42.5%\n (got: 燃气: 42.5%)\ngreen gas button survives valid value 0.0\ngreen gas accepts valid value 0.0 (got: 燃气: 0.0%)\ngreen battle gas button survives valid value 0.0\ngreen battle gas accepts valid value 0.0 (got: 燃气: 0.0%)\ngreen gas button survives valid value 100.00\ngreen gas accepts valid value 100.00 (got: 燃气: 100.0%)\ngreen battle gas button survives valid value 100.00\ngreen battle gas accepts valid value 100.00 (got: 燃气: 100.0%)\ngreen gas button survives invalid value -5\ngreen gas rejects outside range helper for -5\ngreen gas rejects outside range for -5 (got: 燃气: 未读取)\ngreen gas button survives invalid value 150\ngreen gas rejects outside range helper for 150\ngreen gas rejects outside range for 150 (got: 燃气: 未读取)\ngreen gas button survives invalid value -0.5\ngreen gas rejects outside range helper for -0.5\ngreen gas rejects outside range for -0.5 (got: 燃气: 未读取)\ngreen gas button survives invalid value 100.5\ngreen gas rejects outside range helper for 100.5\ngreen gas rejects outside range for 100.5 (got: 燃气: 未读取)\ngreen gas button survives invalid value 42.5abc\ngreen gas rejects malformed text for 42.5abc (got: 燃气: 未读取)\ngreen gas button survives invalid value abc42.5%\ngreen gas rejects malformed text for abc42.5% (got: 燃气: 未读取)\ngreen gas button survives invalid value 42.5 %x\ngreen gas rejects malformed text for 42.5 %x (got: 燃气: 未读取)\ngreen gas button survives invalid value \ngreen gas rejects malformed text for  (got: 燃气: 未读取)\ngreen gas button survives invalid value %\ngreen gas rejects malformed text for % (got: 燃气: 未读取)\ngreen gas button survives invalid value 42.\ngreen gas rejects malformed text for 42. (got: 燃气: 未读取)\ngreen gas button survives invalid value .5\ngreen gas rejects malformed text for .5 (got: 燃气: 未读取)\ngreen gas button survives invalid value +42\ngreen gas rejects malformed text for +42 (got: 燃气: 未读取)\ngreen gas button survives invalid value 1e3\ngreen gas rejects malformed text for 1e3 (got: 燃气: 未读取)\ngreen gas button survives invalid value 0x10\ngreen gas rejects malformed text for 0x10 (got: 燃气: 未读取)\ngreen gas button survives invalid value 1/2\ngreen gas rejects malformed text for 1/2 (got: 燃气: 未读取)\ngreen gas button survives invalid value 42,5\ngreen gas rejects malformed text for 42,5 (got: 燃气: 未读取)\ngreen gas button survives invalid value NaN\ngreen gas rejects malformed text for NaN (got: 燃气: 未读取)\ngreen gas button survives invalid value inf\ngreen gas rejects malformed text for inf (got: 燃气: 未读取)\ngreen gas button survives invalid value nan\ngreen gas rejects malformed text for nan (got: 燃气: 未读取)\ngreen gas button survives invalid value    \ngreen gas rejects malformed text for     (got: 燃气: 未读取)\ngreen gas button survives invalid value 12 34\ngreen gas rejects malformed text for 12 34 (got: 燃气: 未读取)\ngreen gas button survives invalid value 42.5.5\ngreen gas rejects malformed text for 42.5.5 (got: 燃气: 未读取)\ngreen gas button survives invalid value ..\ngreen gas rejects malformed text for .. (got: 燃气: 未读取)\ngreen gas button survives invalid value --5\ngreen gas rejects malformed text for --5 (got: 燃气: 未读取)\ngreen gas button survives invalid value 5-\ngreen gas rejects malformed text for 5- (got: 燃气: 未读取)\ngreen gas button survives invalid value 1.2.3\ngreen gas rejects malformed text for 1.2.3 (got: 燃气: 未读取)\ngreen gas button survives non-string value 1\ngreen gas rejects non-string value 1 (got: 燃气: 未读取)\ngreen gas button survives non-string value 2\ngreen gas rejects non-string value 2 (got: 燃气: 未读取)\ngreen gas button survives non-string value 3\ngreen gas rejects non-string value 3 (got: 燃气: 未读取)\ngreen gas button survives non-string value 4\ngreen gas rejects non-string value 4 (got: 燃气: 未读取)\ngreen gas button survives non-string value 5\ngreen gas rejects non-string value 5 (got: 燃气: 未读取)\ngreen gas button survives non-string value 6\ngreen gas rejects non-string value 6 (got: 燃气: 未读取)\ngreen gas button survives non-string value 7\ngreen gas rejects non-string value 7 (got: 燃气: 未读取)\ngreen refresh button runs\ngreen refresh reports blades (got: 刀片 3/8 · 雷枪 2/4 · 燃气 42.5%)\ngreen refresh reports spears (got: 刀片 3/8 · 雷枪 2/4 · 燃气 42.5%)\ngreen refresh reports gas (got: 刀片 3/8 · 雷枪 2/4 · 燃气 42.5%)\ngreen gas button cache hit keeps old label\ngreen gas button reports cached value (got: 燃气: 42.5%)\ngreen refresh button forces rescan and exposes new gas label\ngreen refresh reports forced gas value (got: 刀片 3/8 · 雷枪 2/4 · 燃气 88.8%)\ngreen replaced HUD resolves new blades (got: 刀片 1/2 · 雷枪 3/4 · 燃气 77.7%)\ngreen replaced HUD resolves new spears (got: 刀片 1/2 · 雷枪 3/4 · 燃气 77.7%)\ngreen replaced HUD resolves new gas (got: 刀片 1/2 · 雷枪 3/4 · 燃气 77.7%)\ngreen blades cached before gui loss\ngreen spears cached before gui loss\ngreen gas cached before gui loss\ngreen no PlayerGui: gas reference cleared\ngreen no PlayerGui: blades reference cleared\ngreen no PlayerGui: spears reference cleared\ngreen no PlayerGui: refresh reports blades unread (got: 刀片 未读取 · 雷枪 未读取 · 燃气 未读取)\ngreen no PlayerGui: refresh reports spears unread (got: 刀片 未读取 · 雷枪 未读取 · 燃气 未读取)\ngreen no PlayerGui: refresh reports gas unread (got: 刀片 未读取 · 雷枪 未读取 · 燃气 未读取)\ngreen no PlayerGui: gas entry reports unread (got: 燃气: 未读取)\ngreen no PlayerGui: battle gas entry reports unread (got: 燃气: 未读取)\ngreen gas destroyed: no HUD probe after unload (lobby)\ngreen gas destroyed: no percent read after unload (lobby)\ngreen gas destroyed: no notify after unload (lobby)\ngreen gas destroyed: no HUD probe after unload (battle)\ngreen gas destroyed: no percent read after unload (battle)\ngreen gas destroyed: no notify after unload (battle)\ngreen gas destroyed: no HUD probe on refresh (lobby)\ngreen gas destroyed: no notify on refresh (lobby)\ngreen gas mid-read deactivate: callback completes (lobby)\ngreen gas mid-read deactivate: percent reached (lobby)\ngreen gas mid-read deactivate: actually deactivated (lobby)\ngreen gas mid-read deactivate: no notify (lobby)\ngreen gas mid-read deactivate: callback completes (battle)\ngreen gas mid-read deactivate: percent reached (battle)\ngreen gas mid-read deactivate: actually deactivated (battle)\ngreen gas mid-read deactivate: no notify (battle)\ngreen gas mid-read deactivate: callback completes (refresh)\ngreen gas mid-read deactivate: percent reached (refresh)\ngreen gas mid-read deactivate: actually deactivated (refresh)\ngreen gas mid-read deactivate: no notify (refresh)\ngreen gas works again after re-enable (got: 燃气: 42.5%)\nR18_RESULT GREEN\nR18_EXECUTED_BYTES 30030\nR18_EXECUTED_SHA256 a519d4f96f0b23616e2298bda65bceefd271f024baacc396a11e8dd1d018477a\nR18_PASS hud contract green checks=183\nR36_NC hud-loss CAPTURED sha256=ea5b83aeb7ee87d6f7f2a71625197ebfce291e641c6d1c0d6525975640c5d603 bytes=29998 by: RED no PlayerGui: blades reference cleared\nR36_NC gas-range CAPTURED sha256=829f101ca7eb709b77519199ab10ef343e1d8258dff8d13545ab3d2624866725 bytes=30015 by: RED gas rejects outside range helper for 150 ;; RED gas rejects outside range helper for 100.5\nR36_NC gas-exact CAPTURED sha256=3930d0c2911c462acdf581c8830d0f9d31754725bdc0523acba93f854d225e87 bytes=30035 by: RED gas exact path rejects decoy\nR36_NC gas-alive CAPTURED sha256=b7c1fbab7555aa7ceb9859e579bea3bc63cc4b9a76d23d39ecc3f4f5a7b476b8 bytes=29962 by: RED gas destroyed: no HUD probe after unload (lobby) ;; RED gas destroyed: no HUD probe after unload (battle) ;; RED gas destroyed: no HUD probe on refresh (lobby)\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "local-features-r19",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_local_features_r19.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1044,
+      "stdout": "R19_INPUT_SHA256 src/ForsakenVisual.luau 106877a9866171fe2c2392d92689414b21e0be0803216b71df9ae24b36fb1517 bytes=74470\nR19_INPUT_SHA256 src/BloxStrikeCosmetic.luau 15fc3a6a478e9c10335b5e3f48f815f60e5a2a8936c460a92e1c279c78609213 bytes=37592\nR19_INPUT_SHA256 src/AOTRLobby.luau 87ad2e8c82226ebcd8b0783ac3ce24a1ef902d662343a517176bf21cbab218f9 bytes=6684\nR19_INPUT_SHA256 src/ServerSwitch.luau f5569973815af65392956ef811ea07b9bad4877af28d98a3566fa085973b994f bytes=26263\nR19_INPUT_SHA256 src/WindAdapter.luau 4fc20bb39b9a5410e0619d3fd65d41644e5203b162cbd052f12811ec7b9b14df bytes=59495\nR19_INPUT_SHA256 tests/test_local_features_r19.luau 64d9c1656149f8ccbf6d3c14b9e7a05aa89a3f584f57dd851490ffa72038dd5f bytes=17352\nR19_ASSEMBLED_SHA256 71a1e560af521b96e05254c66db50391faeed1bbed493166a67ef0600e78a993 bytes=32749 mode=healthy\nR19 PASS strict-instance appearance restoration\nR19 PASS Model baseline retained across repeated applications\nR19 PASS character replacement restores previous model before new application\nR19 PASS scale capability errors and invalid baselines fail closed\nR19 PASS explicit manual scale recovery remains available\nR19 PASS cosmetic idle fast path preserves every active condition\nR19 PASS lobby clipboard snapshot uses actual source and dot helpers\nR19 PASS lobby clipboard fallback none\nR19 PASS lobby clipboard fallback throw\nR19 PASS lobby clipboard fallback decline\nR19 PASS lobby zero count and secondary clipboard capability\nR19 PASS lobby dead and late completion lifecycle fences\nR19 PASS lobby missing or failing fields do not discard the remaining snapshot\nR19 PASS server status button reads one snapshot with no server actions\nR19 PASS server status nonfinite fallback and stopped-state guard\nR19 PASS touch and desktop presets preserve unrelated values and ordering\nR19 PASS preset preflight missing\nR19 PASS preset preflight capability\nR19 PASS preset preflight inactive\nR19 PASS preset stops on throw\nR19 PASS preset stops on deferred\nR19 PASS preset stops on nil\nR19 PASS preset stops on ignored\nR19 PASS preset stops on callback\nR19 PASS preset stops immediately after teardown\nR19_RESULT suites=25 checks=128 failures=0\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "visual-resources-r20",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_visual_resources_r20.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1167,
+      "stdout": "R20_INPUT_SHA256 src/SCPESP.luau 3336b54a6e371ae891692612a343f50dc9f649b3684e66b18afed0ec70e01aa3 bytes=26480\nR20_INPUT_SHA256 src/SCPCore.luau be094f67920fc91adf1db648a21d5d6329900039aae2d0da4995416b219cef90 bytes=32822\nR20_INPUT_SHA256 src/ForsakenVisual.luau 106877a9866171fe2c2392d92689414b21e0be0803216b71df9ae24b36fb1517 bytes=74470\nR20_INPUT_SHA256 src/BloxStrikeCosmetic.luau 15fc3a6a478e9c10335b5e3f48f815f60e5a2a8936c460a92e1c279c78609213 bytes=37592\nR20_INPUT_SHA256 src/AOTRESP.luau 257d004647c1518f9cef26eccfabf0325b28e479293f322f45bb592996695de4 bytes=12257\nR20_INPUT_SHA256 tests/test_visual_resources_r20.luau 94e88034456a6d6a9d474ff099910f24ea8c71c6b83f2bb7ed2b35928408658e bytes=22043\nR20_ASSEMBLED_SHA256 a5ed11faf268e2f0905b5383dab613ad97c2460f9a7381fb79243291adb6f90f bytes=79106 mode=healthy\nR20 PASS drawing setup rollback\nR20 PASS drawing partial pool rollback and guarded methods\nR20 PASS native GUI reuse and missing parent\nR20 PASS native detached GUI is rebuilt\nR20 PASS native detached text is rebuilt\nR20 PASS native root replacement and inaccessible properties\nR20 PASS native construction rollback\nR20 PASS native text commit retries after failed write\nR20 PASS native style controls and cache\nR20 PASS style sanitization and Drawing live style\nR20 PASS chams setup rollback and detached cleanup\nR20 PASS four UI controls reach actual label configuration\nR20 PASS Forsaken allocation rollback\nR20 PASS Forsaken borrowed helper and owned orphan\nR20 PASS Forsaken invalid duration and isolated cleanup\nR20 PASS sound stop disconnects subscriptions\nR20 PASS sound timeout and missing signal fallback\nR20 PASS sound synchronous Ended and playback failure\nR20 PASS sound one Destroy failure does not retain other owners\nR20 PASS AOTR orphan child rebuilt\nR20 PASS AOTR cleanup independently retires detached children\nR20 PASS AOTR parent read failure isolated and unload stays final\nR20 PASS failed existing helper lookup does not allocate\nR20 PASS failed sound lookup does not allocate\nR20 PASS disposed SCP ignores late event and frame delivery\nR20_RESULT suites=25 checks=81 failures=0\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "server-switch",
+      "command": "/data/user/0/com.dshmobile.shell/files/usr/bin/lua5.4",
+      "args": [
+        "tests/test_server_switch.lua"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 62,
+      "stdout": "PASS default is passive and samples real client ping\nPASS concurrent switch and uncertain teleport fence\nPASS identified async failure retries next candidate only\nPASS unidentified legacy failure is terminal not unsafe retry\nPASS synchronous teleport throw retries with bounded attempts\nPASS stop before scheduled work sends no requests\nPASS stop during in-flight request discards response\nPASS request timeout keeps fence and never decodes late result\nPASS IP failure never falls back even with strict region disabled\nPASS strict region rejects unconfirmed or unpreferred country\nPASS country priority outranks reported list ping\nPASS page and lookup budgets with duplicate cursor and jobs\nPASS no slots or low fps is excluded\nPASS HTTP and malformed JSON failures release busy\nPASS auto switch requires sustained client ping not list ping\nPASS invalid real ping resets sustained high counter\nPASS stop from status observer before teleport prevents dispatch\nPASS stop during retry delay suppresses next teleport\nPASS config and status snapshots isolate callers and unsubscribe works\nPASS late identified failure clears uncertain fence without retry\nPASS yielding teleport call times out and late error does not retry\nPASS stop while teleport yields suppresses late updates and retries\nServerSwitch mock tests passed: 22\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "wind-router",
+      "command": "/data/user/0/com.dshmobile.shell/files/usr/bin/python3",
+      "args": [
+        "tests/test_wind_router.py"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 2798,
+      "stdout": "",
+      "stderr": "test_all_standalone_entries_execute (__main__.BuildTests.test_all_standalone_entries_execute) ... ok\ntest_duplicate_placeholder_fails (__main__.BuildTests.test_duplicate_placeholder_fails) ... ok\ntest_entry_early_return_and_errors_keep_one_generic_window (__main__.BuildTests.test_entry_early_return_and_errors_keep_one_generic_window) ... ok\ntest_generated_unified_routes_only_one_game (__main__.BuildTests.test_generated_unified_routes_only_one_game) ... ok\ntest_generic_ui_failure_warns_without_claiming_window (__main__.BuildTests.test_generic_ui_failure_warns_without_claiming_window) ... ok\ntest_manifest_hashes_the_consumed_source_snapshot (__main__.BuildTests.test_manifest_hashes_the_consumed_source_snapshot) ... ok\ntest_missing_dependency_leaves_dist_unchanged (__main__.BuildTests.test_missing_dependency_leaves_dist_unchanged) ... ok\ntest_single_vendor_and_no_ui_placeholders (__main__.BuildTests.test_single_vendor_and_no_ui_placeholders) ... ok\ntest_six_outputs_manifest_and_determinism (__main__.BuildTests.test_six_outputs_manifest_and_determinism) ... ok\ntest_base_override_and_only_unified_download (__main__.LoaderTests.test_base_override_and_only_unified_download) ... ok\ntest_default_is_explicitly_unpublished (__main__.LoaderTests.test_default_is_explicitly_unpublished) ... ok\ntest_invalid_base_does_not_download (__main__.LoaderTests.test_invalid_base_does_not_download) ... ok\ntest_transport_compile_and_runtime_errors_are_reported (__main__.LoaderTests.test_transport_compile_and_runtime_errors_are_reported) ... ok\ntest_numeric_strings_and_aotr_guard (__main__.RouterTests.test_numeric_strings_and_aotr_guard) ... ok\n\n----------------------------------------------------------------------\nRan 14 tests in 2.460s\n\nOK\n",
+      "error": null
+    },
+    {
+      "name": "migration-ids-and-hashes",
+      "command": "/data/user/0/com.dshmobile.shell/files/usr/bin/python3",
+      "args": [
+        "tests/test_wind_migration.py"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 159,
+      "stdout": "PASS attachment option IDs 203; six Wind bundles, all source/output hashes, unmodified Wind vendor\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "forsaken-wind-static",
+      "command": "/data/user/0/com.dshmobile.shell/files/usr/bin/python3",
+      "args": [
+        "tests/test_forsaken_wind.py"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 96,
+      "stdout": "Forsaken WindUI static migration: pass\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "forsaken-enrichment",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_forsaken_enrichment.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 2898,
+      "stdout": "PASS legacy option IDs src/ForsakenCombat.luau: 3 preserved / 13 total\nPASS legacy option IDs src/ForsakenCore.luau: 59 preserved / 59 total\nPASS legacy option IDs src/ForsakenGuest.luau: 3 preserved / 11 total\nPASS legacy option IDs src/ForsakenSurvival.luau: 2 preserved / 6 total\nPASS legacy option IDs src/ForsakenVisual.luau: 2 preserved / 21 total\nForsaken executed assertions: 55\nPASS Forsaken Combat\nForsaken executed assertions: 34\nPASS Forsaken Survival\nappearance tier counts: low=49 mid=77 high=80\nForsaken executed assertions: 126\nPASS Forsaken Visual\nForsaken executed assertions: 37\nPASS Forsaken Guest\nForsaken executed assertions: 41\nPASS Forsaken Core lifecycle\nR23_INPUT_SHA256 src/BloxStrikeCosmetic.luau 15fc3a6a478e9c10335b5e3f48f815f60e5a2a8936c460a92e1c279c78609213 bytes=37592\nR23_INPUT_SHA256 tests/test_bloxstrike_enrichment.luau bb439ab3a656981f3b375bb09fdd119e0de9dc2e6c802f28b8147d90558fc3b8 bytes=42807\nR23_INPUT_SHA256 src/BloxStrikeCommon.luau 63b1f197e95348946332980f7a823bed792437b79845503fdaa1c26df71984bb bytes=11271\nR23_INPUT_SHA256 tests/test_native_animation_r23.luau c11382e8a4bcdf03a449d44758209a821befb819f8b8a6865bd62414fa211d62 bytes=6948\nR23_ASSEMBLED_SHA256 native bdd31335d0fcbc877380d121541ea56833391897ed37f0ce38c648eea3163e2d bytes=66225 mode=healthy\nR23 native animation assertions: 67\nPASS R23 native real factory animation contracts\nR23_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR23_INPUT_SHA256 tests/test_forsaken_enrichment.luau 1d3b28089ae0f5c7101817f9fa3c79cf3811158158481ad0fe753ded8b910830 bytes=35859\nR23_INPUT_SHA256 tests/test_guest_animation_r23.luau 522377c46fb87252663f1c4d1595f44f42f56e92956873d168c31b4adc2cd990 bytes=15843\nR23_ASSEMBLED_SHA256 guest c5bc380336affa1d712afbf4c07301460cee75c0123e84fe7b84d64910ca8eb2 bytes=81848 mode=healthy\ntest_guest_animation_r23 assertions: 350\nPASS R23 guest real factory animation contracts\nR34 world fixture\nsource: src/ForsakenVisual.luau sha256=106877a9866171fe2c2392d92689414b21e0be0803216b71df9ae24b36fb1517 bytes=71872\nfixture: tests/test_world_r34.luau sha256=296fd0d6696200b4ef0772f354b6ed6efca6bf827022d935fc0981466d0848d5\ndefault: PASS R34 PASS: 45 checks\nmutation filter (delete Swords filter (non-Swords particles also hidden)): FAIL-AS-EXPECTED\nmutation budget (delete per-tick 32-item budget): FAIL-AS-EXPECTED\nmutation restore (restore loop disabled (old particles never restored)): FAIL-AS-EXPECTED\nmutation disconnect (old connection never disconnected (listener leak on map swap)): FAIL-AS-EXPECTED\nR34 RESULT: all stages behaved as expected; production source untouched\nR34_INPUT_SHA256 src/ForsakenVisual.luau 106877a9866171fe2c2392d92689414b21e0be0803216b71df9ae24b36fb1517 bytes=74470\nR34_INPUT_SHA256 tests/test_audio_r34.luau d4b493f88482b4e408e8472dd0a12638abbd16f85d8da64960302b28b19ad075 bytes=18984\nR34_ASSEMBLED_SHA256 audio 50576231a37a350fbb1141a4ddd9b224d8feb2d5ee6e27ff2a80f3e79d7afd0c bytes=31493 mode=healthy\ntest_audio_r34 assertions: 99 (checks 99)\nPASS R34 audio real local-sound contracts\nR34_INPUT_SHA256 tests/test_audio_r34.luau d4b493f88482b4e408e8472dd0a12638abbd16f85d8da64960302b28b19ad075 bytes=18984\nR34_ASSEMBLED_SHA256 audio 9d40bec8c4e9473bcd7658b756d515b2d5f9a85250be08aed4cda1b9c3489982 bytes=31478 mode=no-delay\nR34_NEGATIVE_CAPTURED no-delay expected=whip holds 0.45s\nR34_INPUT_SHA256 tests/test_audio_r34.luau d4b493f88482b4e408e8472dd0a12638abbd16f85d8da64960302b28b19ad075 bytes=18984\nR34_ASSEMBLED_SHA256 audio 4219da67364e30bcfaf512fb0d838ab32664d5125120eb381d13fa30490284d4 bytes=31465 mode=no-expiry\nR34_NEGATIVE_CAPTURED no-expiry expected=2s lifetime reclaims sound\nR34_INPUT_SHA256 tests/test_audio_r34.luau d4b493f88482b4e408e8472dd0a12638abbd16f85d8da64960302b28b19ad075 bytes=18984\nR34_ASSEMBLED_SHA256 audio ad1de051a7b09076040eadff3c2abd0937fe2ecce572d539573c05b5d693d577 bytes=31452 mode=no-validity-guard\nR34_NEGATIVE_CAPTURED no-validity-guard expected=superseded sound never plays\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync 73fe36302777827acaf0c0b321679276ff6d732abc0cf9d9235676968bed7bf7 bytes=82859 mode=healthy\ntest_sync_r35 assertions: 1608 (checks 1608)\nPASS R35/R40/R41/R42/R43/R45 sync reference chat-sync contracts checks=1608\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync 794786edef37becebc2af701cc8a316234ed786a43c458ff8a567aacbb20ed58 bytes=82808 mode=loose-command\nR35_NEGATIVE_CAPTURED loose-command expected=non exact message ignored\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync 0e0be78a609942d5181b7f36ee39601efa417ee46cbb0ef0963b40eda5646f75 bytes=82809 mode=session-guard\nR35_NEGATIVE_CAPTURED session-guard expected=session switch reclaims blades\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync c0c104cc5fd1b2c78135b764a9253366347ea2cc0f78aa99ea8dd5d124f064df bytes=82816 mode=conditional-restore\nR35_NEGATIVE_CAPTURED conditional-restore expected=external survivor name preserved\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync ab5c11e4425f891ec0785b2269d85487128f3ddc321b37f3d23376b8886b4587 bytes=82816 mode=terio-icon-restore\nR35_NEGATIVE_CAPTURED terio-icon-restore expected=external Terio icon preserved\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync 6b8ff85ac215f9150e6a32a26381b079e3227f173516b59f1b5c95d2b3c072cd bytes=82885 mode=terio-frame-deadline\nR35_NEGATIVE_CAPTURED terio-frame-deadline expected=Terio deadline restores at exact two seconds\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync dfdb4b2dead4df89963b434975b8176c76c32a302b9f1a4f38da82103302f9c0 bytes=82809 mode=terio-look-restore\nR35_NEGATIVE_CAPTURED terio-look-restore expected=Terio external shirt preserved\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync 94abbbb89a5e495e641c4c308a0e826f4e85fedf33fe0d0270a1b162de26e278 bytes=82820 mode=terio-look-owner\nR35_NEGATIVE_CAPTURED terio-look-owner expected=Terio handed-off shirt not rewritten\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync d7bdd418cc3237e937f3ff49fc9ce00ac8f96fb5670768ae78b9622abd380a0f bytes=82830 mode=terio-look-late-write\nR35_NEGATIVE_CAPTURED terio-look-late-write expected=Terio setter interruption compensates late write close-before\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync 9522fb5ad1b83de259a796e16cb77b68513954a8b58a14ca9d4e65881c45897a bytes=82863 mode=terio-face-delay\nR35_NEGATIVE_CAPTURED terio-face-delay expected=Terio face delayed until two seconds\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync 3161e41dc8c51479b7062101c4c51958659a2dffe168ccc470d0014ab6e9f61e bytes=82856 mode=terio-face-deadline\nR35_NEGATIVE_CAPTURED terio-face-deadline expected=Terio face restores at nominal deadline\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync eb3957e27a0d83169e9d2f9a5308a21233492c34bdc5acdd9ed6628ae472cf69 bytes=82835 mode=terio-face-close\nR35_NEGATIVE_CAPTURED terio-face-close expected=Terio pulse close restores original face\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync f04d7c65d76c30e4a98ecca4f1cc7e6141999820d859040cd95eb5623095cfa9 bytes=82807 mode=terio-face-late-write\nR35_NEGATIVE_CAPTURED terio-face-late-write expected=Terio pulse compensates late write close-before\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync 3f3b8473b827c4d375a17aca10468ca6a20104e3742ebaec7dd1562a417bbd21 bytes=82862 mode=terio-skin-color\nR35_NEGATIVE_CAPTURED terio-skin-color expected=Terio skin applies exact reference white\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync d81a90050a98fbb382e076f01d8ab0515160819ee2b8b2d5d322ec5e5ea9d330 bytes=82890 mode=terio-skin-restore\nR35_NEGATIVE_CAPTURED terio-skin-restore expected=Terio external skin preserved\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync b4280b0ec55b035029d6a031b2eadba940b323904fcaa820445c1174d9f20d05 bytes=82890 mode=terio-skin-owner\nR35_NEGATIVE_CAPTURED terio-skin-owner expected=Terio handed-off skin not rewritten\nR35_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4 bytes=53863\nR35_INPUT_SHA256 tests/test_sync_r35.luau 33b0c924b84192bbbb4751f8da5ad7f17ef91416d7d385aa4aa515989bce6196 bytes=62596\nR35_ASSEMBLED_SHA256 sync 7dfc11d0bbf121ca96a3870c7a285abe0c24a44c86734f0dbf2d567a4e0638cb bytes=82859 mode=terio-skin-bound\nR35_NEGATIVE_CAPTURED terio-skin-bound expected=Terio skin scan is bounded at 256 direct children\nR39_INPUT_SHA256 tests/test_forsaken_enrichment.luau 1d3b28089ae0f5c7101817f9fa3c79cf3811158158481ad0fe753ded8b910830\nR39_INPUT_SHA256 src/ForsakenGuest.luau 557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4\nR39_INPUT_SHA256 tests/test_sil_animation_r39.luau 9e219fa271866e5d8ef6fa744ec0c008b5fe34c6cddcc29dccbbb2f4a8023937\ntest_sil_animation_r39 assertions: 272\nR39_ASSEMBLED_SHA256 74e6cdc6842b7e8aa8f3df5436e55db25082c93d4075ad024351d115b309100a bytes=83174\nPASS R39 Sil real factory animation contracts\nR39_NC finisher-delay CAPTURED sha256=ad2e7423034dc4c09a591ff33c1dc0a455875744e09ae57f7d5836553ea0a88b bytes=83171 by: LuaError: [string \"sil_animation_r39\"]:5: delayed id does not replace immediately: expected 0, got 1\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "bloxstrike-enrichment",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_bloxstrike_enrichment.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1305,
+      "stdout": "[Vortexion/BloxStrike] frame combat=- cand=0 hit=0(0.00ms) bullet path=fixture bullets=0(0.00ms) slow=0 hooks=0 remotes=0/0\nPASS BloxStrike checks: 667\nPASS BloxStrike executable enrichment regressions; Core reload/unload/debug runtime\nR38_NC trail-expiry CAPTURED sha256=ffb26286b44f3ca8a1b00b7e45ea65e53db19b99409ea238ef49b0c4a1901929 bytes=165510 by: trail preview expires at 0.5 seconds\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "scp-enrichment",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_scp_enrichment.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1201,
+      "stdout": "PASS candidate camera loss empties pool and nearest cap\nPASS NPC pool accepts Model without Character access and reuses nonrefresh\nPASS box allocation partial failure rolls back\nPASS shared cleanup and touch filtered origin order focus\nPASS cloak cleanup restores hook lifecycle\nPASS candidate roster throttles and nested late humanoid events\nPASS camera lock persists revalidates team wall death and clears gates\nPASS camera mobile mouse fallback replacement alpha and reusable marker\nPASS camera touch hold toggle focus and text entry suppression\nPASS hitbox throttled independent scales numeric lerp and immediate restore\nPASS hitbox mode rig respawn and removal restore\nPASS movement single driver speed Y fly priority and restore\nPASS movement touch fly uses displacement and two finger vertical\nPASS noclip restores false true dynamic parts and respawn with one walk\nPASS jump event deferred debounce respawn cancel and teleport cancel\nPASS ESP late subfeature enable independent health labels tracer and immediate hide\nPASS ESP NPC disable R6 switch and chams without Drawing\nPASS core old option IDs new parameters fullbright snapshot server reuse teardown\nPASS core color controls update rendered colors and fence invalid or late values\nPASS core high FPS trigger release reload and anti ragdoll\nPASS core anti AFK pending release on destroy\nPASS desktop legacy buttons mouse both modes and no-capability fallback\nPASS candidate projection work bounded and fractional refresh remainder retained\nPASS hitbox grace collapse numeric transparency and removal listeners released\nPASS fly forward touch direction and jump can resume after teleport cancels pending\nPASS shared visual clamp only slows cadence and rejects bad bridge values\nPASS ESP projection consumes shared clamp and camera swap forces refresh\nPASS ESP offscreen arrow native label and immediate teardown\nPASS forward teleport steps along look vector and mobile jump falls back\nPASS ESP native label MaxDistance follows config without redundant writes\nPASS ESP native label rolls back a half-built gui and refuses a detached parent\nSCP runtime suites: 31 passed, 0 failed\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-static",
+      "command": "/data/user/0/com.dshmobile.shell/files/usr/bin/python3",
+      "args": [
+        "tests/test_aotr.py"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 64,
+      "stdout": "PASS AOTR universe guard\nPASS main menu route\nPASS lobby route\nPASS mission route\nPASS other mission routes\nPASS trade excluded\nPASS fails closed\nPASS two independent bundles\nPASS separate configuration\nPASS wind configurable\nPASS cleanup on reexecute\nPASS bounded monitor\nPASS stale loop token invalidation\nPASS AOTR uses real newlines\nPASS no AOTR raw HTTP loads\nPASS legacy routes preserved\nAOTR static checks passed; runtime remains unverified\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-common-factory",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRCommon.luau",
+        "tests/test_aotr_enrichment.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 828,
+      "stdout": "PASS AOTR Common lifecycle/touch region/order/focus/fallback\nPASS execute tests/test_aotr_enrichment.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-titans-factory",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRTitans.luau",
+        "tests/test_aotr_enrichment.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 833,
+      "stdout": "PASS AOTR factory contract\nPASS execute tests/test_aotr_enrichment.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-combat-factory",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRCombat.luau",
+        "tests/test_aotr_enrichment.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 804,
+      "stdout": "PASS AOTR factory contract\nPASS execute tests/test_aotr_enrichment.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-movement-factory",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRMovement.luau",
+        "tests/test_aotr_enrichment.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1767,
+      "stdout": "PASS AOTR factory contract\nPASS execute tests/test_aotr_enrichment.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-esp-factory",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRESP.luau",
+        "tests/test_aotr_enrichment.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1109,
+      "stdout": "PASS AOTR factory contract\nPASS execute tests/test_aotr_enrichment.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-farm-factory",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRFarm.luau",
+        "tests/test_aotr_enrichment.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1041,
+      "stdout": "PASS AOTR factory contract\nPASS execute tests/test_aotr_enrichment.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-cloak-factory",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRCloak.lua",
+        "tests/test_aotr_enrichment.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1130,
+      "stdout": "PASS AOTR factory contract\nPASS execute tests/test_aotr_enrichment.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-lobby-camera",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRLobby.luau",
+        "tests/test_aotr_lobby_runtime.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 884,
+      "stdout": "PASS AOTR lobby HUD readout\nPASS AOTR lobby camera lifecycle\nPASS execute tests/test_aotr_lobby_runtime.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-property-restoration",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRMovement.luau",
+        "tests/test_aotr_movement_lifecycle.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 760,
+      "stdout": "PASS AOTR movement disable/respawn/dynamic parts/cleanup restoration\nPASS execute tests/test_aotr_movement_lifecycle.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-render-lifecycle",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRESP.luau",
+        "tests/test_aotr_esp_lifecycle.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 956,
+      "stdout": "PASS disabled path allocates no GUI and reads no candidates\nPASS 10Hz refresh reuses records and updates labels\nPASS live display settings apply without respawn\nPASS replacement nape does not leave stale billboard adornee\nPASS despawn disabled path and stop reclaim render objects\nPASS pool loss clears stale render records\nPASS root GUI external removal rebuilds one owned tree\nPASS unparented GUI is replaced rather than leaked\nPASS missing root hides distance and health clamps\nPASS allocation failures do not leak partial records\nPASS highlight allocation failure preserves owned record for retry\nPASS missing GUI parent causes no detached allocations\nPASS unloaded module cannot revive GUI from a late update\nPASS disabled cadence does not retain a partial active frame\nPASS root setup failure rolls back the uncommitted GUI\nPASS highlight setup failure rolls back only its new instance\nPASS throttled visual cadence defers refresh and still reclaims immediately\nGREEN 54 AOTR render checks; 0 failed suites\nPASS execute tests/test_aotr_esp_lifecycle.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-cache-lifecycle",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRTitans.luau",
+        "tests/test_aotr_titans_lifecycle.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1550,
+      "stdout": "PASS late folder subscribes once and spawn/despawn mark dirty\nPASS folder replacement detaches old and dirties from new signals\nPASS reparented folder no longer belongs to workspace\nPASS listener churn keeps app tracking bounded\nPASS stop is idempotent and never scans or resubscribes\nPASS stable folder scans respect interval\nPASS missing folder idle does not force repeated scans\nPASS missing character root clears visuals but preserves titan health semantics\nPASS missing character root clears previous out-of-range distance and flag\nPASS missing camera clears projection and recovers when camera returns\nPASS out-of-range entries clear projection and return in range\nPASS dead entries clear cached fields and revive without stale state\nPASS reparented cached nape is re-resolved within its model\nPASS missing nape invalidates cached projection and distance\nPASS missing humanoid or root invalidates retired entry references\nPASS removed models invalidate held entry references\nPASS folder removal within interval clears entries listeners and dirty\nPASS stop invalidates held entry references\nAOTRTitans lifecycle: 18 passed, 0 failed, 18 total, 133 checks\nPASS execute tests/test_aotr_titans_lifecycle.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-common-lifecycle",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs",
+        "--execute",
+        "--factory",
+        "src/AOTRCommon.luau",
+        "tests/test_aotr_common_lifecycle.luau"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 1128,
+      "stdout": "FIXTURE HEALTH: healthy real Common flow executed\nVISUAL CADENCE: app:GetVisualInterval degradation verified\nAOTR Common lifecycle: passed=264 failed=0 checks=264\nPASS execute tests/test_aotr_common_lifecycle.luau\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "aotr-entry-lifecycle",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_aotr_entry_lifecycle.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 798,
+      "stdout": "PASS Lobby camera default options are registered\nPASS Lobby initial FOV matches bounded integer control default\nPASS Lobby missing window prevents partial entry installation\nPASS Lobby many camera replacements release retired ownership\nPASS Lobby disabled observer preserves unowned camera changes\nPASS Lobby each enable cycle captures its own baseline\nPASS Lobby late camera callbacks cannot revive a stopped entry\nPASS Lobby camera replacement releases previous ownership immediately\nPASS Lobby disabling restores all cameras before reuse\nAOTR Lobby entry: 9 passed, 0 failed, 9 total, 162 checks\nPASS Battle camera default options are registered\nPASS Battle initial FOV matches bounded integer control default\nPASS Battle missing window prevents partial entry installation\nPASS Battle many camera replacements release retired ownership\nPASS Battle disabled observer preserves unowned camera changes\nPASS Battle each enable cycle captures its own baseline\nPASS Battle late camera callbacks cannot revive a stopped entry\nPASS Battle camera replacement releases previous ownership immediately\nPASS Battle disabling restores all cameras before reuse\nPASS Battle sleeping debug task does not read modules after cleanup\nPASS Battle frame gate and late callback preserve inert module lifecycle\nPASS Battle cleanup unbinds named render callback\nAOTR Battle entry: 12 passed, 0 failed, 12 total, 813 checks\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "compile-active-sources-and-six-bundles",
+      "command": "/system/bin/linker64",
+      "args": [
+        "/data/user/0/com.dshmobile.shell/files/usr/bin/node",
+        "tests/run_luau.mjs"
+      ],
+      "passed": true,
+      "skipped": false,
+      "exitCode": 0,
+      "durationMs": 2839,
+      "stdout": "PASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/AOTRBattle.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/AOTRCloak.lua\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/AOTRCombat.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/AOTRCommon.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/AOTRESP.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/AOTRFarm.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/AOTRLobby.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/AOTRMovement.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/AOTRScene.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/AOTRTitans.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/BloxStrikeBullet.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/BloxStrikeCloak.lua\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/BloxStrikeCombat.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/BloxStrikeCommon.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/BloxStrikeCore.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/BloxStrikeCosmetic.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/BloxStrikeVisual.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/ForsakenCombat.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/ForsakenCore.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/ForsakenGuest.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/ForsakenSurvival.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/ForsakenVisual.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/GameRouter.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/SCPCamera.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/SCPCandidates.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/SCPCloak.lua\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/SCPCommon.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/SCPCore.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/SCPESP.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/SCPHitbox.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/SCPMovement.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/SCPSilentAim.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/ServerSwitch.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/src/WindAdapter.luau\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/dist/Vortexion_AOTR_Battle.lua\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/dist/Vortexion_AOTR_Lobby.lua\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/dist/Vortexion_BloxStrike.lua\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/dist/Vortexion_Forsaken.lua\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/dist/Vortexion_SCP.lua\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/dist/Vortexion_Wind.lua\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/vendor/WindUI/Source.lua\nPASS compile /data/data/com.dshmobile.shell/files/home/Vortexion-lua/wind-project/loader.lua\n",
+      "stderr": "",
+      "error": null
+    }
+  ],
+  "roblox_android_tested": false,
+  "roblox_pc_tested": false,
+  "game_features_live_verified": false,
+  "publication": "not_published_to_github",
+  "reference_loaders_executed": false,
+  "notes": [
+    "Native contracts execute selected unmodified vendor function bodies in an instrumented Luau fixture, not the full Roblox GUI.",
+    "Game mocks, compiler and router/build gates do not prove live game protocols or Android rendering.",
+    "The shared fixture callback failure warning is intentionally injected and asserted."
+  ]
+}

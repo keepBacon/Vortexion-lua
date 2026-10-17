@@ -1,4 +1,4 @@
--- Vortexion - Forsaken · Starlight 中文手机版 (based on NumanLUAU/Goonsaken-Hub, source 2026-05-13)
+-- Vortexion - Forsaken · WindUI 中文手机版 (based on NumanLUAU/Goonsaken-Hub, source 2026-05-13)
 -- Community modification: UI localization + Android touch compatibility.
 -- No guarantee of executor compatibility or live-game feature support.
 -- Phase 1 has no published independent loader yet; NEVER reload the old repo on teleport.
@@ -23,6 +23,9 @@ local UserInputService = game:GetService("UserInputService")
 local RNG = Random.new()
 -- v8: stop previous session's throttled background jobs on reinjection.
 local sessionEnv = (getgenv and getgenv()) or _G
+if type(sessionEnv.VortexionForsakenCleanup) == "function" then
+    pcall(sessionEnv.VortexionForsakenCleanup)
+end
 sessionEnv.VortexionSessionId = (sessionEnv.VortexionSessionId or 0) + 1
 local thisSessionId = sessionEnv.VortexionSessionId
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -55,16 +58,23 @@ end
 
 -- Simple connection bucket so we can clean up safely if needed
 local Connections = {}
-local function track(conn) table.insert(Connections, conn); return conn end
+local function track(conn)
+    -- Retain active connections only across repeated native UI toggles.
+    for i = #Connections, 1, -1 do
+        if not Connections[i].Connected then table.remove(Connections, i) end
+    end
+    table.insert(Connections, conn)
+    return conn
+end
 local function disconnectAll()
-    for i, c in ipairs(Connections) do
+    for i = #Connections, 1, -1 do local c = Connections[i]
         if c and c.Disconnect then pcall(function() c:Disconnect() end) end
         Connections[i] = nil
     end
 end
 
 
-local executor = getgenv().identifyexecutor and getgenv().identifyexecutor() or "RobloxClientApp"
+local executor = sessionEnv.identifyexecutor and sessionEnv.identifyexecutor() or "RobloxClientApp"
 
 --[[
 if executor == "Xeno" or executor == "Velocity" or executor == "LX63" then
@@ -77,35 +87,38 @@ local ORIGINAL_DASH_SPEED = 60
 
 local isOverrideActive = false
 local connection
-
--- Start dash override
+local dashHumanoid, dashSaved = nil, {}
+local function restoreDash(hum)
+    local saved = hum and dashSaved[hum]
+    if not saved then return end
+    pcall(function()
+        hum.WalkSpeed, hum.AutoRotate = saved.WalkSpeed, saved.AutoRotate
+        hum:Move(Vector3.zero)
+    end)
+    dashSaved[hum] = nil
+end
 local function startvoidrushcontrol()
     if isOverrideActive then return end
     isOverrideActive = true
-
     connection = RunService.RenderStepped:Connect(function()
-        Humanoid.WalkSpeed = ORIGINAL_DASH_SPEED
-        Humanoid.AutoRotate = false
-
-        local direction = HumanoidRootPart.CFrame.LookVector
-        local horizontalDirection = Vector3.new(direction.X, 0, direction.Z).Unit
-        Humanoid:Move(horizontalDirection)
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if dashHumanoid ~= hum then restoreDash(dashHumanoid); dashHumanoid = hum end
+        if not (hum and root and hum.Health > 0) then return end
+        if not dashSaved[hum] then dashSaved[hum] = {WalkSpeed = hum.WalkSpeed, AutoRotate = hum.AutoRotate} end
+        hum.WalkSpeed, hum.AutoRotate = ORIGINAL_DASH_SPEED, false
+        local direction = root.CFrame.LookVector
+        local horizontal = Vector3.new(direction.X, 0, direction.Z)
+        hum:Move(horizontal.Magnitude > 0.01 and horizontal.Unit or Vector3.new(0, 0, -1))
     end)
+    track(connection)
 end
-
--- Stop dash override
 local function stopvoidrushcontrol()
-    if not isOverrideActive then return end
     isOverrideActive = false
-
-    Humanoid.WalkSpeed = 16
-    Humanoid.AutoRotate = true
-    Humanoid:Move(Vector3.new(0, 0, 0))
-
-    if connection then
-        connection:Disconnect()
-        connection = nil
-    end
+    if connection then connection:Disconnect(); connection = nil end
+    for hum in pairs(dashSaved) do restoreDash(hum) end
+    dashHumanoid = nil
 end
 
 local function fireproximityprompt(Obj, Amount, Skip)
@@ -118,7 +131,7 @@ local function fireproximityprompt(Obj, Amount, Skip)
         for i = 1, Amount do 
             Obj:InputHoldBegin()
             if not Skip then 
-                wait(Obj.HoldDuration)
+                task.wait(Obj.HoldDuration)
             end
             Obj:InputHoldEnd()
         end
@@ -288,26 +301,28 @@ local function firetouchinterest(totouch, whattotouchwith,nilvalue)
         local clone = totouch:Clone()
         local orgpos = totouch.CFrame
         totouch.CFrame = whattotouchwith.CFrame
-        wait(0.5)
+        task.wait(0.5)
         totouch.CFrame = orgpos
         clone:Destroy()
     end)
 end
 
-LocalPlayer.CharacterAdded:Connect(function(char)
-	Character = char
-	Humanoid = char:WaitForChild("Humanoid")
-	Animator = Humanoid:WaitForChild("Animator")
-	HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
-end)
+track(LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    local hum = char:WaitForChild("Humanoid", 10)
+    local root = char:WaitForChild("HumanoidRootPart", 10)
+    if LocalPlayer.Character ~= char or sessionEnv.VortexionSessionId ~= thisSessionId then return end
+    Humanoid, HumanoidRootPart = hum, root
+    Animator = hum and hum:FindFirstChildOfClass("Animator")
+end))
 
 local function checkAndSetSlowStatus()
     if AntiSlow == false then
         return
     end
 	local Character = LocalPlayer.Character
+	if not Character then return end
 	local Humanoid = Character:WaitForChild("Humanoid")
-    if not Character then return end
 
     local speedMultipliers = Character:FindFirstChild("SpeedMultipliers")
     if not speedMultipliers then return end
@@ -317,7 +332,7 @@ local function checkAndSetSlowStatus()
 
     slowedStatus.Value = 1
 
-    local fovMultipliers = character:FindFirstChild("FOVMultipliers")
+    local fovMultipliers = Character:FindFirstChild("FOVMultipliers")
     if not fovMultipliers then return end
 
     local fovSlowedStatus = fovMultipliers:FindFirstChild("SlowedStatus")
@@ -416,7 +431,7 @@ local function ToggleInvis(enabled)
                         humanoid.Parent.HumanoidRootPart.Transparency = 1
                     end
                 end
-                wait(0.5)
+                task.wait(0.5)
             end
         end)
     else
@@ -472,7 +487,7 @@ local function handleToggle(enabled)
 						humanoid.Parent.HumanoidRootPart.Transparency = 1
                     end
                 end
-                wait(0.5)
+                task.wait(0.5)
             end
         end)
     else
@@ -545,7 +560,9 @@ local function startBlockTp(state)
         local char = localPlayer.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then return end
 
-        for _, killer in ipairs(workspace.Players.Killers:GetChildren()) do
+        local killersFolder = workspace.Players and workspace.Players:FindFirstChild("Killers")
+        if not killersFolder then return end
+        for _, killer in ipairs(killersFolder:GetChildren()) do
             if not (killer:IsA("Model") and killer:FindFirstChild("HumanoidRootPart")) then
                 blockingKillers[killer] = nil
                 continue
@@ -566,7 +583,16 @@ local function startBlockTp(state)
             local originalCF = char.HumanoidRootPart.CFrame
 
             -- Fire block
-            ReplicatedStorage.Modules.Network.RemoteEvent:FireServer("UseActorAbility", "Block")
+            local okFireBlock = pcall(function()
+                local rs = game:GetService("ReplicatedStorage")
+                local modules = rs:FindFirstChild("Modules")
+                local network = modules and modules:FindFirstChild("Network")
+                local remote = network and network:FindFirstChild("RemoteEvent")
+                if remote then
+                    remote:FireServer("UseActorAbility", "Block")
+                end
+            end)
+            if not okFireBlock then continue end
 
             -- Teleport in front of killer
             local killerHRP = killer.HumanoidRootPart
@@ -577,7 +603,7 @@ local function startBlockTp(state)
 
             -- Keep teleporting until animation ends or punch charge = "1"
             task.spawn(function()
-                while true do
+                while sessionEnv.VortexionSessionId == thisSessionId do
                     task.wait(0.05)
                     if not (localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")) then break end
 
@@ -607,787 +633,50 @@ soundPlayer.Parent = Workspace
 soundPlayer.Looped = false
 soundPlayer.Volume = 5
 
-if true == true then
-	function KillerEmoteGUI()
-		local KillerEmoteGUI = Instance.new("ScreenGui", PlayerGui)
-		local Holder = Instance.new("Frame")
-		local UICorner = Instance.new("UICorner")
-		local LogoUIC = Instance.new("UICorner")
-		local Bwah = Instance.new("UIAspectRatioConstraint")
-		local WhereTheButtons = Instance.new("Frame")
-		local _1 = Instance.new("Frame")
-		local TextButton1 = Instance.new("TextButton")
-		local Front1 = Instance.new("ImageLabel")
-		local UIC111 = Instance.new("UICorner")
-		local Background1 = Instance.new("ImageLabel")
-		local UIC11 = Instance.new("UICorner")
-		local UIC1 = Instance.new("UICorner")
-		local _2 = Instance.new("Frame")
-		local TextButton2 = Instance.new("TextButton")
-		local Front2 = Instance.new("ImageLabel")
-		local UIC222 = Instance.new("UICorner")
-		local Background2 = Instance.new("ImageLabel")
-		local UIC22 = Instance.new("UICorner")
-		local UIC2 = Instance.new("UICorner")
-		local _3 = Instance.new("Frame")
-		local TextButton3 = Instance.new("TextButton")
-		local Front3 = Instance.new("ImageLabel")
-		local UIC333 = Instance.new("UICorner")
-		local Background3 = Instance.new("ImageLabel")
-		local UIC33 = Instance.new("UICorner")
-		local UIC3 = Instance.new("UICorner")
-		local _4 = Instance.new("Frame")
-		local TextButton4 = Instance.new("TextButton")
-		local Front4 = Instance.new("ImageLabel")
-		local UIC444 = Instance.new("UICorner")
-		local Background4 = Instance.new("ImageLabel")
-		local UIC44 = Instance.new("UICorner")
-		local UIC4 = Instance.new("UICorner")
-		local _5 = Instance.new("Frame")
-		local TextButton5 = Instance.new("TextButton")
-		local Front5 = Instance.new("ImageLabel")
-		local UIC555 = Instance.new("UICorner")
-		local Background5 = Instance.new("ImageLabel")
-		local UIC55 = Instance.new("UICorner")
-		local UIC5 = Instance.new("UICorner")
-		local _6 = Instance.new("Frame")
-		local TextButton6 = Instance.new("TextButton")
-		local Front6 = Instance.new("ImageLabel")
-		local UIC666 = Instance.new("UICorner")
-		local Background6 = Instance.new("ImageLabel")
-		local UIC66 = Instance.new("UICorner")
-		local UIC6 = Instance.new("UICorner")
-		local _7 = Instance.new("Frame")
-		local TextButton7 = Instance.new("TextButton")
-		local Front7 = Instance.new("ImageLabel")
-		local UIC777 = Instance.new("UICorner")
-		local Background7 = Instance.new("ImageLabel")
-		local UIC77 = Instance.new("UICorner")
-		local UIC7 = Instance.new("UICorner")
-		local _8 = Instance.new("Frame")
-		local TextButton8 = Instance.new("TextButton")
-		local Front8 = Instance.new("ImageLabel")
-		local UIC888 = Instance.new("UICorner")
-		local Background8 = Instance.new("ImageLabel")
-		local UIC88 = Instance.new("UICorner")
-		local UIC8 = Instance.new("UICorner")
-		local ListingLayouts = Instance.new("UIListLayout")
-		local WhereButtonPadding = Instance.new("UIPadding")
-		local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
-		local Name = Instance.new("Frame")
-		local NameTextbox = Instance.new("TextLabel")
-		local NameUIT = Instance.new("UITextSizeConstraint")
-		local NameUIC = Instance.new("UICorner")
-
-		--Properties:
-
-		KillerEmoteGUI.Name = "KillerEmoteGUI"
-		KillerEmoteGUI.Parent = PlayerGui
-		KillerEmoteGUI.ResetOnSpawn = false
-
-		Holder.Name = "Holder"
-		Holder.Parent = KillerEmoteGUI
-		Holder.AnchorPoint = Vector2.new(0.5, 0.5)
-		Holder.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		Holder.BackgroundTransparency = 0.250
-		Holder.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Holder.BorderSizePixel = 0
-		Holder.LayoutOrder = 1
-		Holder.Position = UDim2.new(0.5, 0, 0.6, 0)
-		Holder.Size = UDim2.new(0, 0, 0, 0)
-		Holder.SizeConstraint = Enum.SizeConstraint.RelativeXY
-		UICorner.Parent = Holder
-
-		WhereTheButtons.Name = "WhereTheButtons"
-		WhereTheButtons.Parent = Holder
-		WhereTheButtons.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		WhereTheButtons.BackgroundTransparency = 1.000
-		WhereTheButtons.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		WhereTheButtons.BorderSizePixel = 0
-		WhereTheButtons.Size = UDim2.new(1, -40, 1, 0)
-
-		_1.Name = "1"
-		_1.Parent = WhereTheButtons
-		_1.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		_1.BackgroundTransparency = 0.700
-		_1.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		_1.BorderSizePixel = 0
-		_1.LayoutOrder = 1
-		_1.Size = UDim2.new(0.125, 0, 1, 0)
-		_1.ZIndex = 2
-
-		TextButton1.Name = "TextButton1"
-		TextButton1.Parent = _1
-		TextButton1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton1.BackgroundTransparency = 1.000
-		TextButton1.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		TextButton1.BorderSizePixel = 0
-		TextButton1.Size = UDim2.new(1, 0, 1, 0)
-		TextButton1.ZIndex = 3
-		TextButton1.Font = Enum.Font.FredokaOne
-		TextButton1.Text = ""
-		TextButton1.TextColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton1.TextScaled = true
-		TextButton1.TextSize = 10.000
-		TextButton1.TextWrapped = true
-
-		Front1.Name = "Front1"
-		Front1.Parent = TextButton1
-		Front1.AnchorPoint = Vector2.new(0.5, 0.5)
-		Front1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Front1.BackgroundTransparency = 1.000
-		Front1.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Front1.BorderSizePixel = 0
-		Front1.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Front1.Size = UDim2.new(0.899999976, 0, 0.899999976, 0)
-		Front1.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Front1.ZIndex = 4
-		Front1.Image = "rbxassetid://112068843495830"
-
-		UIC111.Name = "UIC111"
-		UIC111.Parent = Front1
-
-		Background1.Name = "Background1"
-		Background1.Parent = TextButton1
-		Background1.AnchorPoint = Vector2.new(0.5, 0.5)
-		Background1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Background1.BackgroundTransparency = 1.000
-		Background1.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Background1.BorderSizePixel = 0
-		Background1.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Background1.Size = UDim2.new(0.800000012, 0, 0.800000012, 0)
-		Background1.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Background1.ZIndex = 3
-		Background1.Image = "rbxassetid://138110752460865"
-
-		UIC11.Name = "UIC11"
-		UIC11.Parent = Background1
-
-		UIC1.Name = "UIC1"
-		UIC1.Parent = _1
-
-		_2.Name = "2"
-		_2.Parent = WhereTheButtons
-		_2.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		_2.BackgroundTransparency = 0.700
-		_2.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		_2.BorderSizePixel = 0
-		_2.LayoutOrder = 2
-		_2.Size = UDim2.new(0.125, 0, 1, 0)
-		_2.ZIndex = 2
-
-		TextButton2.Name = "TextButton2"
-		TextButton2.Parent = _2
-		TextButton2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton2.BackgroundTransparency = 1.000
-		TextButton2.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		TextButton2.BorderSizePixel = 0
-		TextButton2.Size = UDim2.new(1, 0, 1, 0)
-		TextButton2.ZIndex = 3
-		TextButton2.Font = Enum.Font.FredokaOne
-		TextButton2.Text = ""
-		TextButton2.TextColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton2.TextScaled = true
-		TextButton2.TextSize = 10.000
-		TextButton2.TextWrapped = true
-
-		Front2.Name = "Front2"
-		Front2.Parent = TextButton2
-		Front2.AnchorPoint = Vector2.new(0.5, 0.5)
-		Front2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Front2.BackgroundTransparency = 1.000
-		Front2.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Front2.BorderSizePixel = 0
-		Front2.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Front2.Size = UDim2.new(0.899999976, 0, 0.899999976, 0)
-		Front2.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Front2.ZIndex = 4
-		Front2.Image = "rbxassetid://112068843495830"
-
-		UIC222.Name = "UIC222"
-		UIC222.Parent = Front2
-
-		Background2.Name = "Background2"
-		Background2.Parent = TextButton2
-		Background2.AnchorPoint = Vector2.new(0.5, 0.5)
-		Background2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Background2.BackgroundTransparency = 1.000
-		Background2.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Background2.BorderSizePixel = 0
-		Background2.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Background2.Size = UDim2.new(0.800000012, 0, 0.800000012, 0)
-		Background2.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Background2.ZIndex = 3
-		Background2.Image = "rbxassetid://138110752460865"
-
-		UIC22.Name = "UIC22"
-		UIC22.Parent = Background2
-
-		UIC2.Name = "UIC2"
-		UIC2.Parent = _2
-
-		_3.Name = "3"
-		_3.Parent = WhereTheButtons
-		_3.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		_3.BackgroundTransparency = 0.700
-		_3.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		_3.BorderSizePixel = 0
-		_3.LayoutOrder = 3
-		_3.Size = UDim2.new(0.125, 0, 1, 0)
-		_3.ZIndex = 2
-
-		TextButton3.Name = "TextButton3"
-		TextButton3.Parent = _3
-		TextButton3.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton3.BackgroundTransparency = 1.000
-		TextButton3.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		TextButton3.BorderSizePixel = 0
-		TextButton3.Size = UDim2.new(1, 0, 1, 0)
-		TextButton3.ZIndex = 3
-		TextButton3.Font = Enum.Font.FredokaOne
-		TextButton3.Text = ""
-		TextButton3.TextColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton3.TextScaled = true
-		TextButton3.TextSize = 10.000
-		TextButton3.TextWrapped = true
-
-		Front3.Name = "Front3"
-		Front3.Parent = TextButton3
-		Front3.AnchorPoint = Vector2.new(0.5, 0.5)
-		Front3.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Front3.BackgroundTransparency = 1.000
-		Front3.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Front3.BorderSizePixel = 0
-		Front3.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Front3.Size = UDim2.new(0.899999976, 0, 0.899999976, 0)
-		Front3.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Front3.ZIndex = 4
-		Front3.Image = "rbxassetid://112068843495830"
-
-		UIC333.Name = "UIC333"
-		UIC333.Parent = Front3
-
-		Background3.Name = "Background3"
-		Background3.Parent = TextButton3
-		Background3.AnchorPoint = Vector2.new(0.5, 0.5)
-		Background3.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Background3.BackgroundTransparency = 1.000
-		Background3.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Background3.BorderSizePixel = 0
-		Background3.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Background3.Size = UDim2.new(0.800000012, 0, 0.800000012, 0)
-		Background3.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Background3.ZIndex = 3
-		Background3.Image = "rbxassetid://138110752460865"
-
-		UIC33.Name = "UIC33"
-		UIC33.Parent = Background3
-
-		UIC3.Name = "UIC3"
-		UIC3.Parent = _3
-
-		_4.Name = "4"
-		_4.Parent = WhereTheButtons
-		_4.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		_4.BackgroundTransparency = 0.700
-		_4.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		_4.BorderSizePixel = 0
-		_4.LayoutOrder = 4
-		_4.Size = UDim2.new(0.125, 0, 1, 0)
-		_4.ZIndex = 2
-
-		TextButton4.Name = "TextButton4"
-		TextButton4.Parent = _4
-		TextButton4.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton4.BackgroundTransparency = 1.000
-		TextButton4.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		TextButton4.BorderSizePixel = 0
-		TextButton4.Size = UDim2.new(1, 0, 1, 0)
-		TextButton4.ZIndex = 3
-		TextButton4.Font = Enum.Font.FredokaOne
-		TextButton4.Text = ""
-		TextButton4.TextColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton4.TextScaled = true
-		TextButton4.TextSize = 10.000
-		TextButton4.TextWrapped = true
-
-		Front4.Name = "Front4"
-		Front4.Parent = TextButton4
-		Front4.AnchorPoint = Vector2.new(0.5, 0.5)
-		Front4.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Front4.BackgroundTransparency = 1.000
-		Front4.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Front4.BorderSizePixel = 0
-		Front4.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Front4.Size = UDim2.new(0.899999976, 0, 0.899999976, 0)
-		Front4.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Front4.ZIndex = 4
-		Front4.Image = "rbxassetid://112068843495830"
-
-		UIC444.Name = "UIC444"
-		UIC444.Parent = Front4
-
-		Background4.Name = "Background4"
-		Background4.Parent = TextButton4
-		Background4.AnchorPoint = Vector2.new(0.5, 0.5)
-		Background4.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Background4.BackgroundTransparency = 1.000
-		Background4.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Background4.BorderSizePixel = 0
-		Background4.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Background4.Size = UDim2.new(0.800000012, 0, 0.800000012, 0)
-		Background4.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Background4.ZIndex = 3
-		Background4.Image = "rbxassetid://138110752460865"
-
-		UIC44.Name = "UIC44"
-		UIC44.Parent = Background4
-
-		UIC4.Name = "UIC4"
-		UIC4.Parent = _4
-
-		_5.Name = "5"
-		_5.Parent = WhereTheButtons
-		_5.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		_5.BackgroundTransparency = 0.700
-		_5.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		_5.BorderSizePixel = 0
-		_5.LayoutOrder = 5
-		_5.Size = UDim2.new(0.125, 0, 1, 0)
-		_5.ZIndex = 2
-
-		TextButton5.Name = "TextButton5"
-		TextButton5.Parent = _5
-		TextButton5.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton5.BackgroundTransparency = 1.000
-		TextButton5.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		TextButton5.BorderSizePixel = 0
-		TextButton5.Size = UDim2.new(1, 0, 1, 0)
-		TextButton5.ZIndex = 3
-		TextButton5.Font = Enum.Font.FredokaOne
-		TextButton5.Text = ""
-		TextButton5.TextColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton5.TextScaled = true
-		TextButton5.TextSize = 10.000
-		TextButton5.TextWrapped = true
-
-		Front5.Name = "Front5"
-		Front5.Parent = TextButton5
-		Front5.AnchorPoint = Vector2.new(0.5, 0.5)
-		Front5.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Front5.BackgroundTransparency = 1.000
-		Front5.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Front5.BorderSizePixel = 0
-		Front5.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Front5.Size = UDim2.new(0.899999976, 0, 0.899999976, 0)
-		Front5.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Front5.ZIndex = 4
-		Front5.Image = "rbxassetid://112068843495830"
-
-		UIC555.Name = "UIC555"
-		UIC555.Parent = Front5
-
-		Background5.Name = "Background5"
-		Background5.Parent = TextButton5
-		Background5.AnchorPoint = Vector2.new(0.5, 0.5)
-		Background5.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Background5.BackgroundTransparency = 1.000
-		Background5.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Background5.BorderSizePixel = 0
-		Background5.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Background5.Size = UDim2.new(0.800000012, 0, 0.800000012, 0)
-		Background5.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Background5.ZIndex = 3
-		Background5.Image = "rbxassetid://138110752460865"
-
-		UIC55.Name = "UIC55"
-		UIC55.Parent = Background5
-
-		UIC5.Name = "UIC5"
-		UIC5.Parent = _5
-
-		_6.Name = "6"
-		_6.Parent = WhereTheButtons
-		_6.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		_6.BackgroundTransparency = 0.700
-		_6.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		_6.BorderSizePixel = 0
-		_6.LayoutOrder = 6
-		_6.Size = UDim2.new(0.125, 0, 1, 0)
-		_6.ZIndex = 2
-
-		TextButton6.Name = "TextButton6"
-		TextButton6.Parent = _6
-		TextButton6.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton6.BackgroundTransparency = 1.000
-		TextButton6.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		TextButton6.BorderSizePixel = 0
-		TextButton6.Size = UDim2.new(1, 0, 1, 0)
-		TextButton6.ZIndex = 3
-		TextButton6.Font = Enum.Font.FredokaOne
-		TextButton6.Text = ""
-		TextButton6.TextColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton6.TextScaled = true
-		TextButton6.TextSize = 10.000
-		TextButton6.TextWrapped = true
-
-		Front6.Name = "Front6"
-		Front6.Parent = TextButton6
-		Front6.AnchorPoint = Vector2.new(0.5, 0.5)
-		Front6.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Front6.BackgroundTransparency = 1.000
-		Front6.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Front6.BorderSizePixel = 0
-		Front6.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Front6.Size = UDim2.new(0.899999976, 0, 0.899999976, 0)
-		Front6.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Front6.ZIndex = 4
-		Front6.Image = "rbxassetid://112068843495830"
-
-		UIC666.Name = "UIC666"
-		UIC666.Parent = Front6
-
-		Background6.Name = "Background6"
-		Background6.Parent = TextButton6
-		Background6.AnchorPoint = Vector2.new(0.5, 0.5)
-		Background6.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Background6.BackgroundTransparency = 1.000
-		Background6.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Background6.BorderSizePixel = 0
-		Background6.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Background6.Size = UDim2.new(0.800000012, 0, 0.800000012, 0)
-		Background6.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Background6.ZIndex = 3
-		Background6.Image = "rbxassetid://138110752460865"
-
-		UIC66.Name = "UIC66"
-		UIC66.Parent = Background6
-
-		UIC6.Name = "UIC6"
-		UIC6.Parent = _6
-
-		_7.Name = "7"
-		_7.Parent = WhereTheButtons
-		_7.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		_7.BackgroundTransparency = 0.700
-		_7.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		_7.BorderSizePixel = 0
-		_7.LayoutOrder = 7
-		_7.Size = UDim2.new(0.125, 0, 1, 0)
-		_7.ZIndex = 2
-
-		TextButton7.Name = "TextButton7"
-		TextButton7.Parent = _7
-		TextButton7.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton7.BackgroundTransparency = 1.000
-		TextButton7.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		TextButton7.BorderSizePixel = 0
-		TextButton7.Size = UDim2.new(1, 0, 1, 0)
-		TextButton7.ZIndex = 3
-		TextButton7.Font = Enum.Font.FredokaOne
-		TextButton7.Text = ""
-		TextButton7.TextColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton7.TextScaled = true
-		TextButton7.TextSize = 10.000
-		TextButton7.TextWrapped = true
-
-		Front7.Name = "Front7"
-		Front7.Parent = TextButton7
-		Front7.AnchorPoint = Vector2.new(0.5, 0.5)
-		Front7.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Front7.BackgroundTransparency = 1.000
-		Front7.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Front7.BorderSizePixel = 0
-		Front7.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Front7.Size = UDim2.new(0.899999976, 0, 0.899999976, 0)
-		Front7.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Front7.ZIndex = 4
-		Front7.Image = "rbxassetid://112068843495830"
-
-		UIC777.Name = "UIC777"
-		UIC777.Parent = Front7
-
-		Background7.Name = "Background7"
-		Background7.Parent = TextButton7
-		Background7.AnchorPoint = Vector2.new(0.5, 0.5)
-		Background7.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Background7.BackgroundTransparency = 1.000
-		Background7.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Background7.BorderSizePixel = 0
-		Background7.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Background7.Size = UDim2.new(0.800000012, 0, 0.800000012, 0)
-		Background7.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Background7.ZIndex = 3
-		Background7.Image = "rbxassetid://138110752460865"
-
-		UIC77.Name = "UIC77"
-		UIC77.Parent = Background7
-
-		UIC7.Name = "UIC7"
-		UIC7.Parent = _7
-
-		_8.Name = "8"
-		_8.Parent = WhereTheButtons
-		_8.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		_8.BackgroundTransparency = 0.700
-		_8.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		_8.BorderSizePixel = 0
-		_8.LayoutOrder = 8
-		_8.Size = UDim2.new(0.125, 0, 1, 0)
-		_8.ZIndex = 2
-
-		TextButton8.Name = "TextButton8"
-		TextButton8.Parent = _8
-		TextButton8.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton8.BackgroundTransparency = 1.000
-		TextButton8.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		TextButton8.BorderSizePixel = 0
-		TextButton8.Size = UDim2.new(1, 0, 1, 0)
-		TextButton8.ZIndex = 3
-		TextButton8.Font = Enum.Font.FredokaOne
-		TextButton8.Text = ""
-		TextButton8.TextColor3 = Color3.fromRGB(255, 255, 255)
-		TextButton8.TextScaled = true
-		TextButton8.TextSize = 10.000
-		TextButton8.TextWrapped = true
-
-		Front8.Name = "Front8"
-		Front8.Parent = TextButton8
-		Front8.AnchorPoint = Vector2.new(0.5, 0.5)
-		Front8.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Front8.BackgroundTransparency = 1.000
-		Front8.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Front8.BorderSizePixel = 0
-		Front8.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Front8.Size = UDim2.new(0.899999976, 0, 0.899999976, 0)
-		Front8.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Front8.ZIndex = 4
-		Front8.Image = "rbxassetid://112068843495830"
-
-		UIC888.Name = "UIC888"
-		UIC888.Parent = Front8
-
-		Background8.Name = "Background8"
-		Background8.Parent = TextButton8
-		Background8.AnchorPoint = Vector2.new(0.5, 0.5)
-		Background8.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Background8.BackgroundTransparency = 1.000
-		Background8.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Background8.BorderSizePixel = 0
-		Background8.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Background8.Size = UDim2.new(0.800000012, 0, 0.800000012, 0)
-		Background8.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		Background8.ZIndex = 3
-		Background8.Image = "rbxassetid://138110752460865"
-
-		UIC88.Name = "UIC88"
-		UIC88.Parent = Background8
-
-		UIC8.Name = "UIC8"
-		UIC8.Parent = _8
-
-		ListingLayouts.Name = "ListingLayouts"
-		ListingLayouts.Parent = WhereTheButtons
-		ListingLayouts.FillDirection = Enum.FillDirection.Horizontal
-		ListingLayouts.SortOrder = Enum.SortOrder.LayoutOrder
-		ListingLayouts.VerticalAlignment = Enum.VerticalAlignment.Center
-		ListingLayouts.HorizontalAlignment = Enum.HorizontalAlignment.Left
-		ListingLayouts.Padding = UDim.new(0, 5)
-
-		WhereButtonPadding.Name = "WhereButtonPadding"
-		WhereButtonPadding.Parent = WhereTheButtons
-		WhereButtonPadding.PaddingBottom = UDim.new(0, 5)
-		WhereButtonPadding.PaddingLeft = UDim.new(0, 5)
-		WhereButtonPadding.PaddingRight = UDim.new(0, 5)
-		WhereButtonPadding.PaddingTop = UDim.new(0, 5)
-
-		UIAspectRatioConstraint.Parent = Holder
-		UIAspectRatioConstraint.AspectRatio = 9.000
-
-		Name.Name = "Name"
-		Name.Parent = Holder
-		Name.AnchorPoint = Vector2.new(0.5, 1)
-		Name.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-		Name.BackgroundTransparency = 0.250
-		Name.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Name.BorderSizePixel = 0
-		Name.Position = UDim2.new(0.5, 0, 1.29999995, 5)
-		Name.Size = UDim2.new(1, 0, 0.300000012, 0)
-
-		NameTextbox.Name = "NameTextbox"
-		NameTextbox.Parent = Name
-		NameTextbox.AnchorPoint = Vector2.new(0.5, 0.5)
-		NameTextbox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		NameTextbox.BackgroundTransparency = 1.000
-		NameTextbox.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		NameTextbox.BorderSizePixel = 0
-		NameTextbox.Position = UDim2.new(0.5, 0, 0.5, 0)
-		NameTextbox.Size = UDim2.new(1, 0, 1, 0)
-		NameTextbox.Font = Enum.Font.FredokaOne
-		NameTextbox.Text = "Some Emote Name"
-		NameTextbox.TextColor3 = Color3.fromRGB(255, 255, 255)
-		NameTextbox.TextScaled = true
-		NameTextbox.TextSize = 14.000
-		NameTextbox.TextWrapped = true
-
-		NameUIT.Name = "NameUIT"
-		NameUIT.Parent = NameTextbox
-		NameUIT.MaxTextSize = 30
-		NameUIT.MinTextSize = 10
-
-		NameUIC.Name = "NameUIC"
-		NameUIC.Parent = Name
-
-		local Images = {
-			{ name = "Locked", renderImage = "rbxassetid://103241825392940" },
-			{ name = "LethalCompany", renderImage = "rbxassetid://89769371017185" },
-			{ name = "Headbanger", renderImage = "rbxassetid://126222345373558" },
-			{ name = "SoRetro", renderImage = "rbxassetid://129885437120707" },
-			{ name = "AICatDance", renderImage = "rbxassetid://93387041641721" },
-			{ name = "SubjectThree", renderImage = "rbxassetid://83639505456623" },
-			{ name = "Subterfuge", renderImage = "rbxassetid://71165177698139" },
-			{ name = "Griddy", renderImage = "rbxassetid://71748174857033" },
-			{ name = "Prince", renderImage = "rbxassetid://125197961882771" },
-			{ name = "MissTheQuiet", renderImage = "rbxassetid://86125219137797" },
-			{ name = "Hero", renderImage = "rbxassetid://78969991165860" },
-			{ name = "PYT", renderImage = "rbxassetid://121927033287000" },
-			{ name = "Wait", renderImage = "rbxassetid://106561882302009" },
-			{ name = "No", renderImage = "rbxassetid://101973569734115" },
-			{ name = "Konton", renderImage = "rbxassetid://135343313057075" },
-			{ name = "TickTock", renderImage = "rbxassetid://112068843495830" },
-			{ name = "Dio", renderImage = "rbxassetid://78716828045407" },
-			{ name = "Shucks", renderImage = "rbxassetid://139634009593796" },
-			{ name = "ThePhone", renderImage = "rbxassetid://91657126735088" },
-			{ name = "Skeleton", renderImage = "rbxassetid://94678300716216" },
-			{ name = "Insanity", renderImage = "rbxassetid://79579234154217" },
-			{ name = "HakariDance", renderImage = "rbxassetid://124587965197013" },
-			{ name = "SillyBilly", renderImage = "rbxassetid://96660516353249" },
-			{ name = "Hotdog", renderImage = "rbxassetid://70514684116327" },
-			{ name = "DistractionDance", renderImage = "rbxassetid://110811886859354" },
-			{ name = "CaliforniaGirls", renderImage = "rbxassetid://127260772788474" },
-			{ name = "AolGuy", renderImage = "rbxassetid://81493512531467" },
-			{ name = "Eggrolled", renderImage = "rbxassetid://75402218293560" },
-			{ name = "BagUp", renderImage = "rbxassetid://135883870615399" },
-			{ name = "Poisoned", renderImage = "rbxassetid://92399495788269" },
-			{ name = "Wave", renderImage = "rbxassetid://132063131763271" },
-		}
-
-		local buttons = {
-			TextButton1,
-			TextButton2,
-			TextButton3,
-			TextButton4,
-			TextButton5,
-			TextButton6,
-			TextButton7,
-			TextButton8,
-		}
-
-		local function GetEmoteList()
-			local LocalPlayer = game:GetService("Players").LocalPlayer
-			local emotes = LocalPlayer:FindFirstChild("PlayerData")
-					and LocalPlayer.PlayerData:FindFirstChild("Equipped")
-					and LocalPlayer.PlayerData.Equipped:FindFirstChild("Emotes")
-					and LocalPlayer.PlayerData.Equipped.Emotes.Value
-				or ""
-			local emoteList = {}
-			for i, emote in ipairs(string.split(emotes, "|")) do
-				local EmoteImage = ""
-				for _, image in ipairs(Images) do
-					if image.name == emote then
-						EmoteImage = image.renderImage
-						break
-					end
-				end
-				table.insert(emoteList, { index = i, name = emote, renderImage = EmoteImage })
-			end
-			return emoteList
-		end
-
-		local emoteList = GetEmoteList()
-
-		local function SetImages()
-			for i, button in ipairs(buttons) do
-				local emote = emoteList[i]
-				if emote and emote.renderImage ~= "" then
-					button:FindFirstChild("Front" .. i).Image = emote.renderImage
-				else
-					button.Text = ""
-					for _, child in ipairs(button:GetChildren()) do
-						if child:IsA("ImageLabel") then
-							child:Destroy()
-						end
-					end
-				end
-			end
-		end
-
-		SetImages()
-
-		for i, button in ipairs(buttons) do
-			button.MouseEnter:Connect(function()
-				local emote = emoteList[i]
-				if emote and emote.name ~= "" then
-					NameTextbox.Text = emote.name
-				end
-			end)
-		end
-
-		local TweenService = game:GetService("TweenService")
-
-		local Blur = Instance.new("BlurEffect", game:GetService("Lighting"))
-		Blur.Size = 0
-		Blur.Name = "EmoteBlur"
-
-		local tweenInfoBlur = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
-		local tweenBlur = TweenService:Create(Blur, tweenInfoBlur, { Size = 0 })
-		tweenBlur:Play()
-
-		local tweeninfoholdersize = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
-		local tweenholdersize =
-			TweenService:Create(Holder, tweeninfoholdersize, { Size = UDim2.new(0.8 * 0.8, 0, 0.15 * 0.8, 0) })
-		tweenholdersize:Play()
-
-		for i, button in ipairs(buttons) do
-			button.Activated:Connect(function()
-				local PlayThingText = emoteList[i].name
-
-				local ohString1 = "PlayEmote"
-				local ohString2 = "Animations"
-				local ohString3 = "TickTock"
-				game:GetService("ReplicatedStorage").Modules.Network.RemoteEvent
-					:FireServer(ohString1, ohString2, PlayThingText)
-
-				local TweenService = game:GetService("TweenService")
-
-				local originalSize = Holder.Size
-				local DestinationSize = UDim2.new(0, 0, 0, 0)
-
-				local tweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
-				local tween = TweenService:Create(Holder, tweenInfo, { Size = DestinationSize })
-				local tweenblurinfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
-				local tweenblur = TweenService:Create(Blur, tweenblurinfo, { Size = 0 })
-
-				tweenblur:Play()
-				tween:Play()
-				task.wait(0.25)
-				KillerEmoteGUI:Destroy()
-			end)
-		end
-	end
+-- Forward declarations keep menu callbacks bound to this session.
+local Window, Tabs, Fluent
+local emoteButtons = {}
+local function getEquippedEmotes()
+    local data = LocalPlayer:FindFirstChild("PlayerData")
+    local equipped = data and data:FindFirstChild("Equipped")
+    local emotes = equipped and equipped:FindFirstChild("Emotes")
+    return string.split(emotes and emotes.Value or "", "|")
 end
 
-local ThemeOptions = {
-   ["Default"] = "Default",
-   ["Amber Glow"] = "AmberGlow",
-   ["Amethyst"] = "Amethyst",
-   ["Bloom"] = "Bloom",
-   ["Dark Blue"] = "DarkBlue",
-   ["Green"] = "Green",
-   ["Light"] = "Light",
-   ["Ocean"] = "Ocean",
-   ["Serenity"] = "Serenity"
-}
+local function KillerEmoteGUI()
+    if not (Window and Tabs and Tabs.Emotes) then return end
+    local legacy = PlayerGui:FindFirstChild("KillerEmoteGUI")
+    if legacy then legacy:Destroy() end
+    local emotes = getEquippedEmotes()
+    for slot = 1, 8 do
+        if not emoteButtons[slot] then
+            local emoteSlot = slot
+            emoteButtons[slot] = Tabs.Emotes:AddButton({
+                Title = "表情槽 " .. tostring(slot),
+                Callback = function()
+                    local name = getEquippedEmotes()[emoteSlot]
+                    if not name or name == "" then
+                        Fluent:Notify({ Title = "杀手表情", Content = "此槽位未装备表情。", Duration = 3 })
+                        return
+                    end
+                    pcall(function()
+                        local modules = game:GetService("ReplicatedStorage"):FindFirstChild("Modules")
+                        local network = modules and modules:FindFirstChild("Network")
+                        local remote = network and network:FindFirstChild("RemoteEvent")
+                        if remote then remote:FireServer("PlayEmote", "Animations", name) end
+                    end)
+                end
+            })
+        end
+        local button = emoteButtons[slot] and (emoteButtons[slot].Native or emoteButtons[slot])
+        if button and button.SetTitle then
+            local name = emotes[slot]
+            button:SetTitle("表情槽 " .. tostring(slot) .. " · " .. ((name and name ~= "") and name or "未装备"))
+        end
+    end
+    Window:SelectTab(6)
+    if Window.Native and Window.Native.Open then Window.Native:Open() end
+end
 
 local timeAhead = 0.2
 
@@ -1487,17 +776,16 @@ end
 local function triggerNearestGenerator(shouldLoop)
 	while shouldLoop do
 		looping = true
-		local PuzzleUI = Players.LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("PuzzleUI", 9999)
 		task.wait(timeforonegen + math.random() * 0.5)
 		local MapFolder = workspace:FindFirstChild("Map")
 			and workspace.Map:FindFirstChild("Ingame")
 			and workspace.Map.Ingame:FindFirstChild("Map")
-		if MapFolder then
+		local character = LocalPlayer.Character; local hrp = character and character:FindFirstChild("HumanoidRootPart"); if MapFolder and hrp then
 			local closestGenerator, closestDistance = nil, math.huge
-			local playerPosition = game.Players.LocalPlayer.Character.HumanoidRootPart.Position
+			local playerPosition = hrp.Position
 			for _, g in ipairs(MapFolder:GetChildren()) do
-				if g.Name == "Generator" and g.Progress.Value < 100 then
-					local distance = (g.Main.Position - playerPosition).Magnitude
+				local progress = g:FindFirstChild("Progress"); local main = g:FindFirstChild("Main"); if g.Name == "Generator" and progress and main and progress.Value < 100 then
+					local distance = (main.Position - playerPosition).Magnitude
 					if distance < closestDistance then
 						closestDistance = distance
 						closestGenerator = g
@@ -1505,7 +793,7 @@ local function triggerNearestGenerator(shouldLoop)
 				end
 			end
 			if closestGenerator then
-				closestGenerator.Remotes.RE:FireServer()
+				local remotes = closestGenerator:FindFirstChild("Remotes"); local re = remotes and remotes:FindFirstChild("RE"); if re then re:FireServer() end
 			end
 		end
 	end
@@ -1514,7 +802,7 @@ end
 
 -- Enable aimbot function
 local function enableAimbot()
-    local previousPos = nil
+    local lastPositions = {}
     local deltaTime = 0.03
 
     aimbotConnection = RunService.Heartbeat:Connect(function()
@@ -1529,17 +817,18 @@ local function enableAimbot()
                         if killerModel:IsA("Model") and killerModel:FindFirstChild("HumanoidRootPart") then
                             local hrp = killerModel.HumanoidRootPart
                             local currentPos = hrp.Position
+                            local prevPos = lastPositions[killerModel]
                             local velocity = Vector3.new(0, 0, 0)
 
-                            if previousPos then
-                                velocity = (currentPos - previousPos) / deltaTime
+                            if prevPos then
+                                velocity = (currentPos - prevPos) / deltaTime
                             end
-                            previousPos = currentPos
+                            lastPositions[killerModel] = currentPos
 
                             local predictedPos = currentPos + velocity * timeAhead
 
                             local rootPart = character:FindFirstChild("HumanoidRootPart")
-                            if rootPart then
+                            if rootPart and (predictedPos - rootPart.Position).Magnitude > 0.01 then
 								if humanoid then
 									humanoid.AutoRotate = false
 								end
@@ -1591,7 +880,7 @@ local function setHighlightVisibility(highlight, visible)
 end
 
 -- Player ESP
-local PlayersFolder = Workspace:WaitForChild("Players")
+local PlayersFolder = Workspace:WaitForChild("Players", 30) or Instance.new("Folder")
 
 do
 -- v3: Trap ESP is indexed once per map and incrementally maintained on instance additions.
@@ -1803,6 +1092,7 @@ local function updatePlayerESP(record, camera)
     end
 
     local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Head")
+    if not (root and root:IsA("BasePart")) then root = nil end
     if root and billboard.Adornee ~= root then
         billboard.Adornee = root
         billboard.StudsOffsetWorldSpace = Vector3.new(0, root.Name == "Head" and -5 or -3.1, 0)
@@ -1859,7 +1149,8 @@ end
 local function applyPlayerESP(character, color)
     if not character:IsA("Model") or character == LocalPlayer.Character then return end
     if character.Parent == nil then return end
-    if not character:FindFirstChild("HumanoidRootPart") and not character:FindFirstChild("Head") then
+    local earlyRoot = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Head")
+    if not (earlyRoot and earlyRoot:IsA("BasePart")) then
         return -- 刚出生时延后到下次扫描，不阻塞线程
     end
 
@@ -1890,7 +1181,7 @@ local function applyPlayerESP(character, color)
     local previousBillboard = character:FindFirstChild("PlayerESPBillboard", true)
     if previousBillboard then previousBillboard:Destroy() end
 
-    local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Head")
+    local root = earlyRoot
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "PlayerESPBillboard"
     billboard.Adornee = root
@@ -1921,11 +1212,31 @@ local function applyPlayerESP(character, color)
     updatePlayerESP(record, Workspace.CurrentCamera)
 end
 
+-- 非关键 ESP 投影刷新节流：CheckHz 与桥接返回都有界化，
+-- 拒绝 inf/nan 造成冻结或绕过节流（与其余三路同一契约）。
+local function espThrottleInterval()
+    local checkHz = tonumber(ESP.CheckHz) or 10
+    if checkHz ~= checkHz or checkHz == math.huge or checkHz == -math.huge then checkHz = 10 end
+    local interval = 1 / math.max(2, math.min(20, checkHz))
+    local bridgeOk, bridged = pcall(function()
+        if Fluent and type(Fluent.GetVisualInterval) == "function" then
+            return Fluent:GetVisualInterval(interval)
+        end
+        return nil
+    end)
+    if bridgeOk and type(bridged) == "number" and bridged == bridged
+        and bridged ~= math.huge and bridged ~= -math.huge and bridged > 0 then
+        interval = math.max(interval, bridged)
+    end
+    return interval
+end
+
 -- 固定最多约 10 次/秒检查屏幕投影，避免在手机端逐帧扫描地图。
 runEvery(0.05, function()
     if not ESP.Enabled then return end
     local now = os.clock()
-    if now - ESP.LastCheck < 1 / math.max(2, math.min(20, ESP.CheckHz)) then return end
+    local espInterval = espThrottleInterval()
+    if now - ESP.LastCheck < espInterval then return end
     ESP.LastCheck = now
     local camera = Workspace.CurrentCamera
     for character, record in pairs(playerESPRecords) do
@@ -2198,52 +1509,21 @@ function ESP:SetEnabled(state)
     end
 end
 
--- Stats tracker UI creation
+-- Player statistics are game controls; native WindUI owns the list and scrolling.
 local function createStatsTracker()
-    -- Remove existing GUI if any
-    local existingGui = PlayerGui:FindFirstChild("TimePlayedGUI")
-    if existingGui then
-        existingGui:Destroy()
+    local existing = PlayerGui:FindFirstChild("TimePlayedGUI")
+    if existing then existing:Destroy() end
+    local controller = { Enabled = false, Alive = true, Rows = {} }
+    function controller:Destroy()
+        self.Alive = false
+        self.Enabled = false
+        for _, element in pairs(self.Rows) do
+            local native = element.Native or element
+            if native.Destroy then pcall(function() native:Destroy() end) end
+        end
+        table.clear(self.Rows)
     end
-
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "TimePlayedGUI"
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = PlayerGui
-    screenGui.Enabled = false -- start hidden
-
-    local mainFrame = Instance.new("Frame")
-    local screen = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(600, 500)
-    local panelW, panelH = math.min(500, screen.X - 24), math.min(500, screen.Y - 54)
-    mainFrame.Size = UDim2.fromOffset(math.max(240, panelW), math.max(190, panelH))
-    mainFrame.Position = UDim2.fromOffset(12, 36)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    mainFrame.Parent = screenGui
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 30)
-    title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    title.TextColor3 = Color3.new(1, 1, 1)
-    title.Text = "玩家数据统计"
-    title.Font = Enum.Font.SourceSansBold
-    title.TextSize = 20
-    title.Parent = mainFrame
-
-    local scrollFrame = Instance.new("ScrollingFrame")
-    scrollFrame.Size = UDim2.new(1, 0, 1, -30)
-    scrollFrame.Position = UDim2.new(0, 0, 0, 30)
-    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scrollFrame.BackgroundTransparency = 1
-    scrollFrame.ScrollBarThickness = 6
-    scrollFrame.Parent = mainFrame
-
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    listLayout.Padding = UDim.new(0, 5)
-    listLayout.Parent = scrollFrame
+    if not (Tabs and Tabs.Stats) then return controller end
 
     local function formatTime(seconds)
         local days = math.floor(seconds / 86400)
@@ -2252,97 +1532,86 @@ local function createStatsTracker()
         seconds = seconds % 3600
         local minutes = math.floor(seconds / 60)
         seconds = seconds % 60
-        return string.format("%d天 %02d时 %02d分 %02d秒", days, hours, minutes, seconds)
+        return string.format("%d天 %02d时 %02d分 %02d秒", days, hours, minutes, math.floor(seconds))
     end
 
     local function createPlayerRow(LocalPlayer)
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(1, -10, 0, 100)
-        button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        button.TextColor3 = Color3.new(1, 1, 1)
-        button.Font = Enum.Font.SourceSans
-        button.TextSize = 16
-        button.Text = "正在读取…"
-        button.TextWrapped = true
-        button.TextXAlignment = Enum.TextXAlignment.Left
-        button.AutoButtonColor = true
-        button.LayoutOrder = LocalPlayer.UserId
-        button.Parent = scrollFrame
+        if controller.Rows[LocalPlayer] then return end
+        local button = Tabs.Stats:AddButton({
+            Title = LocalPlayer.Name .. " · 正在读取…",
+            Callback = function()
+                local timeValue = LocalPlayer:FindFirstChild("PlayerData")
+                    and LocalPlayer.PlayerData:FindFirstChild("Stats")
+                    and LocalPlayer.PlayerData.Stats:FindFirstChild("General")
+                    and LocalPlayer.PlayerData.Stats.General:FindFirstChild("TimePlayed")
 
-        button.Activated:Connect(function()
-            local timeValue = LocalPlayer:FindFirstChild("PlayerData")
-                and LocalPlayer.PlayerData:FindFirstChild("Stats")
-                and LocalPlayer.PlayerData.Stats:FindFirstChild("General")
-                and LocalPlayer.PlayerData.Stats.General:FindFirstChild("TimePlayed")
-
-            local timeText = timeValue and formatTime(timeValue.Value) or "N/A"
-            if setclipboard then
-                setclipboard(LocalPlayer.Name .. " - " .. timeText)
+                local timeText = timeValue and formatTime(timeValue.Value) or "N/A"
+                if setclipboard then
+                    setclipboard(LocalPlayer.Name .. " - " .. timeText)
+                end
             end
-        end)
-
+        })
+        controller.Rows[LocalPlayer] = button
         task.spawn(function()
-            while button.Parent do
+            local previousText
+            while controller.Alive and sessionEnv.VortexionSessionId == thisSessionId do
                 task.wait(1.0)
-                if not screenGui.Enabled then continue end
+                if not controller.Alive or sessionEnv.VortexionSessionId ~= thisSessionId then return end
                 if not LocalPlayer:IsDescendantOf(Players) then
-                    button:Destroy()
+                    local native = button.Native or button
+                    if native.Destroy then native:Destroy() end
+                    controller.Rows[LocalPlayer] = nil
                     return
-            end
+                end
+                if not controller.Enabled then continue end
+                local stats = LocalPlayer:FindFirstChild("PlayerData") and LocalPlayer.PlayerData:FindFirstChild("Stats")
+                local general = stats and stats:FindFirstChild("General")
+                local killer = stats and stats:FindFirstChild("KillerStats")
+                local survivor = stats and stats:FindFirstChild("SurvivorStats")
+                local equipped = LocalPlayer:FindFirstChild("PlayerData") and LocalPlayer.PlayerData:FindFirstChild("Equipped")
 
-            local stats = LocalPlayer:FindFirstChild("PlayerData") and LocalPlayer.PlayerData:FindFirstChild("Stats")
-            local general = stats and stats:FindFirstChild("General")
-            local killer = stats and stats:FindFirstChild("KillerStats")
-            local survivor = stats and stats:FindFirstChild("SurvivorStats")
-            local equipped = LocalPlayer:FindFirstChild("PlayerData") and LocalPlayer.PlayerData:FindFirstChild("Equipped")
+                local timePlayed = general and general:FindFirstChild("TimePlayed")
+                local killerWins = killer and killer:FindFirstChild("KillerWins")
+                local killerLosses = killer and killer:FindFirstChild("KillerLosses")
+                local survivorWins = survivor and survivor:FindFirstChild("SurvivorWins")
+                local survivorLosses = survivor and survivor:FindFirstChild("SurvivorLosses")
+                local kills = killer and killer:FindFirstChild("Kills")
+                local emotes = equipped and equipped:FindFirstChild("Emotes")
 
-            local timePlayed = general and general:FindFirstChild("TimePlayed")
-            local killerWins = killer and killer:FindFirstChild("KillerWins")
-            local killerLosses = killer and killer:FindFirstChild("KillerLosses")
-            local survivorWins = survivor and survivor:FindFirstChild("SurvivorWins")
-            local survivorLosses = survivor and survivor:FindFirstChild("SurvivorLosses")
-            local kills = killer and killer:FindFirstChild("Kills")
-            local emotes = equipped and equipped:FindFirstChild("Emotes")
+                local timeText = timePlayed and formatTime(timePlayed.Value) or "N/A"
+                local kw = killerWins and killerWins.Value or "N/A"
+                local kl = killerLosses and killerLosses.Value or "N/A"
+                local sw = survivorWins and survivorWins.Value or "N/A"
+                local sl = survivorLosses and survivorLosses.Value or "N/A"
+                local killCount = kills and kills.Value or "N/A"
+                local emoteText = emotes and emotes.Value or "None"
 
-            local timeText = timePlayed and formatTime(timePlayed.Value) or "N/A"
-            local kw = killerWins and killerWins.Value or "N/A"
-            local kl = killerLosses and killerLosses.Value or "N/A"
-            local sw = survivorWins and survivorWins.Value or "N/A"
-            local sl = survivorLosses and survivorLosses.Value or "N/A"
-            local killCount = kills and kills.Value or "N/A"
-            local emoteText = emotes and emotes.Value or "None"
-
-            local updatedText = string.format(
-                "%s\n游戏时长：%s\n幸存者胜场：%s | 败场：%s\n杀手胜场：%s | 败场：%s | 击杀：%s\n表情：%s",
-                LocalPlayer.Name,
-                timeText,
-                sw, sl,
-                kw, kl, killCount,
-                emoteText
-            )
-            if button.Text ~= updatedText then button.Text = updatedText end
+                local updatedText = string.format(
+                    "%s\n游戏时长：%s\n幸存者胜场：%s | 败场：%s\n杀手胜场：%s | 败场：%s | 击杀：%s\n表情：%s",
+                    LocalPlayer.Name,
+                    timeText,
+                    sw, sl,
+                    kw, kl, killCount,
+                    emoteText
+                )
+                if previousText ~= updatedText then
+                    local native = button.Native or button
+                    if native.SetTitle then native:SetTitle(updatedText) end
+                    previousText = updatedText
+                end
             end
         end)
     end
 
     for _, OtherPlayer in ipairs(Players:GetPlayers()) do
-        if OtherPlayer ~= Players.LocalPlayer then
-            createPlayerRow(OtherPlayer)
-        end
+        if OtherPlayer ~= Players.LocalPlayer then createPlayerRow(OtherPlayer) end
     end
-
-    Players.PlayerAdded:Connect(function(OtherPlayer)
-        if OtherPlayer ~= Players.LocalPlayer then
+    track(Players.PlayerAdded:Connect(function(OtherPlayer)
+        if controller.Alive and sessionEnv.VortexionSessionId == thisSessionId and OtherPlayer ~= Players.LocalPlayer then
             createPlayerRow(OtherPlayer)
         end
-    end)
-
-    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 32)
-    end)
-    scrollFrame.CanvasSize = UDim2.fromOffset(0, listLayout.AbsoluteContentSize.Y + 32)
-
-    return screenGui
+    end))
+    return controller
 end
 
 -- Default toggles and helpers (we will hook these to Fluent UI)
@@ -2519,27 +1788,32 @@ local function generatorDoAll()
     local lastPosition = humanoidRootPart.CFrame
 
     -- Main loop: keep working generators until none left
-    while true do
+    while sessionEnv.VortexionSessionId == thisSessionId do
         local generators = findGenerators()
         if #generators == 0 then
             break
         end
+        -- 长任务中角色可能重生：每轮刷新引用，失效即退出，避免对已销毁部件写 CFrame
+        local currentChar = LocalPlayer.Character
+        local currentHRP = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+        if not currentHRP then break end
 
         for _, gen in ipairs(generators) do
-            if gen:FindFirstChild("Main") and gen:FindFirstChild("Remotes") and gen.Remotes:FindFirstChild("RE") and gen.Remotes:FindFirstChild("RF") then
+            if gen:FindFirstChild("Main") and gen:FindFirstChild("Remotes") and gen.Remotes:FindFirstChild("RE") and gen.Remotes:FindFirstChild("RF") and gen:FindFirstChild("Positions") and gen.Positions:FindFirstChild("Center") and gen:FindFirstChild("Instances") and gen.Instances:FindFirstChild("Generator") then
                 -- Compute direction to face generator cube (if it exists)
 				local generatorPosition = gen.Positions.Center.Position
 				local generatorDirection
 
 				if gen.Instances.Generator:FindFirstChild("Cube") and gen.Instances.Generator.Cube:IsA("BasePart") then
 					local cubePos = gen.Instances.Generator.Cube.Position
-					generatorDirection = (cubePos - generatorPosition).Unit
+					local cubeDelta = cubePos - generatorPosition
+					generatorDirection = cubeDelta.Magnitude > 0.01 and cubeDelta.Unit or Vector3.new(0, 0, 1)
 				else
 					generatorDirection = Vector3.new(0, 0, 1) -- fallback direction forward
 				end
 
 				-- Teleport LocalPlayer to generator, facing the cube (or forward)
-				humanoidRootPart.CFrame = CFrame.new(
+				currentHRP.CFrame = CFrame.new(
 					generatorPosition + Vector3.new(0, 0.5, 0),
 					generatorPosition + Vector3.new(generatorDirection.X, 0, generatorDirection.Z)
 				)
@@ -2572,7 +1846,7 @@ local function generatorDoAll()
     end
 
     -- Return LocalPlayer to original position
-    humanoidRootPart.CFrame = lastPosition
+    if humanoidRootPart and humanoidRootPart.Parent then humanoidRootPart.CFrame = lastPosition end
 end
 
 local function stopLayDown()
@@ -2635,6 +1909,7 @@ local function createFrontflip()
             local forwardVector = startCFrame.LookVector
             local upVector = Vector3.new(0, 1, 0)
             task.spawn(function()
+                pcall(function()
                 local startTime = tick()
                 for i = 1, steps do
                     local t = i / steps
@@ -2667,19 +1942,20 @@ local function createFrontflip()
                     end
                 end
                 task.wait(0.25)
+                end)
                 FlipCooldown = false
             end)
         end
 
         -- keybind F
-        UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+        track(UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
             if gameProcessedEvent then return end
             local focused = UserInputService:GetFocusedTextBox()
             if focused then return end
             if input.KeyCode == Enum.KeyCode.P then
                 FortniteFlips()
             end
-        end)
+        end))
 
         return {
             Flip = FortniteFlips,
@@ -2691,25 +1967,30 @@ end
 local frontflipObj = createFrontflip()()
 
 -- Active UI references
--- FORSAKEN_STARLIGHT_BUNDLE_HEADER
--- build.py replaces these placeholders with an embedded, vendored Starlight source
-local StarlightBridgeFactory = nil
-local Starlight = nil
+-- FORSAKEN_WIND_BUNDLE_HEADER
+-- build.py replaces these placeholders with an embedded, vendored WindUI source
+local WindBridgeFactory = nil
+local WindUI = nil
+-- Four feature-group module factories (Combat / Visual / Survival / Guest).
+-- build.py injects them as embedded IIFE factories and removes these stubs.
+local ForsakenCombatFactory = nil
+local ForsakenVisualFactory = nil
+local ForsakenSurvivalFactory = nil
+local ForsakenGuestFactory = nil
 local FluentLoaded = false
-local success, Fluent = pcall(function()
-    return StarlightBridgeFactory(Starlight)
+local success
+success, Fluent = pcall(function()
+    return WindBridgeFactory(WindUI)
 end)
 if success and Fluent then
     FluentLoaded = true
 else
-    warn("[Forsaken] Starlight 无法启动：" .. tostring(Fluent))
+    warn("[Forsaken] WindUI 无法启动：" .. tostring(Fluent))
 end
 
--- Create Fluent window & tabs if Fluent loaded
-local Window, Tabs, Player, Game, Misc, Blatant, GuestSettings, CustomAnimations, Discord, Settings
+-- Create the native WindUI window through the compatibility bridge.
 local IsMobile = UserInputService.TouchEnabled
--- Mobile sizing and scroll safety live in the Starlight bridge.
-local function FitMobileWindow() end
+-- Mobile sizing and scroll safety live in the WindUI bridge.
 if FluentLoaded then
     Window = Fluent:CreateWindow({
     	Title = "Forsaken",
@@ -2721,61 +2002,63 @@ if FluentLoaded then
 	})
 
 	Tabs = {
-   		Player = Window:AddTab({ Title = "玩家", Icon = "lucide-circle-user" }),
-   		Game = Window:AddTab({ Title = "游戏", Icon = "lucide-gamepad-2" }),
-   		Misc = Window:AddTab({ Title = "其他", Icon = "lucide-anvil" }),
-   		Blatant = Window:AddTab({ Title = "高风险功能", Icon = "lucide-angry" }),
-   		GuestSettings = Window:AddTab({ Title = "Guest 1337 专项", Icon = "lucide-leaf" }),
-   		CustomAnimations = Window:AddTab({ Title = "自定义动画", Icon = "lucide-person-standing" }),
-		Discord = Window:AddTab({ Title = "社区", Icon = "lucide-settings" }),
-		Settings = Window:AddTab({ Title = "设置", Icon = "lucide-settings" })
+		Combat = Window:AddTab({ Title = "战斗", Icon = "lucide-swords" }),
+		Visual = Window:AddTab({ Title = "视觉", Icon = "lucide-eye" }),
+		Survival = Window:AddTab({ Title = "生存", Icon = "lucide-heart-pulse" }),
+		Guest = Window:AddTab({ Title = "Guest 1337", Icon = "lucide-leaf" }),
+		System = Window:AddTab({ Title = "系统", Icon = "lucide-settings" }),
+		Emotes = Window:AddTab({ Title = "杀手表情", Icon = "lucide-smile" }),
+		Stats = Window:AddTab({ Title = "玩家统计", Icon = "lucide-chart-column" })
 	}
 
-    FitMobileWindow()
-    if IsMobile then
-        task.spawn(function()
-            local last = workspace.CurrentCamera
-            if last then
-                last:GetPropertyChangedSignal("ViewportSize"):Connect(FitMobileWindow)
-            end
-        end)
-    end
-
     -- Put FOV controls before native theme/config groups on mobile.
-    local fovValue, fovActive, oldFov, fovListener = 80, false, nil, nil
+    local fovValue, fovActive, fovCamera, fovListener = 80, false, nil, nil
+    local savedFov = {}
+    local function restoreFov()
+        fovActive = false
+        if fovListener then fovListener:Disconnect(); fovListener = nil end
+        for camera, value in pairs(savedFov) do pcall(function() camera.FieldOfView = value end) end
+        table.clear(savedFov)
+        fovCamera = nil
+    end
+    Fluent:OnDestroy(restoreFov)
     local function applyFovValue()
         local camera = Workspace.CurrentCamera
-        if not (fovActive and camera) then return end
-        if not oldFov then oldFov = camera.FieldOfView end
+        if not fovActive then return end
+        if fovCamera ~= camera then
+            if fovCamera and savedFov[fovCamera] ~= nil then
+                pcall(function() fovCamera.FieldOfView = savedFov[fovCamera] end)
+                savedFov[fovCamera] = nil
+            end
+            fovCamera = camera
+        end
+        if not camera then return end
+        if savedFov[camera] == nil then savedFov[camera] = camera.FieldOfView end
         local effective = math.min(fovValue, 120) -- Roblox engine camera limit
         if math.abs(camera.FieldOfView - effective) > 0.01 then
             camera.FieldOfView = effective
         end
     end
-    Tabs.Settings:AddSlider("ForsakenFOVValue", {
+    Tabs.System:AddSlider("ForsakenFOVValue", {
         Title = "视场角（80–200）", Default = 80, Min = 80, Max = 200, Rounding = 0,
         Callback = function(value)
             fovValue = math.clamp(tonumber(value) or 80, 80, 200)
             applyFovValue()
         end
     })
-    Tabs.Settings:AddToggle("ForsakenFOVEnabled", {
+    Tabs.System:AddToggle("ForsakenFOVEnabled", {
         Title = "应用视场角", Default = false,
         Callback = function(enabled)
             fovActive = enabled
             if not enabled then
-                if fovListener then fovListener:Disconnect(); fovListener = nil end
-                if oldFov and Workspace.CurrentCamera then
-                    Workspace.CurrentCamera.FieldOfView = oldFov
-                end
-                oldFov = nil
+                restoreFov()
             else
                 applyFovValue()
                 if not fovListener then
                     local nextCheck = 0
                     fovListener = RunService.Heartbeat:Connect(function()
                         if sessionEnv.VortexionSessionId ~= thisSessionId then
-                            fovListener:Disconnect(); fovListener = nil
+                            restoreFov()
                             return
                         end
                         local now = os.clock()
@@ -2788,30 +2071,11 @@ if FluentLoaded then
             end
         end
     })
-    Tabs.Settings:AddParagraph({
+    Tabs.System:AddParagraph({
         Title = "视场角限制",
         Content = "控制当前相机。引擎实际限制为 120°；没有证据证实游戏设置值可直接改写到 200°。"
     })
-    Window:InstallSettings(Tabs.Settings)
-    -- Fluent third-party addon strings: UI-only patch, never alters saved option keys.
-    local ExtraLabels = {
-        ["Interface"] = "界面", ["Minimize Keybind"] = "收起菜单快捷键",
-        ["Theme Manager"] = "主题管理", ["Theme"] = "主题",
-        ["Save Manager"] = "配置管理", ["Config"] = "配置",
-        ["Config List"] = "配置列表", ["Save Config"] = "保存配置",
-        ["Load Config"] = "读取配置", ["Delete Config"] = "删除配置",
-        ["Autoload"] = "自动加载", ["Set as autoload"] = "设为自动加载",
-        ["Transparency"] = "透明度", ["Acrylic"] = "亚克力模糊",
-        ["Notification"] = "通知", ["Settings"] = "设置",
-    }
-    if Fluent.GUI then
-        for _, node in ipairs(Fluent.GUI:GetDescendants()) do
-            if node:IsA("TextLabel") or node:IsA("TextButton") then
-                local translated = ExtraLabels[node.Text]
-                if translated then node.Text = translated end
-            end
-        end
-    end
+    Window:InstallSettings(Tabs.System)
 
 	Fluent:Notify({
 		Title = "正在加载…",
@@ -2861,13 +2125,13 @@ local customChargeEnabled = false
 local customChargeAnimId = ""
 local chargeAnimIds = { "106014898528300" }
 
--- Stats GUI creation now (kept hidden until toggle)
+-- Stats updates start only when the existing game toggle is enabled.
 statsGui = createStatsTracker()
 statsGui.Enabled = false
 
--- Original Goonsaken callback bindings mapped through the native Starlight bridge
+-- Original Goonsaken callback bindings mapped through the native WindUI bridge
 if FluentLoaded then
-    Tabs.Player:AddSlider("Walkspeed", {
+    Tabs.Survival:AddSlider("Walkspeed", {
         Title = "移动速度倍率",
         Default = 1,
         Min = 1,
@@ -2883,7 +2147,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Player:AddSlider("JumpPower", {
+    Tabs.Survival:AddSlider("JumpPower", {
         Title = "跳跃力度",
         Default = 50,
         Min = 0,
@@ -2898,7 +2162,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Player:AddToggle("Goon", {
+    Tabs.Survival:AddToggle("Goon", {
         Title = "Goon 动作",
         Default = false,
         Callback = function(state)
@@ -2911,7 +2175,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Player:AddToggle("LayDown", {
+    Tabs.Survival:AddToggle("LayDown", {
         Title = "趴下动作",
         Default = false,
         Callback = function(state)
@@ -2924,7 +2188,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Player:AddButton({
+    Tabs.Survival:AddButton({
         Title = "前空翻（P 键 / 手机快捷操作） · Fartsaken",
         Callback = function()
             if frontflipObj and frontflipObj.Flip then
@@ -2933,7 +2197,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Player:AddToggle("AntiSlowness", {
+    Tabs.Survival:AddToggle("AntiSlowness", {
         Title = "防减速",
         Default = false,
         Callback = function(state)
@@ -2941,7 +2205,7 @@ if FluentLoaded then
         end
     })
 
-	Tabs.Player:AddToggle("VoidRushControl", {
+	Tabs.Survival:AddToggle("VoidRushControl", {
     	Title = "虚空冲刺控制（感谢 golden）",
     	Default = false,
     	Callback = function(state)
@@ -2953,21 +2217,29 @@ if FluentLoaded then
     	end
 	})
 
-    Tabs.Player:AddButton({
+    Tabs.Combat:AddButton({
         Title = "404 自动招架",
         Callback = function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/NumanTF3/auto-404-parry/refs/heads/main/main.lua"))()
+            local okLoad, errLoad = pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/NumanTF3/auto-404-parry/refs/heads/main/main.lua"))() end)
+            if not okLoad then
+                warn("[Vortexion/Forsaken] external script failed: " .. tostring(errLoad))
+                if Fluent then Fluent:Notify({ Title = "外部脚本", Content = "加载失败，查看控制台", Duration = 5 }) end
+            end
         end
     })
 
-    Tabs.Player:AddButton({
+    Tabs.Combat:AddButton({
         Title = "Raging Pace 自动招架",
         Callback = function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/NumanTF3/auto-raging-pace/refs/heads/main/main.lua"))()
+            local okLoad, errLoad = pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/NumanTF3/auto-raging-pace/refs/heads/main/main.lua"))() end)
+            if not okLoad then
+                warn("[Vortexion/Forsaken] external script failed: " .. tostring(errLoad))
+                if Fluent then Fluent:Notify({ Title = "外部脚本", Content = "加载失败，查看控制台", Duration = 5 }) end
+            end
         end
     })
 
-    Tabs.Player:AddToggle("ChanceAimbot", {
+    Tabs.Combat:AddToggle("ChanceAimbot", {
         Title = "Chance 自动瞄准",
         Default = false,
         Callback = function(state)
@@ -2979,7 +2251,7 @@ if FluentLoaded then
         end
     })
 
-	Tabs.Player:AddSlider("ChanceAimbotPredictionValue", {
+	Tabs.Combat:AddSlider("ChanceAimbotPredictionValue", {
         Title = "Chance 预判参数",
         Default = 0.2,
         Min = 0.1,
@@ -2990,27 +2262,35 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Player:AddButton({
+    Tabs.Combat:AddButton({
         Title = "极限闪避（自动躲避杀手）",
         Callback = function()
-            loadstring(game:HttpGet('https://raw.githubusercontent.com/NumanTF3/forsaken-ultra-instinct/refs/heads/main/main.lua'))()
+            local okLoad, errLoad = pcall(function() loadstring(game:HttpGet('https://raw.githubusercontent.com/NumanTF3/forsaken-ultra-instinct/refs/heads/main/main.lua'))() end)
+            if not okLoad then
+                warn("[Vortexion/Forsaken] external script failed: " .. tostring(errLoad))
+                if Fluent then Fluent:Notify({ Title = "外部脚本", Content = "加载失败，查看控制台", Duration = 5 }) end
+            end
         end
     })
 
-    Tabs.Player:AddButton({
+    Tabs.Combat:AddButton({
         Title = "Two Time 自动背刺与瞄准",
         Callback = function()
-			setclipboard("https://discord.gg/ETTV2g8kxS")
+			if setclipboard then setclipboard("https://discord.gg/ETTV2g8kxS") end
 			Fluent:Notify({
     			Title = "Two Time 自动背刺",
     			Content = "由 skibisaken 制作，已复制 Discord 链接。",
     			Duration = 8
 			})
-            loadstring(game:HttpGet('https://raw.githubusercontent.com/NumanTF3/two-time-backstab/refs/heads/main/main.lua'))()
+            local okLoad, errLoad = pcall(function() loadstring(game:HttpGet('https://raw.githubusercontent.com/NumanTF3/two-time-backstab/refs/heads/main/main.lua'))() end)
+            if not okLoad then
+                warn("[Vortexion/Forsaken] external script failed: " .. tostring(errLoad))
+                if Fluent then Fluent:Notify({ Title = "外部脚本", Content = "加载失败，查看控制台", Duration = 5 }) end
+            end
         end
     })
 
-    Tabs.Player:AddToggle("Invisible", {
+    Tabs.Visual:AddToggle("Invisible", {
         Title = "角色隐身",
         Default = false,
         Callback = function(state)
@@ -3026,7 +2306,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Player:AddToggle("Invis007n7", {
+    Tabs.Visual:AddToggle("Invis007n7", {
         Title = "007n7 克隆时完全隐身",
         Default = false,
         Callback = function(state)
@@ -3042,7 +2322,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Player:AddToggle("HitboxModifier", {
+    Tabs.Combat:AddToggle("HitboxModifier", {
         Title = "命中范围修改（基于 IYRE）",
         Default = false,
         Callback = function(Value)
@@ -3050,7 +2330,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Player:AddInput("HitboxDetectionDistance", {
+    Tabs.Combat:AddInput("HitboxDetectionDistance", {
         Title = "命中判定距离",
         Default = "120",
         Placeholder = "120",
@@ -3066,7 +2346,7 @@ if FluentLoaded then
     --------------------------------------------------------------------------
     -- Game Tab
     --------------------------------------------------------------------------
-    Tabs.Game:AddToggle("ESPToggle", {
+    Tabs.Visual:AddToggle("ESPToggle", {
         Title = "ESP 透视（杀手红 / 幸存者绿）",
         Description = "无墙遮挡时透明度 80%；有墙遮挡或屏幕外 0%（高亮完全显示）",
         Default = false,
@@ -3078,38 +2358,38 @@ if FluentLoaded then
 
     -- Stage 2: independently maintained category-based ESP options, inspired by
     -- c00lSaken/OPAI references, using the existing raycast renderer (no duplicate ESP loops).
-    Tabs.Game:AddToggle("EspKillers", {
+    Tabs.Visual:AddToggle("EspKillers", {
         Title = "显示杀手（红色）", Default = true,
         Callback = function(v) ESP.ShowKillers = v; ESP:SetEnabled(ESP.Enabled) end
     })
-    Tabs.Game:AddToggle("EspSurvivors", {
+    Tabs.Visual:AddToggle("EspSurvivors", {
         Title = "显示幸存者（绿色）", Default = true,
         Callback = function(v) ESP.ShowSurvivors = v; ESP:SetEnabled(ESP.Enabled) end
     })
-    Tabs.Game:AddToggle("EspIdentity", {
+    Tabs.Visual:AddToggle("EspIdentity", {
         Title = "用户名与使用角色", Default = true,
         Callback = function(v) ESP.ShowLabels = v; ESP:SetEnabled(ESP.Enabled) end
     })
-    Tabs.Game:AddSlider("EspVisibleTransparency", {
+    Tabs.Visual:AddSlider("EspVisibleTransparency", {
         Title = "无遮挡透明度", Min = 0, Max = 95, Default = 80, Rounding = 0, Suffix = "%",
         Callback = function(v) ESP.VisibleAlpha = math.clamp(v / 100, 0, 0.95) end
     })
-    Tabs.Game:AddToggle("EspHealthDistance", {
+    Tabs.Visual:AddToggle("EspHealthDistance", {
         Title = "显示生命值与距离", Default = false,
         Callback = function(v) ESP.ShowDetails = v; ESP:SetEnabled(ESP.Enabled) end
     })
-    Tabs.Game:AddSlider("EspRefreshRate", {
+    Tabs.Visual:AddSlider("EspRefreshRate", {
         Title = "遮挡检测频率", Min = 2, Max = 20, Default = 10, Rounding = 0, Suffix = "Hz",
         Callback = function(v) ESP.CheckHz = math.clamp(v, 2, 20) end
     })
 
     -- Vortexion: generator readout uses the current generator index and a 1Hz
     -- distance sampler. It never duplicates auto-solve or generator listeners.
-    Tabs.Game:AddToggle("GeneratorProgressESP", {
+    Tabs.Visual:AddToggle("GeneratorProgressESP", {
         Title = "发电机进度与距离标签", Default = false,
         Callback = function(v) ESP.GeneratorDetails = v; ESP:RefreshGeneratorLabels() end
     })
-    Tabs.Game:AddToggle("GeneratorShowCompleted", {
+    Tabs.Visual:AddToggle("GeneratorShowCompleted", {
         Title = "标签包含已完成发电机", Default = false,
         Callback = function(v) ESP.CompletedGenerators = v; ESP:RefreshGeneratorLabels() end
     })
@@ -3157,23 +2437,24 @@ if FluentLoaded then
                 end
             end)
         end
-        Tabs.Game:AddToggle("KillerProximityAlert", {
+        Tabs.Visual:AddToggle("KillerProximityAlert", {
             Title = "杀手接近提醒（手机友好）", Default = false,
             Callback = function(v) alert:SetEnabled(v) end
         })
-        Tabs.Game:AddSlider("KillerProximityRadius", {
+        Tabs.Visual:AddSlider("KillerProximityRadius", {
             Title = "提醒距离", Min = 10, Max = 100, Default = 35, Rounding = 0, Suffix = " studs",
             Callback = function(v) alert.Range = math.clamp(v,10,100) end
         })
     end
 
-    Tabs.Game:AddToggle("StatsTrackerToggle", {
+    Tabs.Survival:AddToggle("StatsTrackerToggle", {
         Title = "玩家数据统计",
         Default = false,
         Callback = function(state)
             toggles.StatsTracker = state
             if statsGui then
                 statsGui.Enabled = state
+                if state and Window then Window:SelectTab(7) end
             end
         end
     })
@@ -3301,7 +2582,7 @@ if FluentLoaded then
             end
         end)
 
-        Tabs.Game:AddToggle("InfiniteStamina", {
+        Tabs.Survival:AddToggle("InfiniteStamina", {
             Title = "无限体力（杀手 / 幸存者）",
             Description = "持续维护体力，回合切换后自动恢复；需要执行器支持 require",
             Default = false,
@@ -3312,7 +2593,7 @@ if FluentLoaded then
     end
 	
     -- Auto Rejoin on Kick (default ON)
-    Tabs.Game:AddToggle("AutoRejoinToggle", {
+    Tabs.Survival:AddToggle("AutoRejoinToggle", {
         Title = "被踢出后自动重进",
         Default = true,
         Callback = function(state)
@@ -3321,7 +2602,7 @@ if FluentLoaded then
                 if not activeConnections.AutoRejoin then
                     activeConnections.AutoRejoin = GuiService.ErrorMessageChanged:Connect(function(msg)
                         if msg and msg ~= "" then
-                            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+                            pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId) end)
                         end
                     end)
                 end
@@ -3334,14 +2615,14 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Game:AddButton({
+    Tabs.Survival:AddButton({
         Title = "重新加入当前服务器",
         Callback = function()
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+            pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId) end)
         end
     })
     
-    Tabs.Game:AddToggle("autofixgen", {
+    Tabs.Survival:AddToggle("autofixgen", {
         Title = "自动解当前发电机（需进入解谜）",
 		Default = false,
         Callback = function(state)
@@ -3349,7 +2630,7 @@ if FluentLoaded then
         end
     })
 
-	Tabs.Game:AddSlider("OneGenSpeedValue", {
+	Tabs.Survival:AddSlider("OneGenSpeedValue", {
         Title = "当前发电机解谜间隔",
         Default = 2.5,
         Min = 2.5,
@@ -3360,7 +2641,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Game:AddToggle("auto1x1x1x1popups", {
+    Tabs.Survival:AddToggle("auto1x1x1x1popups", {
         Title = "自动关闭 1x1x1x1 弹窗",
         Default = false,
         Callback = function(state)
@@ -3374,14 +2655,18 @@ if FluentLoaded then
     --------------------------------------------------------------------------
     -- Misc Tab
     --------------------------------------------------------------------------
-    Tabs.Misc:AddButton({
+    Tabs.System:AddButton({
         Title = "加载 Infinite Yield",
         Callback = function()
-            loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+            local okLoad, errLoad = pcall(function() loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))() end)
+            if not okLoad then
+                warn("[Vortexion/Forsaken] external script failed: " .. tostring(errLoad))
+                if Fluent then Fluent:Notify({ Title = "外部脚本", Content = "加载失败，查看控制台", Duration = 5 }) end
+            end
         end
     })
 
-    Tabs.Misc:AddToggle("NameProtect", {
+    Tabs.System:AddToggle("NameProtect", {
         Title = "名字保护（隐藏玩家用户名）",
         Default = false,
         Callback = function(state)
@@ -3393,14 +2678,18 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Misc:AddButton({
+    Tabs.System:AddButton({
         Title = "FPS 性能优化（会降低画质）",
         Callback = function()
-			loadstring(game:HttpGet('https://raw.githubusercontent.com/NumanTF3/roblox-fpsboost-script/refs/heads/main/main.lua'))()
+			local okLoad, errLoad = pcall(function() loadstring(game:HttpGet('https://raw.githubusercontent.com/NumanTF3/roblox-fpsboost-script/refs/heads/main/main.lua'))() end)
+			if not okLoad then
+			    warn("[Vortexion/Forsaken] external script failed: " .. tostring(errLoad))
+			    if Fluent then Fluent:Notify({ Title = "外部脚本", Content = "加载失败，查看控制台", Duration = 5 }) end
+			end
         end
     })
 
-    Tabs.Misc:AddToggle("SettingsVideo", {
+    Tabs.System:AddToggle("SettingsVideo", {
 		Title = "暂停菜单播放 ONE MORE GAME 视频",
 		Default = false,
 		Callback = function(state)
@@ -3437,7 +2726,7 @@ if FluentLoaded then
 						Method = "GET"
 					})
 
-					if response.Success and response.Body then
+					if response and response.Success and response.Body then
 						writefile(fullPath, response.Body)
 						Fluent:Notify({
 							Title = "视频资源",
@@ -3463,9 +2752,9 @@ if FluentLoaded then
 				-- Asset for VideoFrame
 				local videoAsset = getcustomasset(fullPath)
 				local CoreGui = game:GetService("CoreGui")
-				local SettingsShield = CoreGui:WaitForChild("RobloxGui")
-					:WaitForChild("SettingsClippingShield")
-					:WaitForChild("SettingsShield")
+				local robloxGui = CoreGui:WaitForChild("RobloxGui", 10)
+					local clippingShield = robloxGui and robloxGui:WaitForChild("SettingsClippingShield", 10)
+					local SettingsShield = clippingShield and clippingShield:WaitForChild("SettingsShield", 10)
 
 				local videoGui
 
@@ -3495,7 +2784,7 @@ if FluentLoaded then
 				end
 
 				-- Monitor
-				_G.SettingsVideoLoop = task.spawn(function()
+				_G.SettingsVideoLoop = task.spawn(function() if not SettingsShield then return end
 					local wasVisible = SettingsShield.Visible
 					while state do
 						local isVisible = SettingsShield.Visible
@@ -3519,7 +2808,7 @@ if FluentLoaded then
 		end
 	})
 
-    Tabs.Misc:AddInput("PlaySoundByID", {
+    Tabs.System:AddInput("PlaySoundByID", {
         Title = "按资源 ID 播放声音",
         Placeholder = "输入 Roblox 音效 ID",
         Numeric = true,
@@ -3534,7 +2823,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Misc:AddDropdown("ChangeLMSSong", {
+    Tabs.System:AddDropdown("ChangeLMSSong", {
         Title = "选择 LMS 音乐",
         Values = {
             "Burnout", "Compass", "Vanity", "Close To Me", "Plead",
@@ -3548,14 +2837,20 @@ if FluentLoaded then
         end
     })
 
-    Tabs.Misc:AddButton({
+    Tabs.System:AddButton({
         Title = "替换 LMS 音乐",
         Callback = function()
             print("Waiting for Workspace.Themes.LastSurvivor to exist...")
-            local theme = game.Workspace:WaitForChild("Themes", 99999)
-            if not theme then return end
-            local lastSurvivor = theme:WaitForChild("LastSurvivor", 60)
-            if not lastSurvivor then return end
+            local theme = game.Workspace:WaitForChild("Themes", 30)
+            if not theme then
+                if Fluent then Fluent:Notify({Title = "LMS 音乐", Content = "未找到 Workspace.Themes，该功能仅限 LMS 模式可用。", Duration = 5}) end
+                return
+            end
+            local lastSurvivor = theme:WaitForChild("LastSurvivor", 15)
+            if not lastSurvivor then
+                if Fluent then Fluent:Notify({Title = "LMS 音乐", Content = "未找到 Themes.LastSurvivor，可能尚未加载完成。", Duration = 5}) end
+                return
+            end
             local songId = LMSSongs[selectedSong]
             if songId then
                 lastSurvivor.SoundId = songId
@@ -3569,14 +2864,14 @@ if FluentLoaded then
     --------------------------------------------------------------------------
     -- Blatant Tab
     --------------------------------------------------------------------------
-    Tabs.Blatant:AddButton({
+    Tabs.Survival:AddButton({
         Title = "自动完成所有发电机",
         Callback = function()
-            generatorDoAll()
+            task.spawn(generatorDoAll)
         end
     })
 
-    Tabs.Blatant:AddSlider("GenSpeedValue", {
+    Tabs.Survival:AddSlider("GenSpeedValue", {
         Title = "全部发电机解谜间隔",
         Default = 3,
         Min = 3,
@@ -3590,14 +2885,14 @@ if FluentLoaded then
     --------------------------------------------------------------------------
     -- Auto Block Tab
     --------------------------------------------------------------------------
-	Tabs.GuestSettings:AddParagraph({
+	Tabs.Guest:AddParagraph({
         Title = "致谢 Skibisaken",
         Content = "此功能组来自 skibisaken 的脚本，社区：https://discord.gg/ETTV2g8kxS"
     })
 
     -- One shared, detachable job instead of one permanent Stepped hook per toggle.
     local chargeConnection, chargeLastTime = nil, 0
-    Tabs.GuestSettings:AddToggle("ChargeSpeedToggle", {
+    Tabs.Guest:AddToggle("ChargeSpeedToggle", {
         Title = "自定义冲锋速度", Default = false,
         Callback = function(enabled)
             if chargeConnection then chargeConnection:Disconnect(); chargeConnection = nil end
@@ -3619,7 +2914,7 @@ if FluentLoaded then
         end
     })
 
-	Tabs.GuestSettings:AddSlider("GuestChargeSpeed", {
+	Tabs.Guest:AddSlider("GuestChargeSpeed", {
         Title = "冲锋速度",
         Default = 2.833,
         Min = 2.833,
@@ -3696,22 +2991,22 @@ if FluentLoaded then
         for _, item in ipairs(killers:GetDescendants()) do observe(item) end
         table.insert(guestSoundWarnings, killers.DescendantAdded:Connect(observe))
     end
-    Tabs.GuestSettings:AddToggle("GuestSoundWarning", {
+    Tabs.Combat:AddToggle("GuestSoundWarning", {
         Title = "杀手攻击音效预警", Default = false,
         Callback = function(enabled)
             if enabled then startGuestSoundWarnings() else stopGuestSoundWarnings() end
         end
     })
-    Tabs.GuestSettings:AddSlider("GuestSoundWarningRange", {
+    Tabs.Combat:AddSlider("GuestSoundWarningRange", {
         Title = "攻击预警距离", Default = 20, Min = 8, Max = 45, Rounding = 0,
         Suffix = "studs", Callback = function(value)
             guestSoundWarningRange = math.clamp(tonumber(value) or 20, 8, 45)
         end
     })
-    Tabs.GuestSettings:AddParagraph({Title = "音效预警说明",
+    Tabs.Combat:AddParagraph({Title = "音效预警说明",
         Content = "参考上传源码重新实现。仅启用时监听杀手音效，2 秒通知冷却，关闭时释放连接；音效 ID 可能随游戏更新失效。"})
 
-    Tabs.GuestSettings:AddToggle("GuestSettingsToggle", {
+    Tabs.Combat:AddToggle("GuestSettingsToggle", {
         Title = "自动格挡",
         Default = false,
         Callback = function(Value)
@@ -3719,7 +3014,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.GuestSettings:AddToggle("StrictRangeToggle", {
+    Tabs.Combat:AddToggle("StrictRangeToggle", {
         Title = "严格距离判定",
         Default = false,
         Callback = function(Value)
@@ -3727,7 +3022,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.GuestSettings:AddDropdown("FacingCheckDropdown", {
+    Tabs.Combat:AddDropdown("FacingCheckDropdown", {
         Title = "朝向判定",
         Values = { "Loose", "Strict" },
         Multi = false,
@@ -3737,7 +3032,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.GuestSettings:AddInput("DetectionRangeInput", {
+    Tabs.Combat:AddInput("DetectionRangeInput", {
         Title = "检测距离",
         Placeholder = "18",
         Numeric = true,
@@ -3746,17 +3041,17 @@ if FluentLoaded then
         end
     })
 
-    Tabs.GuestSettings:AddParagraph({
+    Tabs.Combat:AddParagraph({
         Title = "⚠️ 注意",
         Content = "不要同时启用格挡传送与假格挡，可能引发冲突。"
     })
 
-    Tabs.GuestSettings:AddParagraph({
+    Tabs.Combat:AddParagraph({
         Title = "",
         Content = "提高检测距离有助于格挡传送，建议约 30 studs。"
     })
 
-    Tabs.GuestSettings:AddToggle("BlockTPToggle", {
+    Tabs.Combat:AddToggle("BlockTPToggle", {
         Title = "格挡传送",
         Default = false,
         Callback = function(Value)
@@ -3767,7 +3062,7 @@ if FluentLoaded then
     --------------------------------------------------------------------------
     -- Predictive Auto Block Tab
     --------------------------------------------------------------------------
-    Tabs.GuestSettings:AddToggle("PredictiveBlockToggle", {
+    Tabs.Combat:AddToggle("PredictiveBlockToggle", {
         Title = "预测式自动格挡",
         Default = false,
         Callback = function(Value)
@@ -3775,7 +3070,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.GuestSettings:AddInput("PredictiveDetectionRange", {
+    Tabs.Combat:AddInput("PredictiveDetectionRange", {
         Title = "检测距离",
         Placeholder = "10",
         Numeric = true,
@@ -3787,7 +3082,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.GuestSettings:AddSlider("EdgeKillerSlider", {
+    Tabs.Combat:AddSlider("EdgeKillerSlider", {
         Title = "边缘目标延迟",
         Default = 3,
         Min = 0,
@@ -3798,7 +3093,7 @@ if FluentLoaded then
         end
     })
 
-	Tabs.GuestSettings:AddParagraph({
+	Tabs.Combat:AddParagraph({
         Title = "边缘目标延迟",
         Content = "目标进入范围后延迟格挡的秒数；离开范围将重置计时。"
     })
@@ -3806,30 +3101,26 @@ if FluentLoaded then
     --------------------------------------------------------------------------
     -- Fake Block Tab
     --------------------------------------------------------------------------
-    Tabs.GuestSettings:AddButton({
-        Title = "加载假格挡 GUI",
+    Tabs.Guest:AddButton({
+        Title = "触发假格挡（WindUI）",
         Callback = function()
-            pcall(function()
-                local fakeGui = PlayerGui:FindFirstChild("FakeBlockGui")
-                if not fakeGui then
-                    local success, result = pcall(function()
-                        return loadstring(game:HttpGet("https://pastebin.com/raw/ztnYv27k"))()
-                    end)
-                    if not success then
-                        warn("Failed to load Fake Block GUI:", result)
-                    end
-                else
-                    fakeGui.Enabled = true
-                    print("Fake Block GUI enabled")
-                end
-            end)
+            local legacy = PlayerGui:FindFirstChild("FakeBlockGui")
+            if legacy then legacy:Destroy() end
+            local guest = sessionEnv.VortexionGuest
+            if guest and guest.buildFakeBlockGui and guest.triggerFakeBlock then
+                guest.buildFakeBlockGui()
+                guest.triggerFakeBlock()
+                if Window then Window:SelectTab(4) end
+            else
+                Fluent:Notify({ Title = "假格挡", Content = "Guest 功能组尚未就绪。", Duration = 3 })
+            end
         end
     })
 
     --------------------------------------------------------------------------
     -- Auto Punch Tab
     --------------------------------------------------------------------------
-    Tabs.GuestSettings:AddToggle("AutoPunchToggle", {
+    Tabs.Combat:AddToggle("AutoPunchToggle", {
         Title = "自动出拳",
         Default = false,
         Callback = function(Value)
@@ -3837,7 +3128,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.GuestSettings:AddToggle("FlingPunchToggle", {
+    Tabs.Combat:AddToggle("FlingPunchToggle", {
         Title = "击退出拳",
         Default = false,
         Callback = function(Value)
@@ -3845,7 +3136,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.GuestSettings:AddToggle("PunchAimbotToggle", {
+    Tabs.Combat:AddToggle("PunchAimbotToggle", {
         Title = "出拳自动瞄准",
         Default = false,
         Callback = function(Value)
@@ -3854,7 +3145,7 @@ if FluentLoaded then
     })
 
     local predictionValue = 4
-    Tabs.GuestSettings:AddSlider("AimPredictionSlider", {
+    Tabs.Combat:AddSlider("AimPredictionSlider", {
         Title = "瞄准预判距离",
         Default = predictionValue,
         Min = 0,
@@ -3866,7 +3157,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.GuestSettings:AddSlider("FlingPowerSlider", {
+    Tabs.Combat:AddSlider("FlingPowerSlider", {
         Title = "击退力度",
         Default = 10000,
         Min = 5000,
@@ -3880,7 +3171,7 @@ if FluentLoaded then
     --------------------------------------------------------------------------
     -- Custom Animations Tab
     --------------------------------------------------------------------------
-    Tabs.CustomAnimations:AddInput("CustomBlockAnim", {
+    Tabs.Visual:AddInput("CustomBlockAnim", {
         Title = "自定义格挡动画",
         Placeholder = "动画 ID",
         Callback = function(Text)
@@ -3888,7 +3179,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.CustomAnimations:AddToggle("EnableCustomBlockAnim", {
+    Tabs.Visual:AddToggle("EnableCustomBlockAnim", {
         Title = "启用自定义格挡动画",
         Default = false,
         Callback = function(Value)
@@ -3896,7 +3187,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.CustomAnimations:AddInput("CustomPunchAnim", {
+    Tabs.Visual:AddInput("CustomPunchAnim", {
         Title = "自定义出拳动画",
         Placeholder = "动画 ID",
         Callback = function(Text)
@@ -3904,7 +3195,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.CustomAnimations:AddToggle("EnableCustomPunchAnim", {
+    Tabs.Visual:AddToggle("EnableCustomPunchAnim", {
         Title = "启用自定义出拳动画",
         Default = false,
         Callback = function(Value)
@@ -3912,7 +3203,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.CustomAnimations:AddInput("ChargeAnimID", {
+    Tabs.Visual:AddInput("ChargeAnimID", {
         Title = "冲锋动画 ID",
         Placeholder = "输入动画 ID",
         Callback = function(input)
@@ -3920,7 +3211,7 @@ if FluentLoaded then
         end
     })
 
-    Tabs.CustomAnimations:AddToggle("EnableCustomChargeAnim", {
+    Tabs.Visual:AddToggle("EnableCustomChargeAnim", {
         Title = "自定义冲锋动画",
         Default = false,
         Callback = function(value)
@@ -3928,10 +3219,10 @@ if FluentLoaded then
         end
     })
 
-	Tabs.Discord:AddButton({
+	Tabs.System:AddButton({
         Title = "复制 Discord 邀请链接",
         Callback = function()
-			setclipboard("https://discord.gg/aXNagEYb2f")
+			if setclipboard then setclipboard("https://discord.gg/aXNagEYb2f") end
 			Fluent:Notify({
     			Title = "已复制 Discord 邀请链接",
     			Content = "邀请链接已复制到剪贴板。",
@@ -3941,17 +3232,17 @@ if FluentLoaded then
     })
 else
 	-- Fluent not loaded fallback: wire minimal keybinds and defaults
-    warn("Starlight not loaded; GUI controls unavailable; gameplay hooks retained.")
+    warn("WindUI not loaded; GUI controls unavailable; gameplay hooks retained.")
 end
 
--- StarlightBridge repairs each native content column's CanvasSize and scrolling state.
+-- Native WindUI manages content scrolling and mobile layout.
 
 
 -- Ensure AutoRejoin default ON (original script created a connection by default)
 if not activeConnections.AutoRejoin and toggles.AutoRejoinOnKick then
     activeConnections.AutoRejoin = GuiService.ErrorMessageChanged:Connect(function(msg)
         if msg and msg ~= "" then
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+            pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId) end)
         end
     end)
 end
@@ -3988,7 +3279,7 @@ local AttackAnimations = {
 -- Helpers
 local function fireRemoteBlock()
 	local args = {"UseActorAbility", "Block"}
-	ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
+	local modules = ReplicatedStorage:WaitForChild("Modules", 10); local network = modules and modules:WaitForChild("Network", 10); local remote = network and network:WaitForChild("RemoteEvent", 10); if remote then remote:FireServer(unpack(args)) else warn("[Vortexion] Block remote unavailable") end
 end
 
 local function isFacing(localRoot, targetRoot)
@@ -4064,7 +3355,7 @@ end
 
 coroutine.wrap(function()
     local hrp, c, vel, movel = nil, nil, nil, 0.1
-    while true do
+    while sessionEnv.VortexionSessionId == thisSessionId do
         task.wait(hiddenfling and 0.016 or 0.25)
         if hiddenfling then
             while hiddenfling and not (c and c.Parent and hrp and hrp.Parent) do
@@ -4147,10 +3438,10 @@ RunService.Heartbeat:Connect(function()
                                 while tick() - startTime < 0.5 do
                                     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                                         local myRoot = LocalPlayer.Character.HumanoidRootPart
-                                        local targetHRP = killer.HumanoidRootPart
-                                        local direction = targetHRP.CFrame.LookVector
-                                        local tpPosition = targetHRP.Position + direction * 6
-                                        myRoot.CFrame = CFrame.new(tpPosition)
+                                        local targetHRP = killer.Parent and killer:FindFirstChild("HumanoidRootPart")
+                                        local direction = targetHRP and targetHRP.CFrame.LookVector
+                                        local tpPosition = targetHRP and (targetHRP.Position + direction * 6)
+                                        if tpPosition then myRoot.CFrame = CFrame.new(tpPosition) end
                                     end
                                     task.wait()
                                 end
@@ -4244,10 +3535,13 @@ RunService.Heartbeat:Connect(function()
 
 									if myRootNow and targetRoot then
 										local predictedPos = targetRoot.Position + (targetRoot.CFrame.LookVector * predictionValue)
-										myRootNow.CFrame = CFrame.lookAt(
-											myRootNow.Position, 
-											predictedPos
-										)
+										local lookDir = predictedPos - myRootNow.Position
+										if lookDir.Magnitude > 0.01 then
+											myRootNow.CFrame = CFrame.lookAt(
+												myRootNow.Position, 
+												predictedPos
+											)
+										end
 									end
 									task.wait()
 								end
@@ -4259,7 +3553,7 @@ RunService.Heartbeat:Connect(function()
 						end
 
                         -- Trigger punch GUI button
-                        for _, conn in ipairs(getconnections(punchBtn.MouseButton1Click)) do
+                        for _, conn in ipairs(getconnections and getconnections(punchBtn.MouseButton1Click) or {}) do
                             pcall(function()
                                 conn:Fire()
                             end)
@@ -4307,7 +3601,7 @@ local lastReplaceTime = {
 
 -- Continuous custom animation replacer (runs forever if toggled on)
 task.spawn(function()
-    while true do
+    while sessionEnv.VortexionSessionId == thisSessionId do
         local enabled = customBlockEnabled or customPunchEnabled or customChargeEnabled
         task.wait(enabled and 0.08 or 0.4)
         if not (customBlockEnabled or customPunchEnabled or customChargeEnabled) then continue end
@@ -4330,7 +3624,7 @@ task.spawn(function()
                     local newAnim = Instance.new("Animation")
                     newAnim.AnimationId = "rbxassetid://" .. customBlockAnimId
                     local newTrack = animator:LoadAnimation(newAnim)
-                    newTrack:Play()
+                    if newTrack then newTrack:Play() end
                     break
                 end
             end
@@ -4343,7 +3637,7 @@ task.spawn(function()
                     local newAnim = Instance.new("Animation")
                     newAnim.AnimationId = "rbxassetid://" .. customPunchAnimId
                     local newTrack = animator:LoadAnimation(newAnim)
-                    newTrack:Play()
+                    if newTrack then newTrack:Play() end
                     break
                 end
             end
@@ -4356,7 +3650,7 @@ task.spawn(function()
                     local newAnim = Instance.new("Animation")
                     newAnim.AnimationId = "rbxassetid://" .. customChargeAnimId
                     local newTrack = animator:LoadAnimation(newAnim)
-                    newTrack:Play()
+                    if newTrack then newTrack:Play() end
                     break
                 end
             end
@@ -4372,7 +3666,7 @@ RunService.Heartbeat:Connect(function()
     local now = os.clock()
     if now - lastHitboxScan < 0.05 then return end
     lastHitboxScan = now
-	if not HumanoidRootPart then return end
+	if not HumanoidRootPart or not Humanoid then return end
 
 	local playing = false
 	for _, track in ipairs(Humanoid:GetPlayingAnimationTracks()) do
@@ -4399,7 +3693,8 @@ RunService.Heartbeat:Connect(function()
 		end
 	end
 
-	scanGroup(workspace.Players:GetDescendants())
+	local playersFolder = workspace:FindFirstChild("Players")
+	if playersFolder then scanGroup(playersFolder:GetDescendants()) end
 	local npcs = workspace:FindFirstChild("Map", true) and workspace.Map:FindFirstChild("NPCs", true)
 	if npcs then
 		scanGroup(npcs:GetChildren())
@@ -4410,7 +3705,8 @@ RunService.Heartbeat:Connect(function()
 	local ping = LocalPlayer:GetNetworkPing()
 	local randomOffset = Vector3.new(RNG:NextNumber(-1.5, 1.5), 0, RNG:NextNumber(-1.5, 1.5))
 	local predicted = Target.HumanoidRootPart.Position + randomOffset + (Target.HumanoidRootPart.Velocity * (ping * 1.25))
-	local neededVelocity = (predicted - HumanoidRootPart.Position) / (ping * 2)
+	local divisor = math.max(ping * 2, 0.05)
+	local neededVelocity = (predicted - HumanoidRootPart.Position) / divisor
 
 	local oldVelocity = HumanoidRootPart.Velocity
 	HumanoidRootPart.Velocity = neededVelocity
@@ -4441,178 +3737,116 @@ end
 if FluentLoaded then
 Fluent:Notify({
     Title = "手机端提示",
-    Content = "已增加独立触控菜单入口，可直接点击悬浮按钮展开/收起。可在设置页保存并自动加载配置。",
+    Content = "使用 WindUI 原生触控入口展开菜单；主题与配置在统一 UI 分组管理。",
     Duration = 7
 })
 end
 
 local hubLoaded = true
 
--- Mobile-first launcher. Uses supported Fluent Window:Minimize instead of
--- keyboard injection or private Roblox CoreGui topbar implementation.
-local function ToggleMenu()
-    if Window and Window.Minimize then
-        Window:Minimize()
-    elseif Fluent and Fluent.Notify then
-        Fluent:Notify({Title = "菜单不可用", Content = "Starlight 界面未成功加载。", Duration = 3})
-    end
+-- Native WindUI OpenButton owns the mobile launcher.
+for _, previousName in ipairs({"GoonsakenMobileOverlay", "VortexionForsakenOverlay"}) do
+    local previous = PlayerGui:FindFirstChild(previousName)
+    if previous then previous:Destroy() end
 end
 
 local function SetOptionToggle(id)
     if not Fluent or not Fluent.Options then return end
     local option = Fluent.Options[id]
-    if option and option.SetValue then
-        option:SetValue(not option.Value)
-    end
+    if option and option.SetValue then option:SetValue(not option.Value) end
 end
 
-local function CreateMobileLauncher()
-    if not IsMobile then return end
-    -- Clean up the legacy launcher when migrating from Goonsaken without leaving duplicates.
-    for _, previousName in ipairs({"GoonsakenMobileOverlay", "VortexionForsakenOverlay"}) do
-        local previous = PlayerGui:FindFirstChild(previousName)
-        if previous then previous:Destroy() end
-    end
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "VortexionForsakenOverlay"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = false
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    gui.DisplayOrder = 45
-    gui.Parent = PlayerGui
-
-    local holder = Instance.new("Frame")
-    holder.Name = "Launcher"
-    holder.BackgroundTransparency = 1
-    holder.Size = UDim2.fromOffset(52, 52)
-    holder.Position = UDim2.new(0, 10, 0.42, 0)
-    holder.Parent = gui
-
-    local toggle = Instance.new("TextButton")
-    toggle.Name = "MenuButton"
-    toggle.Size = UDim2.fromOffset(52, 52)
-    toggle.BackgroundColor3 = Color3.fromRGB(27, 31, 38)
-    toggle.BorderSizePixel = 0
-    toggle.Text = "菜单"
-    toggle.Font = Enum.Font.GothamBold
-    toggle.TextSize = 15
-    toggle.TextColor3 = Color3.fromRGB(244, 246, 250)
-    toggle.AutoButtonColor = true
-    toggle.Active = true
-    toggle.Parent = holder
-    Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 12)
-    local stroke = Instance.new("UIStroke", toggle)
-    stroke.Color = Color3.fromRGB(77, 89, 107)
-    stroke.Transparency = 0.5
-    stroke.Thickness = 1
-
-    local panel = Instance.new("Frame")
-    panel.Name = "Actions"
-    panel.BackgroundColor3 = Color3.fromRGB(24, 27, 34)
-    panel.BorderSizePixel = 0
-    panel.Position = UDim2.fromOffset(58, 0)
-    panel.Size = UDim2.fromOffset(136, 226)
-    panel.Visible = false
-    panel.Parent = holder
-    Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 10)
-    local panelStroke = Instance.new("UIStroke", panel)
-    panelStroke.Color = Color3.fromRGB(85, 96, 112)
-    panelStroke.Transparency = 0.66
-    local padding = Instance.new("UIPadding", panel)
-    padding.PaddingTop = UDim.new(0, 7)
-    padding.PaddingBottom = UDim.new(0, 7)
-    padding.PaddingLeft = UDim.new(0, 7)
-    padding.PaddingRight = UDim.new(0, 7)
-    local list = Instance.new("UIListLayout", panel)
-    list.Padding = UDim.new(0, 5)
-    list.SortOrder = Enum.SortOrder.LayoutOrder
-
-    local function AddAction(label, callback)
-        local b = Instance.new("TextButton")
-        b.Size = UDim2.new(1, 0, 0, 37)
-        b.BorderSizePixel = 0
-        b.BackgroundColor3 = Color3.fromRGB(42, 47, 56)
-        b.Font = Enum.Font.GothamMedium
-        b.TextSize = 14
-        b.TextColor3 = Color3.fromRGB(243, 246, 249)
-        b.Text = label
-        b.AutoButtonColor = true
-        b.Parent = panel
-        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 7)
-        b.Activated:Connect(function()
-            local ok, err = pcall(callback)
-            if not ok then warn("[Vortexion Mobile] " .. tostring(err)) end
-        end)
-        return b
-    end
-    AddAction("展开 / 收起", ToggleMenu)
-    AddAction("前空翻", function() if frontflipObj and frontflipObj.Flip then frontflipObj.Flip() end end)
-    AddAction("ESP 开关", function() SetOptionToggle("ESPToggle") end)
-    AddAction("自动解谜开关", function() SetOptionToggle("autofixgen") end)
-    AddAction("杀手表情", function()
-        if type(KillerEmoteGUI) == "function" then
-            local prior = PlayerGui:FindFirstChild("KillerEmoteGUI")
-            if prior then prior:Destroy() end
-            KillerEmoteGUI()
-        end
-    end)
-
-    -- Touch/mouse dragging, no high-frequency per-frame hooks.
-    local dragInput, dragStart, startPos
-    local dragging = false
-    local moved = false
-    local function ClampHolder(x, y)
-        local camera = workspace.CurrentCamera
-        local v = camera and camera.ViewportSize or Vector2.new(720, 420)
-        return math.clamp(x, 4, math.max(4, v.X - 58)), math.clamp(y, 4, math.max(4, v.Y - 78))
-    end
-    toggle.InputBegan:Connect(function(input)
-        if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-        dragging = true
-        moved = false
-        dragInput = input
-        dragStart = input.Position
-        startPos = holder.AbsolutePosition
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then dragging = false end
-        end)
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if not dragging or not dragStart then return end
-        if input ~= dragInput and not (dragInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement) then return end
-        local diff = input.Position - dragStart
-        if diff.Magnitude > 8 then moved = true end
-        if not moved then return end
-        local x,y = ClampHolder(startPos.X + diff.X, startPos.Y + diff.Y)
-        holder.Position = UDim2.fromOffset(x,y)
-    end)
-    toggle.Activated:Connect(function()
-        if moved then moved = false; return end
-        panel.Visible = not panel.Visible
-        -- Place the actions panel on the side that has more room.
-        local width = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.X or 800
-        local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(800, 450)
-        local x = holder.AbsolutePosition.X + 206 > viewport.X and -142 or 58
-        local y = holder.AbsolutePosition.Y + 226 > viewport.Y - 8 and -174 or 0
-        panel.Position = UDim2.fromOffset(x, y)
-        local label = panel.Visible and "关闭" or "菜单"
-        toggle.Text = label
-    end)
-    return gui
-end
-
-if IsMobile then
-    CreateMobileLauncher()
-end
-
--- Safe config autoload: was unreachable after the original infinite topbar loop.
-if FluentLoaded and Starlight and Starlight.LoadAutoloadConfig then
-    local ok, err = pcall(function() Starlight:LoadAutoloadConfig() end)
-    if not ok then warn("[Forsaken/Starlight] 自动加载配置失败: " .. tostring(err)) end
+if FluentLoaded and Tabs then
+    Tabs.Survival:AddButton({
+        Title = "前空翻",
+        Callback = function() if frontflipObj and frontflipObj.Flip then frontflipObj.Flip() end end
+    })
+    Tabs.Visual:AddButton({ Title = "ESP 快捷开关", Callback = function() SetOptionToggle("ESPToggle") end })
+    Tabs.Survival:AddButton({ Title = "自动解谜快捷开关", Callback = function() SetOptionToggle("autofixgen") end })
+    Tabs.Visual:AddButton({ Title = "杀手表情", Callback = KillerEmoteGUI })
+    Tabs.Emotes:AddButton({ Title = "刷新装备表情", Callback = KillerEmoteGUI })
+    -- Populate without changing the initial game page.
+    KillerEmoteGUI()
+    Window:SelectTab(1)
 end
 
 -- Avoid writes on every Heartbeat; chat config is optional in some clients.
 if chatWindow then
     pcall(function() chatWindow.Enabled = true end)
+end
+
+---------------------------------------------------------------------------
+-- 四个功能组模块装配 (Combat / Visual / Survival / Guest)
+-- 借鉴 Forsaken-Script-main / Forsaken-Scripts-main 审计结论的增强实现，
+-- 每个组自包含（pcall 隔离），单组失败不影响其余组与主界面。
+---------------------------------------------------------------------------
+local featureGroupApis = {}
+if FluentLoaded and Tabs then
+    local groupCtx = {
+        Players = Players,
+        LocalPlayer = LocalPlayer,
+        RunService = RunService,
+        Workspace = Workspace,
+        UserInputService = UserInputService,
+        TextChatService = TextChatService,
+        Tabs = Tabs,
+        Fluent = Fluent,
+        track = track,
+        Connections = Connections,
+        disconnectAll = disconnectAll,
+        runEvery = runEvery,
+        sessionEnv = sessionEnv,
+        thisSessionId = thisSessionId,
+        IsMobile = IsMobile,
+    }
+    local FEATURE_GROUPS = {
+        { key = "VortexionCombat",   name = "战斗组",   factory = ForsakenCombatFactory },
+        { key = "VortexionVisual",   name = "视觉组",   factory = ForsakenVisualFactory },
+        { key = "VortexionSurvival", name = "生存组",   factory = ForsakenSurvivalFactory },
+        { key = "VortexionGuest",    name = "Guest 组", factory = ForsakenGuestFactory },
+    }
+    for _, group in ipairs(FEATURE_GROUPS) do
+        if type(group.factory) == "function" then
+            local ok, api = pcall(group.factory, groupCtx)
+            if ok and type(api) == "table" then
+                sessionEnv[group.key] = api
+                featureGroupApis[group.key] = api
+            else
+                warn("[Forsaken] 功能组加载失败 " .. group.name .. ": " .. tostring(api))
+            end
+        end
+    end
+end
+
+
+local cleaned = false
+local function cleanupForsaken()
+        if cleaned then return end
+        cleaned = true
+        for key, api in pairs(featureGroupApis) do
+            if type(api.Destroy) == "function" then pcall(api.Destroy) end
+            if sessionEnv[key] == api then sessionEnv[key] = nil end
+        end
+        if sessionEnv.VortexionSessionId == thisSessionId then
+            sessionEnv.VortexionSessionId = thisSessionId + 1
+        end
+        -- Reset enabled callbacks before removing their event connections.
+        for _, option in pairs(Fluent and Fluent.Options or {}) do
+            if option.Value == true and option.SetValue then
+                pcall(function() option:SetValue(false) end)
+            end
+        end
+        for _, conn in pairs(activeConnections) do
+            if conn and conn.Disconnect then pcall(function() conn:Disconnect() end) end
+        end
+        disconnectAll()
+        if statsGui then pcall(function() statsGui:Destroy() end) end
+        pcall(stopvoidrushcontrol)
+        pcall(disableAimbot)
+        pcall(function() ESP:SetEnabled(false) end)
+end
+sessionEnv.VortexionForsakenCleanup = cleanupForsaken
+if FluentLoaded and Fluent.OnDestroy then
+    Fluent:OnDestroy(function() cleanupForsaken() end)
 end
 

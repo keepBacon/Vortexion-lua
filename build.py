@@ -1,69 +1,185 @@
 #!/usr/bin/env python3
-"""Reproducible build of Vortexion - Forsaken (Starlight UI).
-No network requests or GitHub writes are performed.
-"""
+"""Build isolated WindUI bundles offline; this command never publishes files."""
 from pathlib import Path
-import hashlib, json
-ROOT=Path(__file__).resolve().parent
-VENDOR=ROOT/'vendor/Starlight/Source.lua'
-BRIDGE=ROOT/'src/StarlightAdapter.luau'
-CORE=ROOT/'src/ForsakenCore.luau'
-DIST=ROOT/'dist';DIST.mkdir(exist_ok=True)
-core=CORE.read_text(encoding='utf-8')
-starlight=VENDOR.read_text(encoding='utf-8')
-bridge=BRIDGE.read_text(encoding='utf-8')
-assert core.count('local StarlightBridgeFactory = nil\nlocal Starlight = nil\n')==1
-assert starlight.rstrip().endswith('return Starlight')
-assert bridge.lstrip().startswith('-- Vortexion - Forsaken')
-prefix=(
-    '-- Vortexion - Forsaken · Starlight UI · independent source package\n'
-    '-- Starlight © Nebula Softworks, licensed CC BY-NC 4.0; retain vendor/Starlight/LICENSE.\n'
-    '-- This bundle uses Roblox model rbxassetid://132866968194043 at runtime.\n'
-    '-- Build output, do not edit: modify src/*.luau then run python3 build.py.\n'
-    'local Starlight = (function()\n'+starlight+'\nend)()\n'
-    'local StarlightBridgeFactory = (function()\n'+bridge+'\nend)()\n'
-)
-core=core.replace('local StarlightBridgeFactory = nil\nlocal Starlight = nil\n','',1)
-out=DIST/'Vortexion_Forsaken.lua';out.write_text(prefix+core,encoding='utf-8')
-sha=lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
-manifest={'phase':5,'project_name':'Vortexion - Forsaken','ui_project_title':'Forsaken','ui_byline':'- Vortexion','repository_name_proposed':'Vortexion-lua', 'repository':'keepBacon/Vortexion-lua', 'build_tag':'forsaken-sidebar-scroll-v10','status':'local_build_ready_for_publishing','starlight_source_sha256':sha(VENDOR),'core_sha256':sha(CORE),'bridge_sha256':sha(BRIDGE),'output_sha256':sha(out),'output_bytes':out.stat().st_size,'publication':'verify_github_main_after_push','github_repository':'https://github.com/keepBacon/Vortexion-lua','old_repo_touched':False,'roblox_android_tested':False,'luau_compiler_tested':False,'notice':'Build-time metadata cannot verify GitHub deployment; confirm main and Raw URLs after push.'}
-(DIST/'build-manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False),encoding='utf-8')
-# Game-specific bundle shares vendored Starlight without mixing feature logic.
-BLOX=ROOT/'src/BloxStrikeCore.luau'
-blox=BLOX.read_text(encoding='utf-8')
-assert blox.count('local StarlightBridgeFactory = nil\nlocal Starlight = nil\n')==1
-combat=(ROOT/'src/BloxStrikeCombat.luau').read_text(encoding='utf-8')
-visual=(ROOT/'src/BloxStrikeVisual.luau').read_text(encoding='utf-8')
-cosmetic=(ROOT/'src/BloxStrikeCosmetic.luau').read_text(encoding='utf-8')
-assert combat.lstrip().startswith('return function(c)')
-assert visual.lstrip().startswith('return function(c)')
-assert cosmetic.lstrip().startswith('-- BloxStrike')
-blox_prefix=(
-    '-- Vortexion BloxStrike independent build\n'
-    '-- Starlight © Nebula Softworks, CC BY-NC 4.0 (see vendor/Starlight/LICENSE)\n'
-    'local Starlight = (function()\n'+starlight+'\nend)()\n'
-    'local StarlightBridgeFactory = (function()\n'+bridge+'\nend)()\n'
-    'local BloxCombatFactory = (function()\n'+combat+'\nend)()\n'
-    'local BloxVisualFactory = (function()\n'+visual+'\nend)()\n'
-    'local BloxCosmeticFactory = (function()\n'+cosmetic+'\nend)()\n'
-)
-blox_out=DIST/'Vortexion_BloxStrike.lua'
-blox_source=blox.replace('local BloxCombatFactory = nil\n','',1).replace('local BloxVisualFactory = nil\n','',1).replace('local BloxCosmeticFactory = nil\n','',1)
-blox_source=blox_source.replace('local StarlightBridgeFactory = nil\nlocal Starlight = nil\n','',1)
-blox_out.write_text(blox_prefix+blox_source,encoding='utf-8')
-print('BloxStrike bundle:',blox_out.stat().st_size,sha(blox_out))
-print(json.dumps(manifest,indent=2,ensure_ascii=False))
+import hashlib
+import json
+import re
 
-# Dedicated AOTR bundles use the same vendored Starlight but isolated application state.
-for name,core_file in (("Lobby","AOTRLobby.luau"),("Battle","AOTRBattle.luau")):
-    common=(ROOT/"src/AOTRCommon.luau").read_text(encoding="utf-8")
-    body=(ROOT/"src"/core_file).read_text(encoding="utf-8")
-    header=(
-        "-- Vortexion AOTR "+name+" - generated bundle, do not edit\n"
-        "local Starlight = (function()\n"+starlight+"\nend)()\n"
-        "local StarlightBridgeFactory = (function()\n"+bridge+"\nend)()\n"
-        "local AOTRCommon = (function()\n"+common+"\nend)()\n"
+ROOT = Path(__file__).resolve().parent
+VENDOR = "vendor/WindUI/Source.lua"
+BRIDGE = "src/WindAdapter.luau"
+SERVER_SWITCH = "src/ServerSwitch.luau"
+ROUTER = "src/GameRouter.luau"
+
+FORSAKEN_MODULES = [
+    ("ForsakenCombatFactory", "ForsakenCombat.luau"),
+    ("ForsakenVisualFactory", "ForsakenVisual.luau"),
+    ("ForsakenSurvivalFactory", "ForsakenSurvival.luau"),
+    ("ForsakenGuestFactory", "ForsakenGuest.luau"),
+]
+BLOX_MODULES = [
+    ("BloxCommonFactory", "BloxStrikeCommon.luau"),
+    ("BloxCloakFactory", "BloxStrikeCloak.lua"),
+    ("BloxCombatFactory", "BloxStrikeCombat.luau"),
+    ("BloxBulletFactory", "BloxStrikeBullet.luau"),
+    ("BloxVisualFactory", "BloxStrikeVisual.luau"),
+    ("BloxCosmeticFactory", "BloxStrikeCosmetic.luau"),
+]
+AOTR_BATTLE_MODULES = [
+    ("AOTRCloakFactory", "AOTRCloak.lua"),
+    ("AOTRTitansFactory", "AOTRTitans.luau"),
+    ("AOTRCombatFactory", "AOTRCombat.luau"),
+    ("AOTRMovementFactory", "AOTRMovement.luau"),
+    ("AOTRESPFactory", "AOTRESP.luau"),
+    ("AOTRFarmFactory", "AOTRFarm.luau"),
+]
+SCP_MODULES = [
+    ("SCPCommonFactory", "SCPCommon.luau"),
+    ("SCPCandidatesFactory", "SCPCandidates.luau"),
+    ("SCPCloakFactory", "SCPCloak.lua"),
+    ("SCPCameraFactory", "SCPCamera.luau"),
+    ("SCPSilentAimFactory", "SCPSilentAim.luau"),
+    ("SCPHitboxFactory", "SCPHitbox.luau"),
+    ("SCPMovementFactory", "SCPMovement.luau"),
+    ("SCPESPFactory", "SCPESP.luau"),
+]
+GAMES = {
+    "Forsaken": ("ForsakenCore.luau", FORSAKEN_MODULES),
+    "BloxStrike": ("BloxStrikeCore.luau", BLOX_MODULES),
+    "AOTR_Lobby": ("AOTRLobby.luau", [("AOTRCommon", "AOTRCommon.luau")]),
+    "AOTR_Battle": ("AOTRBattle.luau", [("AOTRCommon", "AOTRCommon.luau")] + AOTR_BATTLE_MODULES),
+    "SCP": ("SCPCore.luau", SCP_MODULES),
+}
+
+HEADER = (
+    "-- Vortexion WindUI - generated offline; not published to GitHub.\n"
+    "-- WindUI attribution and license are retained in vendor/WindUI/.\n"
+    "-- Forsaken retains runtime model rbxassetid://132866968194043.\n"
+    "-- Modify src/*.luau and run python3 build.py; do not edit this output.\n"
+)
+PRELOAD = (
+    "local client = (getgenv and getgenv()) or _G\n"
+    "local previousBridge = client.VortexionWindBridge\n"
+    "if type(previousBridge) == \"table\" and type(previousBridge.Destroy) == \"function\" then\n"
+    "    local ok, err = pcall(function() previousBridge:Destroy() end)\n"
+    "    if not ok then warn(\"[Vortexion/Wind] Previous UI cleanup: \" .. tostring(err)) end\n"
+    "    if client.VortexionWindBridge == previousBridge then client.VortexionWindBridge = nil end\n"
+    "    task.wait(0.5)\n"
+    "end\n"
+)
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def embed(name, source):
+    return "local " + name + " = (function()\n" + source + "\nend)()\n"
+
+
+def strip_placeholder(source, name):
+    pattern = r"(?m)^local " + re.escape(name) + r"\s*=\s*nil[ \t]*\n"
+    matches = list(re.finditer(pattern, source))
+    if len(matches) > 1:
+        raise ValueError("Duplicate placeholder: " + name)
+    return re.sub(pattern, "", source, count=1)
+
+
+def build(root=ROOT):
+    root = Path(root)
+    sources = {}
+    source_hashes = {}
+
+    def read(relative):
+        if relative not in sources:
+            path = root / relative
+            if not path.is_file():
+                raise FileNotFoundError("Wind build dependency not ready: " + str(path))
+            data = path.read_bytes()
+            source = data.decode("utf-8")
+            source_hashes[relative] = hashlib.sha256(data).hexdigest()
+            if not source.strip():
+                raise ValueError("Empty build dependency: " + relative)
+            sources[relative] = source
+        return sources[relative]
+
+    shared = HEADER + PRELOAD + embed("WindUI", read(VENDOR))
+    # Adapter closures must capture the already-declared server controller factory.
+    for name, path in (("ServerSwitchFactory", SERVER_SWITCH), ("WindBridgeFactory", BRIDGE)):
+        source = read(path)
+        if "return function(" not in source:
+            raise ValueError("Missing factory return: " + path)
+        shared += embed(name, source)
+    router = read(ROUTER)
+    game_bodies = {}
+    outputs = {}
+    for name, (core_file, modules) in GAMES.items():
+        body = read("src/" + core_file)
+        if re.search(r"\bStarlight(?:BridgeFactory)?\b", body):
+            raise ValueError("Core WindUI rename not ready: " + core_file)
+        body = strip_placeholder(strip_placeholder(body, "WindBridgeFactory"), "WindUI")
+        prefix = ""
+        for factory, filename in modules:
+            source = read("src/" + filename)
+            if "return function(" not in source:
+                raise ValueError("Missing module factory return: " + filename)
+            prefix += embed(factory, source)
+            body = strip_placeholder(body, factory)
+        # Even standalone entries retain module-local scope and their original early returns.
+        game_bodies[name] = prefix + body + "\n"
+        outputs["Vortexion_" + name + ".lua"] = (
+            shared + embed("GameRouter", router)
+            + "local entry = function()\n" + game_bodies[name] + "end\n"
+            + "return GameRouter.Run(WindUI, WindBridgeFactory, entry, game.GameId, game.PlaceId, "
+            + json.dumps(name) + ")\n"
+        )
+
+    unified = shared + embed("GameRouter", router)
+    unified += "local GameEntries = {\n"
+    for name, body in game_bodies.items():
+        unified += "    [" + json.dumps(name) + "] = function()\n" + body + "    end,\n"
+    unified += (
+        "}\n"
+        "local route, reason = GameRouter.Resolve(game.GameId, game.PlaceId)\n"
+        "local entry = route and GameEntries[route] or nil\n"
+        "return GameRouter.Run(WindUI, WindBridgeFactory, entry, game.GameId, game.PlaceId, reason)\n"
     )
-    output=DIST/("Vortexion_AOTR_"+name+".lua")
-    output.write_text(header+body, encoding="utf-8")
-    print("AOTR",name,output.stat().st_size,sha(output))
+    outputs["Vortexion_Wind.lua"] = unified
+
+    # Validate all inputs before replacing any distributable.
+    dist = root / "dist"
+    dist.mkdir(exist_ok=True)
+    bundles = {}
+    for filename, source in outputs.items():
+        out = dist / filename
+        out.write_text(source, encoding="utf-8")
+        bundles[filename] = {"sha256": sha(out), "bytes": out.stat().st_size}
+    manifest = {
+        "project_name": "Vortexion WindUI",
+        "build_tag": "wind-unified-v1",
+        "status": "local_build_unpublished",
+        "publication": "not_published_to_github",
+        "repository": "keepBacon/Vortexion-lua",
+        "vendor_path": VENDOR,
+        "vendor_sha256": source_hashes[VENDOR],
+        "windui_source_sha256": source_hashes[VENDOR],
+        "sources": {path: source_hashes[path] for path in sorted(sources)},
+        "bundles": bundles,
+        "outputs": sorted(bundles),
+        "unified_entry": "dist/Vortexion_Wind.lua",
+        "roblox_android_tested": False,
+        "luau_compiler_tested": False,
+        "old_repo_touched": False,
+        "notice": "Offline build only; no upload or Roblox Android runtime verification.",
+    }
+    (dist / "build-manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return manifest
+
+
+if __name__ == "__main__":
+    result = build()
+    for filename, metadata in result["bundles"].items():
+        print(filename, metadata["bytes"], metadata["sha256"])
+    print("PASS", len(result["outputs"]), "offline outputs; GitHub unpublished; Roblox Android unverified")

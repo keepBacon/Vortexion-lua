@@ -1,38 +1,23 @@
--- Vortexion unified loader: exact Roblox experience routing.
--- Match Universe/GameId first so that all sub-places of a game share one branch.
-local ROUTES = {
-    [6331902150] = "dist/Vortexion_Forsaken.lua",
-    [7633926880] = "dist/Vortexion_BloxStrike.lua",
-}
-local PLACE_FALLBACK = {
-    [18687417158] = "dist/Vortexion_Forsaken.lua",
-    [114234929420007] = "dist/Vortexion_BloxStrike.lua",
-}
-local AOTR_UNIVERSE = 4658598196
-local AOTR_PLACES = {
-    [13379208636] = "dist/Vortexion_AOTR_Lobby.lua",
-    [14916516914] = "dist/Vortexion_AOTR_Lobby.lua",
-    [13379349730] = "dist/Vortexion_AOTR_Battle.lua",
-    [14638336319] = "dist/Vortexion_AOTR_Battle.lua",
-    [14012874501] = "dist/Vortexion_AOTR_Battle.lua",
-    [13904207646] = "dist/Vortexion_AOTR_Battle.lua",
-}
-local base = "https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/"
-local universe = tonumber(game.GameId)
-local place = tonumber(game.PlaceId)
-local path = universe == AOTR_UNIVERSE and AOTR_PLACES[place] or ROUTES[universe] or PLACE_FALLBACK[place]
-if universe == AOTR_UNIVERSE and not AOTR_PLACES[place] then
-    warn("[Vortexion/AOTR] Unsupported or trade scene: "..tostring(place))
+-- Downloads only the unified WindUI entry; routing lives inside that bundle.
+-- This isolated Wind build has NOT been published to the GitHub URL below.
+local env = (getgenv and getgenv()) or _G
+local base = env.VortexionSourceBase
+local path = "dist/Vortexion_Wind.lua"
+if base == nil then
+    base = "https://raw.githubusercontent.com/keepBacon/Vortexion-lua/main/"
+    warn("[Vortexion/Wind] This Wind build is not published to GitHub. Set VortexionSourceBase to your hosting base before loading.")
+end
+if type(base) ~= "string" or not base:match("^https?://") then
+    warn("[Vortexion/Wind] VortexionSourceBase must be an HTTP(S) base URL")
     return
 end
-if not path then
-    warn(("[Vortexion] Unsupported experience: GameId=%s, PlaceId=%s"):format(tostring(universe), tostring(place)))
-    return
-end
+base = base:gsub("/+$", "") .. "/"
 local ok, err = pcall(function()
     local code = game:HttpGet(base .. path)
-    local entry = loadstring(code)
-    assert(type(entry) == "function", "Downloaded script did not compile")
+    local entry, compileError = loadstring(code)
+    assert(type(entry) == "function", "Unified Wind entry did not compile: " .. tostring(compileError))
     entry()
 end)
-if not ok then warn("[Vortexion] Load failed (" .. path .. "): " .. tostring(err)) end
+if not ok then
+    warn("[Vortexion/Wind] Load failed (" .. base .. path .. "): " .. tostring(err))
+end

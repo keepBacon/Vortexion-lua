@@ -7699,16 +7699,16 @@ function Starlight:CreateWindow(WindowSettings)
 											inputinstance.Text = NestedElement.Values.Transparency == nil
 												and string.format(
 													"#%02X%02X%02X",
-													color.R * 0xFF,
-													color.G * 0xFF,
-													color.B * 0xFF
+													math.floor(color.R * 0xFF + 0.5),
+													math.floor(color.G * 0xFF + 0.5),
+													math.floor(color.B * 0xFF + 0.5)
 												)
 												or string.format(
 													"#%02X%02X%02X%02X",
-													color.R * 0xFF,
-													color.G * 0xFF,
-													color.B * 0xFF,
-													(1 - NestedElement.Values.Transparency) * 0xFF
+													math.floor(color.R * 0xFF + 0.5),
+													math.floor(color.G * 0xFF + 0.5),
+													math.floor(color.B * 0xFF + 0.5),
+													math.floor((1 - NestedElement.Values.Transparency) * 0xFF + 0.5)
 												)
 										end
 										if Input.Name == "Alpha" then
@@ -7799,7 +7799,7 @@ function Starlight:CreateWindow(WindowSettings)
 
 								local color = Color3.fromHSV(h, s, v)
 								local hex =
-									string.format("#%02X%02X%02X", color.R * 0xFF, color.G * 0xFF, color.B * 0xFF)
+									string.format("#%02X%02X%02X", math.floor(color.R * 0xFF + 0.5), math.floor(color.G * 0xFF + 0.5), math.floor(color.B * 0xFF + 0.5))
 
 								UserInputService.InputEnded:Connect(function(input)
 									if
@@ -8043,16 +8043,16 @@ function Starlight:CreateWindow(WindowSettings)
 												inputinstance.Text = NestedElement.Values.Transparency == nil
 													and string.format(
 														"#%02X%02X%02X",
-														NestedElement.Values.CurrentValue.R * 0xFF,
-														NestedElement.Values.CurrentValue.G * 0xFF,
-														NestedElement.Values.CurrentValue.B * 0xFF
+														math.floor(NestedElement.Values.CurrentValue.R * 0xFF + 0.5),
+														math.floor(NestedElement.Values.CurrentValue.G * 0xFF + 0.5),
+														math.floor(NestedElement.Values.CurrentValue.B * 0xFF + 0.5)
 													)
 													or string.format(
 														"#%02X%02X%02X%02X",
-														NestedElement.Values.CurrentValue.R * 0xFF,
-														NestedElement.Values.CurrentValue.G * 0xFF,
-														NestedElement.Values.CurrentValue.B * 0xFF,
-														(1 - NestedElement.Values.Transparency) * 0xFF
+														math.floor(NestedElement.Values.CurrentValue.R * 0xFF + 0.5),
+														math.floor(NestedElement.Values.CurrentValue.G * 0xFF + 0.5),
+														math.floor(NestedElement.Values.CurrentValue.B * 0xFF + 0.5),
+														math.floor((1 - NestedElement.Values.Transparency) * 0xFF + 0.5)
 													)
 											end
 										end)

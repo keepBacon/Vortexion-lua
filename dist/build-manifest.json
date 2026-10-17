@@ -1,21 +1,85 @@
 {
-  "phase": 5,
-  "project_name": "Vortexion - Forsaken",
-  "ui_project_title": "Forsaken",
-  "ui_byline": "- Vortexion",
-  "repository_name_proposed": "Vortexion-lua",
-  "repository": "keepBacon/Vortexion-lua",
-  "build_tag": "forsaken-sidebar-scroll-v10",
-  "status": "local_build_ready_for_publishing",
-  "starlight_source_sha256": "030a31d9c48d35caefee6ce72c6dba9fef6a2e3f817248fefd39001b8c55c99b",
-  "core_sha256": "b1d245a3d3ee831e8bd3a074fc994749b604a204b8d7e337c2f149dd5a8b5c23",
-  "bridge_sha256": "08df2e27c867080d2e77a35587c4e6aaaf245d6aea34702e0846f355afc8e26b",
-  "output_sha256": "37efb55479e1a65a0d8b0d4ebe57a7b3ffae05ddf2adf2cc55dcf6c95e43b4b4",
-  "output_bytes": 577095,
-  "publication": "verify_github_main_after_push",
-  "github_repository": "https://github.com/keepBacon/Vortexion-lua",
+  "build_tag": "wind-unified-v1",
+  "bundles": {
+    "Vortexion_AOTR_Battle.lua": {
+      "bytes": 1536193,
+      "sha256": "68f2136202a7694db466b1f4ab169ce806d2865436369856906487f92209c6a6"
+    },
+    "Vortexion_AOTR_Lobby.lua": {
+      "bytes": 1465064,
+      "sha256": "0a6c5de1868c26d117033bb9e03a96ff40f1fbf4048f63c12c69663f15f0d71e"
+    },
+    "Vortexion_BloxStrike.lua": {
+      "bytes": 1592717,
+      "sha256": "1533ea80c55279f8e4a93284a4058b37a1940bdc5716498ca54cc88d4d8f4706"
+    },
+    "Vortexion_Forsaken.lua": {
+      "bytes": 1755657,
+      "sha256": "73e38394d837c94d340c9332d4c6d559a98e90c6c528bde9e7fec453a8679c80"
+    },
+    "Vortexion_SCP.lua": {
+      "bytes": 1567301,
+      "sha256": "54aa1c8d2f47bee4d9683a1cd541faec7c46de8496ea6c96701ef3dffd30741b"
+    },
+    "Vortexion_Wind.lua": {
+      "bytes": 2154180,
+      "sha256": "ba80865b4a741f8a57a8490be5d449d926aad757dea53fc8295372de8c6076e3"
+    }
+  },
+  "luau_compiler_tested": true,
+  "notice": "Offline build only; no upload or Roblox Android runtime verification.",
   "old_repo_touched": false,
+  "outputs": [
+    "Vortexion_AOTR_Battle.lua",
+    "Vortexion_AOTR_Lobby.lua",
+    "Vortexion_BloxStrike.lua",
+    "Vortexion_Forsaken.lua",
+    "Vortexion_SCP.lua",
+    "Vortexion_Wind.lua"
+  ],
+  "project_name": "Vortexion WindUI",
+  "publication": "not_published_to_github",
+  "repository": "keepBacon/Vortexion-lua",
   "roblox_android_tested": false,
-  "luau_compiler_tested": false,
-  "notice": "Source-level sidebar/FOV fix; four bundles rebuilt. Roblox Android runtime not tested."
+  "sources": {
+    "src/AOTRBattle.luau": "79773bb50c5c3cea9f37ea6dbd53d9e0f99046be5741afdcdb55f784b9dbb6e4",
+    "src/AOTRCloak.lua": "0fdf01dc2022edd90b5733105026c4a88e75fb329cdac1af15324f61c92596ed",
+    "src/AOTRCombat.luau": "0fa29d14107677debd6b7ccc48ccba8ca63a455eee690b06d022f8a986234979",
+    "src/AOTRCommon.luau": "ef802c843511515d83d316d99a3f623183b4192ddc866802d6e970839a909370",
+    "src/AOTRESP.luau": "257d004647c1518f9cef26eccfabf0325b28e479293f322f45bb592996695de4",
+    "src/AOTRFarm.luau": "7146f18bbb5fc4ce7dc7ed72fe60739acdf2a9328391e4ed0dc75f820632b11b",
+    "src/AOTRLobby.luau": "87ad2e8c82226ebcd8b0783ac3ce24a1ef902d662343a517176bf21cbab218f9",
+    "src/AOTRMovement.luau": "4de9b57f0caf09fd6c072df12698e2a10f40b3242f25378beb9d7d64428078ec",
+    "src/AOTRTitans.luau": "8c55c4ecf8b91e4e44239cead676fda1113fda17a7541220796a707104921160",
+    "src/BloxStrikeBullet.luau": "801612328f9e1516ba37fb1b347fbd26cc145880219aca6d97181b33fd0df995",
+    "src/BloxStrikeCloak.lua": "e2ae697b026ac5f0bed64ab84f0f022d41b166b193897ce22a6680c0383189c4",
+    "src/BloxStrikeCombat.luau": "a797bafedd1a995fe35e48bf3926460a5febb809f49b7d824f335086105ab1d4",
+    "src/BloxStrikeCommon.luau": "63b1f197e95348946332980f7a823bed792437b79845503fdaa1c26df71984bb",
+    "src/BloxStrikeCore.luau": "d151550644e6ae38f557254d535431566dd6ca679355fa2d49e4f3a70cfcac15",
+    "src/BloxStrikeCosmetic.luau": "15fc3a6a478e9c10335b5e3f48f815f60e5a2a8936c460a92e1c279c78609213",
+    "src/BloxStrikeVisual.luau": "3b2137cc998f16a97c99faba8a5c60fd129e6f07e2fdff6ddc09305609b8fde4",
+    "src/ForsakenCombat.luau": "8a2209ee52a6b07abc9958d31e1c09f79772c925dc48020053ecd41db9132a24",
+    "src/ForsakenCore.luau": "fbb08750adb05928a352941818182625b1e2a0378cd1f885c8f84268f27d698e",
+    "src/ForsakenGuest.luau": "557b98e89dc4fe4ee6462dfeb56fb9e2abe748f5536d8916eb42dae916608ac4",
+    "src/ForsakenSurvival.luau": "072462b6cb51e3395a2aebbf6359badd04a1262299a64ebafa19138344704645",
+    "src/ForsakenVisual.luau": "106877a9866171fe2c2392d92689414b21e0be0803216b71df9ae24b36fb1517",
+    "src/GameRouter.luau": "d38f4117ea6aec535d03460a681e39ff009c238c09360fb14876f78b1959d7a6",
+    "src/SCPCamera.luau": "dcb1afda4dc974a315a4a278e5e894c756b5e72aa9d5a71052e3780417a90274",
+    "src/SCPCandidates.luau": "66731652f08aecedc50d37b6c080a77565d7e599b192bd1baf3ced18792146e9",
+    "src/SCPCloak.lua": "6a3640e73ef4dd2f532f73b64aa970a1d6abb2e77e88e175ec7b86a0d6c4c7c8",
+    "src/SCPCommon.luau": "54c065a9527c3db68966d4149952e3482ba8e796cc69a1da0a135f18d97e0966",
+    "src/SCPCore.luau": "be094f67920fc91adf1db648a21d5d6329900039aae2d0da4995416b219cef90",
+    "src/SCPESP.luau": "3336b54a6e371ae891692612a343f50dc9f649b3684e66b18afed0ec70e01aa3",
+    "src/SCPHitbox.luau": "92bcfe9fa2a60823872d393fd70d1b59d1ae944133f9eb8e8c5a4cc75c98f5e6",
+    "src/SCPMovement.luau": "ae97afebe8523a9063e1598b455c0088bc2ebaf2573118264504e98fd152d47d",
+    "src/SCPSilentAim.luau": "c26edcc01c5506ff058daeec8b72c102be02a185c9401213efd676d721de544f",
+    "src/ServerSwitch.luau": "f5569973815af65392956ef811ea07b9bad4877af28d98a3566fa085973b994f",
+    "src/WindAdapter.luau": "4fc20bb39b9a5410e0619d3fd65d41644e5203b162cbd052f12811ec7b9b14df",
+    "vendor/WindUI/Source.lua": "e29ebad6907d6293731d1de042d6aec4a9428fcddbed8a8f19ef5f4ce05c6d05"
+  },
+  "status": "local_build_unpublished",
+  "unified_entry": "dist/Vortexion_Wind.lua",
+  "vendor_path": "vendor/WindUI/Source.lua",
+  "vendor_sha256": "e29ebad6907d6293731d1de042d6aec4a9428fcddbed8a8f19ef5f4ce05c6d05",
+  "windui_source_sha256": "e29ebad6907d6293731d1de042d6aec4a9428fcddbed8a8f19ef5f4ce05c6d05"
 }
