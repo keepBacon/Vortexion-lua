@@ -1,9 +1,9 @@
 {
-  "build_tag": "loader-v2-modular-r2.11-feature-trace",
+  "build_tag": "loader-v2-modular-r2.12-runtime-evidence",
   "core": {
-    "bytes": 1468675,
+    "bytes": 1473105,
     "path": "dist/Vortexion_Core.lua",
-    "sha256": "97c0c45edb9e704190424ed835e379261be519facf38099db4d98ab94b722903"
+    "sha256": "191a3c273747ce5552b03ecdc2690a88adf59b3935703d28172f62ea1cc8ee54"
   },
   "fallback": "standalone-bundle-manual-only",
   "modules": {
@@ -23,9 +23,9 @@
       "sha256": "151fb4fae930a1c902ad452657709433de9a96b7fb3451f68d58480733a1cbdb"
     },
     "Forsaken": {
-      "bytes": 39706,
+      "bytes": 40332,
       "path": "dist/Vortexion_Module_Forsaken.lua",
-      "sha256": "36ec46fadfdf6d211f09d31c1ebe85c3a060b9e476453e21093e500a54636e55"
+      "sha256": "18e3375371c8167b8a0ab0e5f95f9048ecb04fd1eca66472717c2234cfd16566"
     },
     "SCP": {
       "bytes": 127959,

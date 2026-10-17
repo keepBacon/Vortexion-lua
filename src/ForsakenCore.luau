@@ -38,6 +38,7 @@ local state = {alive = true, killers = false, survivors = false,
     maxDistance = 240, alertDistance = 35, markers = {}, lastAlert = 0,
     ticker = nil, originalFov = setmetatable({}, {__mode="k"}),
     scans = 0, objects = 0, lastProblem = "none",
+    candidateCount = 0, inRangeCount = 0, markerFailures = 0,
     lastScanReason = "尚未开始", scanMode = "idle", stateRepairs = 0,
     characterGeneration = 0, spectatorScans = 0, reconcileElapsed = 0,
     watchConnection = nil, lifecycleConnections = {}}
@@ -135,12 +136,15 @@ local function markerFor(model, kind)
         or kind == "Survivor" and Color3.fromRGB(78, 176, 121)
         or Color3.fromRGB(245, 191, 85)
     highlight.OutlineColor = highlight.FillColor
-    highlight.Parent = gui
+    -- Parent to the actual target, not PlayerGui. Roblox supports the model-owned
+    -- form directly, while some clients intermittently suppress PlayerGui highlights.
+    highlight.Parent = model
     state.markers[model] = highlight
     return highlight
 end
 local function tickVisual()
     state.scans += 1
+    state.candidateCount, state.inRangeCount = 0, 0
     -- The camera is an independent observer during death/spectate. Do not
     -- disable ESP merely because the player's previous character was removed.
     local playerRoot = getRoot(user.Character)
@@ -168,6 +172,7 @@ local function tickVisual()
     local budget = 32 -- Bound per-refresh allocations on mobile.
     local nearestThreat
     for model, kind in pairs(required) do
+        state.candidateCount += 1
         local root = getRoot(model) or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
         if root and root:IsA("BasePart") then
             local distance = (root.Position - origin).Magnitude
@@ -177,10 +182,14 @@ local function tickVisual()
             local show = (kind == "Killer" and state.killers)
                 or (kind == "Survivor" and state.survivors)
                 or (kind == "Generator" and state.generators)
-            if show and distance <= state.maxDistance and budget > 0 then
-                budget -= 1
-                visible[model] = true
-                safe("highlight", function() markerFor(model, kind) end)
+            if show and distance <= state.maxDistance then
+                state.inRangeCount += 1
+                if budget > 0 then
+                    budget -= 1
+                    local ok = safe("highlight", function() markerFor(model, kind) end)
+                    if ok then visible[model] = true
+                    else state.markerFailures = state.markerFailures + 1 end
+                end
             end
         end
     end
@@ -330,7 +339,7 @@ tabs.system:AddButton({Title="检查游戏结构", Callback=function()
             tostring(native), tostring(option and option.Value), tostring(state[field]))
     end
     local msg = ("Killers=%s %d/%d Survivors=%s %d/%d Markers=%d Refresh=%d %s Error=%s\n" ..
-        "%s / %s / %s\n模式=%s 原因=%s 状态修复=%d 角色代次=%d 观战扫描=%d")
+        "%s / %s / %s\n模式=%s 原因=%s 状态修复=%d 角色代次=%d 观战扫描=%d 候选=%d 范围内=%d 高亮异常=%d")
         :format(tostring(killers~=nil), kReady, kTotal,
             tostring(survivors~=nil), sReady, sTotal,
             state.objects, state.scans, mode, state.lastProblem,
@@ -338,7 +347,8 @@ tabs.system:AddButton({Title="检查游戏结构", Callback=function()
             optionInfo("FsSurvivorESP", "Survivor"),
             optionInfo("FsGeneratorESP", "Generator"),
             state.scanMode, state.lastScanReason, state.stateRepairs,
-            state.characterGeneration, state.spectatorScans)
+            state.characterGeneration, state.spectatorScans,
+            state.candidateCount, state.inRangeCount, state.markerFailures)
     bridge:Notify({Title="Forsaken 诊断", Content=msg, Duration=12})
 end})
 tabs.system:AddButton({Title="重进当前游戏", Callback=function()

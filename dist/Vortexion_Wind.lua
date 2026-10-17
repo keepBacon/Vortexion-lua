@@ -41341,6 +41341,80 @@ return function(WindUI, config)
                 {"wind_auto_fit", true},
             })
         end})
+        -- On-demand observable client probe, shared by all five game entries.
+        -- It does NOT claim that remote gameplay has been accepted by the server.
+        local runtimeProbeBusy = false
+        bridge.RuntimeProbeLast = "尚未执行客户端自检"
+        local function probeClientRuntime()
+            if runtimeProbeBusy or not bridge.Active then return end
+            runtimeProbeBusy = true
+            local lines = {"Vortexion R2.12 / CLIENT PROBE", "Route-PlaceId=" .. tostring(game.PlaceId)}
+            local function put(key, value) lines[#lines + 1] = key .. "=" .. tostring(value) end
+            local heartbeatProbe = nil
+            local cameraProbe, cameraOriginal, cameraTarget = nil, nil, nil
+            local ok, err = pcall(function()
+                local players = game:GetService("Players")
+                local runService = game:GetService("RunService")
+                local user = players.LocalPlayer
+                local character = user and user.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                local camera = world.CurrentCamera
+                put("BridgeActive", bridge.Active)
+                put("Character", character and character.Name or "none")
+                put("HumanoidHealth", humanoid and humanoid.Health or "none")
+                put("CameraAvailable", camera ~= nil)
+                local frames = 0
+                heartbeatProbe = runService.Heartbeat:Connect(function() frames = frames + 1 end)
+                task.wait(0.3)
+                heartbeatProbe:Disconnect()
+                heartbeatProbe = nil
+                put("HeartbeatFrames/0.3s", frames)
+                if camera then
+                    local base = camera.FieldOfView
+                    local probe = base > 115 and base - 3 or base + 3
+                    cameraProbe, cameraOriginal, cameraTarget = camera, base, probe
+                    local written = false
+                    local writeOk, writeErr = pcall(function()
+                        camera.FieldOfView = probe
+                        written = math.abs(camera.FieldOfView - probe) < 0.05
+                    end)
+                    put("CameraWriteImmediate", writeOk and written)
+                    if not writeOk then put("CameraWriteError", writeErr) end
+                    task.wait(0.18)
+                    local persisted = false
+                    pcall(function() persisted = math.abs(camera.FieldOfView - probe) < 0.05 end)
+                    put("CameraWriteAfter0.18s", persisted)
+                end
+            end)
+            -- Even when service access or task.wait throws, release a temporary
+            -- heartbeat connection and restore only a value still owned by us.
+            if heartbeatProbe then pcall(function() heartbeatProbe:Disconnect() end) end
+            if cameraProbe and cameraOriginal ~= nil and cameraTarget ~= nil then
+                pcall(function()
+                    if math.abs(cameraProbe.FieldOfView - cameraTarget) < 0.05 then
+                        cameraProbe.FieldOfView = cameraOriginal
+                    end
+                end)
+            end
+            if not ok then put("ProbeError", err) end
+            put("GameFeatureHealth", bridge:FeatureHealth())
+            bridge.RuntimeProbeLast = table.concat(lines, "\n")
+            runtimeProbeBusy = false
+            if bridge.Active then
+                print("[Vortexion/RuntimeProbe]\n" .. bridge.RuntimeProbeLast)
+                bridge:Notify({Title="客户端能力自检（非服务器确认）", Content=bridge.RuntimeProbeLast:sub(1,1500), Duration=12})
+            end
+        end
+        debugPage:AddButton({Title="运行客户端自检（短暂检测相机FOV）", Callback=function()
+            if not runtimeProbeBusy then task.spawn(probeClientRuntime) end
+        end})
+        debugPage:AddButton({Title="复制客户端自检结果", Callback=function()
+            local copyFn = setclipboard or toclipboard or env.setclipboard or env.toclipboard
+            if type(copyFn) == "function" then
+                local ok = pcall(copyFn, bridge.RuntimeProbeLast)
+                bridge:Notify({Title="客户端自检", Content=ok and "已复制" or "剪贴板写入失败"})
+            else bridge:Notify({Title="客户端自检", Content="剪贴板不可用；请查看控制台输出"}) end
+        end})
         debugPage:AddToggle("wind_debug", {Title = "WindUI 原生调试", Default = config.Debug == true, Callback = function(v) native.Debug = v end})
         debugPage:AddToggle("wind_trace", {Title = "桥接回调跟踪", Default = false, Callback = function(v) bridge.Trace = v end})
         local diagnostic = debugPage:AddParagraph({Title = "运行诊断", Content = "点击刷新获取当前状态。"})
@@ -42497,6 +42571,7 @@ local state = {alive = true, killers = false, survivors = false,
     maxDistance = 240, alertDistance = 35, markers = {}, lastAlert = 0,
     ticker = nil, originalFov = setmetatable({}, {__mode="k"}),
     scans = 0, objects = 0, lastProblem = "none",
+    candidateCount = 0, inRangeCount = 0, markerFailures = 0,
     lastScanReason = "尚未开始", scanMode = "idle", stateRepairs = 0,
     characterGeneration = 0, spectatorScans = 0, reconcileElapsed = 0,
     watchConnection = nil, lifecycleConnections = {}}
@@ -42594,12 +42669,15 @@ local function markerFor(model, kind)
         or kind == "Survivor" and Color3.fromRGB(78, 176, 121)
         or Color3.fromRGB(245, 191, 85)
     highlight.OutlineColor = highlight.FillColor
-    highlight.Parent = gui
+    -- Parent to the actual target, not PlayerGui. Roblox supports the model-owned
+    -- form directly, while some clients intermittently suppress PlayerGui highlights.
+    highlight.Parent = model
     state.markers[model] = highlight
     return highlight
 end
 local function tickVisual()
     state.scans += 1
+    state.candidateCount, state.inRangeCount = 0, 0
     -- The camera is an independent observer during death/spectate. Do not
     -- disable ESP merely because the player's previous character was removed.
     local playerRoot = getRoot(user.Character)
@@ -42627,6 +42705,7 @@ local function tickVisual()
     local budget = 32 -- Bound per-refresh allocations on mobile.
     local nearestThreat
     for model, kind in pairs(required) do
+        state.candidateCount += 1
         local root = getRoot(model) or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
         if root and root:IsA("BasePart") then
             local distance = (root.Position - origin).Magnitude
@@ -42636,10 +42715,14 @@ local function tickVisual()
             local show = (kind == "Killer" and state.killers)
                 or (kind == "Survivor" and state.survivors)
                 or (kind == "Generator" and state.generators)
-            if show and distance <= state.maxDistance and budget > 0 then
-                budget -= 1
-                visible[model] = true
-                safe("highlight", function() markerFor(model, kind) end)
+            if show and distance <= state.maxDistance then
+                state.inRangeCount += 1
+                if budget > 0 then
+                    budget -= 1
+                    local ok = safe("highlight", function() markerFor(model, kind) end)
+                    if ok then visible[model] = true
+                    else state.markerFailures = state.markerFailures + 1 end
+                end
             end
         end
     end
@@ -42789,7 +42872,7 @@ tabs.system:AddButton({Title="检查游戏结构", Callback=function()
             tostring(native), tostring(option and option.Value), tostring(state[field]))
     end
     local msg = ("Killers=%s %d/%d Survivors=%s %d/%d Markers=%d Refresh=%d %s Error=%s\n" ..
-        "%s / %s / %s\n模式=%s 原因=%s 状态修复=%d 角色代次=%d 观战扫描=%d")
+        "%s / %s / %s\n模式=%s 原因=%s 状态修复=%d 角色代次=%d 观战扫描=%d 候选=%d 范围内=%d 高亮异常=%d")
         :format(tostring(killers~=nil), kReady, kTotal,
             tostring(survivors~=nil), sReady, sTotal,
             state.objects, state.scans, mode, state.lastProblem,
@@ -42797,7 +42880,8 @@ tabs.system:AddButton({Title="检查游戏结构", Callback=function()
             optionInfo("FsSurvivorESP", "Survivor"),
             optionInfo("FsGeneratorESP", "Generator"),
             state.scanMode, state.lastScanReason, state.stateRepairs,
-            state.characterGeneration, state.spectatorScans)
+            state.characterGeneration, state.spectatorScans,
+            state.candidateCount, state.inRangeCount, state.markerFailures)
     bridge:Notify({Title="Forsaken 诊断", Content=msg, Duration=12})
 end})
 tabs.system:AddButton({Title="重进当前游戏", Callback=function()

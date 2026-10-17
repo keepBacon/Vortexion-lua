@@ -182,7 +182,7 @@ assert(__connected==__disconnected)
         self.assertIn('ForsakenEnhancementsFactory',CORE)
         self.assertIn('"ForsakenEnhancements.luau"',BUILD)
         r=json.loads((ROOT/'dist/runtime-manifest.json').read_text())
-        self.assertTrue('r2.8' in r['build_tag'] or 'r2.10' in r['build_tag'] or 'r2.11' in r['build_tag'])
+        self.assertTrue('r2.8' in r['build_tag'] or 'r2.10' in r['build_tag'] or 'r2.11' in r['build_tag'] or 'r2.12' in r['build_tag'])
         for k in ['core',*r['modules'].keys()]:
             d=r[k] if k=='core' else r['modules'][k]
             raw=(ROOT/d['path']).read_bytes()

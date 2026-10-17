@@ -41341,6 +41341,80 @@ return function(WindUI, config)
                 {"wind_auto_fit", true},
             })
         end})
+        -- On-demand observable client probe, shared by all five game entries.
+        -- It does NOT claim that remote gameplay has been accepted by the server.
+        local runtimeProbeBusy = false
+        bridge.RuntimeProbeLast = "尚未执行客户端自检"
+        local function probeClientRuntime()
+            if runtimeProbeBusy or not bridge.Active then return end
+            runtimeProbeBusy = true
+            local lines = {"Vortexion R2.12 / CLIENT PROBE", "Route-PlaceId=" .. tostring(game.PlaceId)}
+            local function put(key, value) lines[#lines + 1] = key .. "=" .. tostring(value) end
+            local heartbeatProbe = nil
+            local cameraProbe, cameraOriginal, cameraTarget = nil, nil, nil
+            local ok, err = pcall(function()
+                local players = game:GetService("Players")
+                local runService = game:GetService("RunService")
+                local user = players.LocalPlayer
+                local character = user and user.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                local camera = world.CurrentCamera
+                put("BridgeActive", bridge.Active)
+                put("Character", character and character.Name or "none")
+                put("HumanoidHealth", humanoid and humanoid.Health or "none")
+                put("CameraAvailable", camera ~= nil)
+                local frames = 0
+                heartbeatProbe = runService.Heartbeat:Connect(function() frames = frames + 1 end)
+                task.wait(0.3)
+                heartbeatProbe:Disconnect()
+                heartbeatProbe = nil
+                put("HeartbeatFrames/0.3s", frames)
+                if camera then
+                    local base = camera.FieldOfView
+                    local probe = base > 115 and base - 3 or base + 3
+                    cameraProbe, cameraOriginal, cameraTarget = camera, base, probe
+                    local written = false
+                    local writeOk, writeErr = pcall(function()
+                        camera.FieldOfView = probe
+                        written = math.abs(camera.FieldOfView - probe) < 0.05
+                    end)
+                    put("CameraWriteImmediate", writeOk and written)
+                    if not writeOk then put("CameraWriteError", writeErr) end
+                    task.wait(0.18)
+                    local persisted = false
+                    pcall(function() persisted = math.abs(camera.FieldOfView - probe) < 0.05 end)
+                    put("CameraWriteAfter0.18s", persisted)
+                end
+            end)
+            -- Even when service access or task.wait throws, release a temporary
+            -- heartbeat connection and restore only a value still owned by us.
+            if heartbeatProbe then pcall(function() heartbeatProbe:Disconnect() end) end
+            if cameraProbe and cameraOriginal ~= nil and cameraTarget ~= nil then
+                pcall(function()
+                    if math.abs(cameraProbe.FieldOfView - cameraTarget) < 0.05 then
+                        cameraProbe.FieldOfView = cameraOriginal
+                    end
+                end)
+            end
+            if not ok then put("ProbeError", err) end
+            put("GameFeatureHealth", bridge:FeatureHealth())
+            bridge.RuntimeProbeLast = table.concat(lines, "\n")
+            runtimeProbeBusy = false
+            if bridge.Active then
+                print("[Vortexion/RuntimeProbe]\n" .. bridge.RuntimeProbeLast)
+                bridge:Notify({Title="客户端能力自检（非服务器确认）", Content=bridge.RuntimeProbeLast:sub(1,1500), Duration=12})
+            end
+        end
+        debugPage:AddButton({Title="运行客户端自检（短暂检测相机FOV）", Callback=function()
+            if not runtimeProbeBusy then task.spawn(probeClientRuntime) end
+        end})
+        debugPage:AddButton({Title="复制客户端自检结果", Callback=function()
+            local copyFn = setclipboard or toclipboard or env.setclipboard or env.toclipboard
+            if type(copyFn) == "function" then
+                local ok = pcall(copyFn, bridge.RuntimeProbeLast)
+                bridge:Notify({Title="客户端自检", Content=ok and "已复制" or "剪贴板写入失败"})
+            else bridge:Notify({Title="客户端自检", Content="剪贴板不可用；请查看控制台输出"}) end
+        end})
         debugPage:AddToggle("wind_debug", {Title = "WindUI 原生调试", Default = config.Debug == true, Callback = function(v) native.Debug = v end})
         debugPage:AddToggle("wind_trace", {Title = "桥接回调跟踪", Default = false, Callback = function(v) bridge.Trace = v end})
         local diagnostic = debugPage:AddParagraph({Title = "运行诊断", Content = "点击刷新获取当前状态。"})

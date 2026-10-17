@@ -1,5 +1,5 @@
 {
-  "build_tag": "loader-v2-modular-r2.11-feature-trace",
+  "build_tag": "loader-v2-modular-r2.12-runtime-evidence",
   "files": {
     "R1_SOURCE_HASHES.json": {
       "bytes": 5590,
@@ -34,28 +34,28 @@
       "sha256": "33c41dbce36ba0e4063611bdf952abb61e2d1e68a2b611d0c7474ca7a2999edf"
     },
     "build.py": {
-      "bytes": 12474,
-      "sha256": "8ed47b0d78b0576c454196992cee746ad6416eb917a870aa3e1ec59f472170dd"
+      "bytes": 12477,
+      "sha256": "ddaff7b391a90e3ccd6cba8c07925dc2970a43f33078fd84431940ebae8f075f"
     },
     "dist/Vortexion_AOTR_Battle.lua": {
-      "bytes": 1559190,
-      "sha256": "8c4e173990c1fe68a4f421e7779e2f86440ddb3830dc4ef003fa00316581fd5a"
+      "bytes": 1563620,
+      "sha256": "d92efc927bcb0f2ebfc801fc1a3f39d28e557ff320b031dcb421467a4211cc64"
     },
     "dist/Vortexion_AOTR_Lobby.lua": {
-      "bytes": 1493404,
-      "sha256": "281733f4c53202b72b71f35b95ddd3174d5cd11d21c74c4c0bb7353fde2dd84f"
+      "bytes": 1497834,
+      "sha256": "e00b42a591d24c755f205f550ae96d1f2977394b9380189347360acab7ca14b0"
     },
     "dist/Vortexion_BloxStrike.lua": {
-      "bytes": 1628298,
-      "sha256": "f01d9acd52b25954718efe3265f4e6bedc9d803638e6dd98e57c37482005dc30"
+      "bytes": 1632728,
+      "sha256": "de24de674ec6e0b443d59fec07dde3b66beb2d595706fc9037190b836b0e400e"
     },
     "dist/Vortexion_Core.lua": {
-      "bytes": 1468675,
-      "sha256": "97c0c45edb9e704190424ed835e379261be519facf38099db4d98ab94b722903"
+      "bytes": 1473105,
+      "sha256": "191a3c273747ce5552b03ecdc2690a88adf59b3935703d28172f62ea1cc8ee54"
     },
     "dist/Vortexion_Forsaken.lua": {
-      "bytes": 1507733,
-      "sha256": "5704617fa79368f7c945b103120f6fa5d85e7ea685914bb50633846fb6191c2e"
+      "bytes": 1512789,
+      "sha256": "651e274d1fc7729838333dcea2865ea0e0312c1d3860baaa9c28103f9c435dd6"
     },
     "dist/Vortexion_Module_AOTR_Battle.lua": {
       "bytes": 91163,
@@ -70,28 +70,28 @@
       "sha256": "151fb4fae930a1c902ad452657709433de9a96b7fb3451f68d58480733a1cbdb"
     },
     "dist/Vortexion_Module_Forsaken.lua": {
-      "bytes": 39706,
-      "sha256": "36ec46fadfdf6d211f09d31c1ebe85c3a060b9e476453e21093e500a54636e55"
+      "bytes": 40332,
+      "sha256": "18e3375371c8167b8a0ab0e5f95f9048ecb04fd1eca66472717c2234cfd16566"
     },
     "dist/Vortexion_Module_SCP.lua": {
       "bytes": 127959,
       "sha256": "ef387b1c12ef1810a8ba82b181675447cfe9c6280e66c7ab1929793908748a9a"
     },
     "dist/Vortexion_SCP.lua": {
-      "bytes": 1595986,
-      "sha256": "1ebd5cc521ba42c50c563ba6ee6ff3c92a6c00c2822e3833de3a9d75b9f4ce16"
+      "bytes": 1600416,
+      "sha256": "6b00e440c802a57166c29f1d38ff9e83445aa32b8089a412f8f5f409fca9e0fc"
     },
     "dist/Vortexion_Wind.lua": {
-      "bytes": 1910215,
-      "sha256": "97a3677c160dc4de9c793cc80df6c720626a5a6eadff2c829f988fb3786a448e"
+      "bytes": 1915271,
+      "sha256": "0ce221046ba3541f57b03ea77da15c16b1b01aaa3448931bfc296e929aee070a"
     },
     "dist/build-manifest.json": {
       "bytes": 6142,
-      "sha256": "24d3c6cf766d19d2c1b3297fbb150593027cf368e12693fe0b84b7c0eaeeee08"
+      "sha256": "0275fbd5cb3713196bc77aaf9561be18ac38070a6b3e26b78375e96d4d6b080b"
     },
     "dist/runtime-manifest.json": {
-      "bytes": 1746,
-      "sha256": "460fcac460178ae2677db7223b347155a2eefb9450957a01e1934b0f1be453a4"
+      "bytes": 1749,
+      "sha256": "29ac7f4a109637728cfbd53f1e7b3daf76f5a7337180ed17091424cecb93f869"
     },
     "dist/test-mobile-v6.json": {
       "bytes": 266,
@@ -221,6 +221,10 @@
       "bytes": 2444,
       "sha256": "2d1e8ae644231edcec0abd6aecd2a8393e13539306a5a822a8190d1acd01d33b"
     },
+    "docs/R212_ROOT_CAUSE_AUDIT.md": {
+      "bytes": 10465,
+      "sha256": "edf64f17145ffbf0134c2e7b2c6eeea155fb81079376a58bbd73d8202a6025fa"
+    },
     "docs/R29_FIELD_REPAIR.md": {
       "bytes": 2223,
       "sha256": "547f085b0a93bd5720ab898d49b00c7428683f250781c2c291f00348f58fca47"
@@ -310,8 +314,8 @@
       "sha256": "afc3a739da53b06bb854237b015e528773490482e7cbbdc59214aa83e873abbe"
     },
     "loader.lua": {
-      "bytes": 23712,
-      "sha256": "98de68ccbad19c3a3163ef4e4364721289cea60cd44f9c3bced3666ea9cad015"
+      "bytes": 23715,
+      "sha256": "707246f0ecee7c8c7aa661b666c833930f234b175d4b91d296206e45b0a31a58"
     },
     "package.json": {
       "bytes": 154,
@@ -386,8 +390,8 @@
       "sha256": "2e2cd42cf3e737bc636e73b2ced1fc11ab8e09ad6a0b38f4272412f8d3c9025d"
     },
     "src/ForsakenCore.luau": {
-      "bytes": 16105,
-      "sha256": "7eb94e4528ba7526b68756a3c8188cf04e046d96c84ba772a548f41ef66ac7fa"
+      "bytes": 16731,
+      "sha256": "7176529459ff5e213f312748828f5b3a5e8567d5d8d76cc6849889e4939b4fbb"
     },
     "src/ForsakenEnhancements.luau": {
       "bytes": 22985,
@@ -446,8 +450,8 @@
       "sha256": "71ecb72282d8269dadd3ffb82f473e5bfe3abf01022ece8f45910482b8d02c86"
     },
     "src/WindAdapter.luau": {
-      "bytes": 76936,
-      "sha256": "1efb9433750d255f173df43d379ef2549ff3ac0f37e17376d5c2a6d35805b28c"
+      "bytes": 81366,
+      "sha256": "7d2771c5e0d776dd9921eb177588a8985ac9e986e248bd7e0d601fc1ff745a60"
     },
     "src/loader_routes.json": {
       "bytes": 478,
@@ -638,8 +642,8 @@
       "sha256": "1d3b28089ae0f5c7101817f9fa3c79cf3811158158481ad0fe753ded8b910830"
     },
     "tests/test_forsaken_r28.py": {
-      "bytes": 8153,
-      "sha256": "aadccf4f693cc6e044a950d154d6fee45aaeacda8445c6b0f9d998f1a083deb1"
+      "bytes": 8182,
+      "sha256": "07580495b7c79369073dbaab16eada7649578b27a510328e4d6fda77e4ccbf1f"
     },
     "tests/test_forsaken_wind.py": {
       "bytes": 3464,
@@ -666,8 +670,8 @@
       "sha256": "e5a0e019c27013b7817cc23bcf0647de29b585ad89a81eed7c7f6cf9fb6a9df5"
     },
     "tests/test_r210_cross_game_state.py": {
-      "bytes": 3822,
-      "sha256": "4176498eb373eca594ee67e6f6e8f465df489a32c57596aedb2a1c9290d358f5"
+      "bytes": 3825,
+      "sha256": "425a0b8dbefa02d9377ac53431249700aa4506102aead8cac1b67f477c7d8013"
     },
     "tests/test_r210_state.py": {
       "bytes": 4853,
@@ -677,17 +681,21 @@
       "bytes": 4407,
       "sha256": "adc3cf2943a8d16f26d5eb6b20786ad928e56f8b14a3efdf9645f5a1f50233c6"
     },
+    "tests/test_r212_runtime_evidence.py": {
+      "bytes": 4130,
+      "sha256": "a661a3c92a462bb6dece552bc255b7b601219ffbbec970aa4dc27f469c01f9dc"
+    },
     "tests/test_r25_stability.py": {
-      "bytes": 8618,
-      "sha256": "1b56f870e9b2bb73f1c180c77de17efa4eb478af92c1c710dbf1b69cc2a2fe61"
+      "bytes": 8621,
+      "sha256": "45da70d6673ac4cac697affbe5a82c94115b7d818d370c8554c80fd2ef10a76b"
     },
     "tests/test_r26_blox_stability.py": {
-      "bytes": 5949,
-      "sha256": "bf9a80f9e2d3f56ed7ebcc7691aa6f724db239b91e021eb43625ed84954153c7"
+      "bytes": 5952,
+      "sha256": "1373ec09ef0d0922e0fcb2c85dfd0fa07d48c4a331f87f4f04cc7202471e6b46"
     },
     "tests/test_r27_feature_health.py": {
-      "bytes": 5577,
-      "sha256": "5e8ca3400e47995429a92a6acda9a3149a0a3db28c5a5f31d430706be511af1a"
+      "bytes": 5583,
+      "sha256": "d90dd61ad808153a4dd36b8a03b4ba55db7f8b08069ee3590b889a8288e5a96a"
     },
     "tests/test_r29_field_failures.py": {
       "bytes": 1860,
